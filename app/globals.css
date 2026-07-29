@@ -808,6 +808,149 @@ button:focus-visible {
   letter-spacing: 0.12em;
 }
 
+.lucky-overlay {
+  z-index: 8;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 230, 109, 0.2), transparent 30%),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(118, 80, 222, 0.11) 0 10px,
+      transparent 10px 20px
+    ),
+    rgba(8, 7, 29, 0.96);
+}
+
+.lucky-dialog-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 78px;
+  margin: 18px 0 10px;
+  border: 4px solid var(--gold);
+  background: #7650de;
+  color: var(--gold);
+  font-family: "Arial Black", sans-serif;
+  font-size: 42px;
+  line-height: 1;
+  box-shadow:
+    7px 7px 0 #38256d,
+    0 0 24px rgba(255, 230, 109, 0.32);
+  clip-path: polygon(15% 10%, 38% 10%, 45% 0, 55% 0, 62% 10%, 85% 10%, 100% 100%, 0 100%);
+}
+
+.lucky-overlay h2 {
+  margin: 6px 0 10px;
+  color: white;
+  font-family: "Arial Black", "PingFang SC", sans-serif;
+  font-size: clamp(32px, 8vw, 48px);
+  letter-spacing: -0.06em;
+  text-shadow:
+    4px 0 0 var(--pink),
+    -3px 4px 0 #5037c4;
+}
+
+.lucky-dialog-copy,
+.lucky-result-label {
+  margin: 0 0 17px;
+  color: #d8d2ef;
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.lucky-risk-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: min(94%, 390px);
+  margin-bottom: 23px;
+  border: 1px solid #51458b;
+  background: rgba(13, 11, 41, 0.86);
+}
+
+.lucky-risk-row span {
+  padding: 10px 7px;
+  color: var(--gold);
+  font-size: 8px;
+  font-weight: 950;
+}
+
+.lucky-risk-row span:last-child {
+  color: var(--pink);
+}
+
+.lucky-risk-row i {
+  border-right: 1px solid #51458b;
+  border-left: 1px solid #51458b;
+  color: #8d84b8;
+  padding: 11px 8px;
+  font-size: 7px;
+  font-style: normal;
+}
+
+.lucky-actions {
+  flex-wrap: wrap;
+}
+
+.lucky-overlay.is-double .lucky-dialog-icon {
+  border-color: var(--gold);
+  background: #e39f17;
+  color: #21173a;
+  box-shadow:
+    7px 7px 0 #714330,
+    0 0 28px rgba(255, 230, 109, 0.48);
+}
+
+.lucky-overlay.is-half .lucky-dialog-icon {
+  border-color: var(--pink);
+  background: #4a275f;
+  color: var(--pink);
+  box-shadow:
+    7px 7px 0 #251638,
+    0 0 28px rgba(255, 79, 163, 0.38);
+}
+
+.lucky-overlay.is-double h2 {
+  color: var(--gold);
+}
+
+.lucky-overlay.is-half h2 {
+  color: #ff7ac8;
+}
+
+.lucky-result-numbers {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: min(82%, 300px);
+  margin: 0 0 25px;
+  border: 2px solid #51458b;
+  background: #0d0b29;
+  padding: 12px 18px;
+}
+
+.lucky-result-numbers span,
+.lucky-result-numbers strong {
+  color: #aaa1d1;
+  font-family: "Arial Black", sans-serif;
+  font-size: 30px;
+}
+
+.lucky-result-numbers strong {
+  color: var(--gold);
+}
+
+.is-half .lucky-result-numbers strong {
+  color: var(--pink);
+}
+
+.lucky-result-numbers i {
+  color: var(--cyan);
+  font-size: 20px;
+  font-style: normal;
+}
+
 .intro-overlay h1 {
   display: flex;
   flex-direction: column;

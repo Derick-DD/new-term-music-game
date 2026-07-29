@@ -56,6 +56,11 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /const VEHICLE_LEVELS/);
   assert.match(page, /const pauseGame = useCallback/);
   assert.match(page, /const resumeGame = useCallback/);
+  assert.match(page, /const openLuckyBag = useCallback/);
+  assert.match(page, /const continueLuckyGame = useCallback/);
+  assert.match(page, /是否开启锦囊？/);
+  assert.match(page, /确认并继续/);
+  assert.match(page, /Math\.random\(\) < 0\.55/);
   assert.match(page, /audioRef\.current\?\.suspend/);
   assert.match(page, /vehicleLevelRef\.current = 1/);
   assert.doesNotMatch(page, /localStorage\.setItem\("fan-bus-vehicle-level"/);

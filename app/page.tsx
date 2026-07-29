@@ -12,7 +12,13 @@ const STARTING_FANS = 12;
 const TRAVEL_BEATS = 4;
 const MISS_WINDOW = 190;
 
-type GameStatus = "ready" | "playing" | "paused" | "finished" | "failed";
+type GameStatus =
+  | "ready"
+  | "playing"
+  | "paused"
+  | "lucky"
+  | "finished"
+  | "failed";
 type EntityType = "fan" | "obstacle" | "lucky";
 type ObstacleType = "cone" | "speaker" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
@@ -60,6 +66,17 @@ type NoteJudgement = {
   detail: string;
   key: number;
 };
+
+type LuckyDialog =
+  | { phase: "choice" }
+  | {
+      phase: "result";
+      outcome: "double" | "half";
+      before: number;
+      after: number;
+      capacity: number;
+      capped: boolean;
+    };
 
 type Particle = {
   x: number;
@@ -483,6 +500,7 @@ export default function Home() {
     tone: ToastTone;
     key: number;
   } | null>(null);
+  const [luckyDialog, setLuckyDialog] = useState<LuckyDialog | null>(null);
   const selectedTrack = getTrack("custom-upload");
   const currentVehicle = getVehicle(vehicleLevel);
   const vehicleTaskProgress = getVehicleTaskProgress(
@@ -1357,33 +1375,18 @@ export default function Home() {
         const x = laneCenter(entity.lane);
         if (entity.type === "lucky") {
           entity.handled = true;
-          const doubled = Math.random() < 0.55;
-          if (doubled) {
-            const capacity = getVehicle(vehicleLevelRef.current).capacity;
-            const doubledFans = fansRef.current * 2;
-            fansRef.current = Math.min(capacity, doubledFans);
-            addFloatText(
-              x,
-              PLAYER_Y - 58,
-              doubledFans > capacity ? `翻倍！上限 ${capacity}` : "粉丝 ×2!",
-              "#ffe66d",
-            );
-            showToast(
-              doubledFans > capacity
-                ? `欧气翻倍！车辆已满载 ${capacity}`
-                : "欧气爆棚！粉丝翻倍",
-              "gold",
-            );
-            addBurst(x, PLAYER_Y - 10, "#ffe66d", 22);
-          } else {
-            fansRef.current = Math.max(1, Math.floor(fansRef.current / 2));
-            comboRef.current = 0;
-            setCombo(0);
-            addFloatText(x, PLAYER_Y - 58, "粉丝 ÷2", "#ff7ac8");
-            showToast("锦囊反转…粉丝减半", "pink");
-            addBurst(x, PLAYER_Y - 10, "#ff7ac8", 18);
-          }
-          setFans(fansRef.current);
+          currentEntity.handled = true;
+          entitiesRef.current = entitiesRef.current.filter(
+            (item) => item.id !== entity.id,
+          );
+          statusRef.current = "lucky";
+          setStatus("lucky");
+          setLuckyDialog({ phase: "choice" });
+          setNoteJudgement(null);
+          songRef.current?.pause();
+          void audioRef.current?.suspend();
+          animationRef.current = null;
+          return;
         } else {
           entity.handled = true;
           if (now < invulnerableUntilRef.current) continue;
@@ -1703,6 +1706,7 @@ export default function Home() {
     setCurrentBpm(detectedBpmRef.current);
     setToast(null);
     setNoteJudgement(null);
+    setLuckyDialog(null);
     resetSongTone();
 
     song.pause();
@@ -1763,6 +1767,82 @@ export default function Home() {
     }
   }, [gameLoop, showToast]);
 
+  const openLuckyBag = useCallback(() => {
+    if (
+      statusRef.current !== "lucky" ||
+      !luckyDialog ||
+      luckyDialog.phase !== "choice"
+    ) {
+      return;
+    }
+
+    const before = fansRef.current;
+    const capacity = getVehicle(vehicleLevelRef.current).capacity;
+    const doubled = Math.random() < 0.55;
+    if (doubled) {
+      const doubledFans = before * 2;
+      fansRef.current = Math.min(capacity, doubledFans);
+      addFloatText(
+        busXRef.current,
+        PLAYER_Y - 64,
+        doubledFans > capacity ? `翻倍！上限 ${capacity}` : "粉丝 ×2!",
+        "#ffe66d",
+      );
+      addBurst(busXRef.current, PLAYER_Y - 10, "#ffe66d", 28);
+      collectFlashRef.current = 1.4;
+      screenPunchRef.current = 1.1;
+      setLuckyDialog({
+        phase: "result",
+        outcome: "double",
+        before,
+        after: fansRef.current,
+        capacity,
+        capped: doubledFans > capacity,
+      });
+      navigator.vibrate?.([24, 18, 38]);
+    } else {
+      fansRef.current = Math.max(1, Math.floor(before / 2));
+      comboRef.current = 0;
+      setCombo(0);
+      addFloatText(
+        busXRef.current,
+        PLAYER_Y - 64,
+        "粉丝 ÷2",
+        "#ff7ac8",
+      );
+      addBurst(busXRef.current, PLAYER_Y - 10, "#ff7ac8", 22);
+      hitFlashRef.current = 0.7;
+      shakeRef.current = 0.22;
+      setLuckyDialog({
+        phase: "result",
+        outcome: "half",
+        before,
+        after: fansRef.current,
+        capacity,
+        capped: false,
+      });
+      navigator.vibrate?.([45, 25, 45]);
+    }
+    setFans(fansRef.current);
+  }, [addBurst, addFloatText, luckyDialog]);
+
+  const continueLuckyGame = useCallback(async () => {
+    if (statusRef.current !== "lucky" || !songRef.current) return;
+    statusRef.current = "playing";
+    setStatus("playing");
+    try {
+      await audioRef.current?.resume();
+      await songRef.current.play();
+      setLuckyDialog(null);
+      lastTimeRef.current = performance.now();
+      animationRef.current = window.requestAnimationFrame(gameLoop);
+    } catch {
+      statusRef.current = "lucky";
+      setStatus("lucky");
+      showToast("歌曲继续播放失败，请重新发车", "danger");
+    }
+  }, [gameLoop, showToast]);
+
   const move = useCallback(
     (direction: -1 | 1) => {
       if (statusRef.current !== "playing") return;
@@ -1804,6 +1884,7 @@ export default function Home() {
     setProgress(0);
     setToast(null);
     setNoteJudgement(null);
+    setLuckyDialog(null);
     entitiesRef.current = [];
     pedestrianRef.current = null;
   }, [resetSongTone]);
@@ -1925,7 +2006,7 @@ export default function Home() {
         <div className="brand">
           <span className="brand-kicker">
             PIXEL TOUR /{" "}
-            {status === "playing" || status === "paused"
+            {status === "playing" || status === "paused" || status === "lucky"
               ? currentBpm
               : songReady
                 ? detectedBpm
@@ -1962,7 +2043,7 @@ export default function Home() {
           <ul>
             <li><i className="legend fan-stick" />对准应援棒：按 HIT 粉丝 +1</li>
             <li><i className="legend warning" />障碍物：掉粉并改变音色，节奏不变</li>
-            <li><i className="legend lucky-bag">?</i>锦囊：×2 或 ÷2，不突破载客上限</li>
+            <li><i className="legend lucky-bag">?</i>锦囊：碰到后选择是否开启，再揭晓 ×2 或 ÷2</li>
             <li><i className="legend pedestrian-icon">♿</i>行人：按预警换到安全车道</li>
           </ul>
           <div className="side-upgrade-card">
@@ -1979,7 +2060,9 @@ export default function Home() {
           <div className="cabinet-top">
             <div>
               <span className="live-dot" />
-              {status === "playing" || status === "paused"
+              {status === "playing" ||
+              status === "paused" ||
+              status === "lucky"
                 ? songTitle
                 : "SELECT A TRACK"}
             </div>
@@ -2027,7 +2110,9 @@ export default function Home() {
             >
               <strong>{songReady ? currentBpm : "--"} BPM</strong>
               <span>
-                {status === "paused"
+                {status === "lucky"
+                  ? "锦囊抉择中 · TEMPO HOLD"
+                  : status === "paused"
                   ? "已暂停 · P / ESC 继续"
                   : toneMode !== "normal"
                   ? `${toneMode === "thick" ? "厚" : "细"}音色中 · TEMPO LOCK`
@@ -2187,6 +2272,89 @@ export default function Home() {
                   </button>
                 </div>
                 <small className="pause-hint">P / ESC 继续</small>
+              </div>
+            )}
+
+            {status === "lucky" && luckyDialog && (
+              <div
+                className={`game-overlay lucky-overlay ${
+                  luckyDialog.phase === "result"
+                    ? `is-${luckyDialog.outcome}`
+                    : ""
+                }`}
+                role="dialog"
+                aria-modal="true"
+                aria-live="assertive"
+                aria-label={
+                  luckyDialog.phase === "choice"
+                    ? "是否开启锦囊"
+                    : "锦囊开启结果"
+                }
+              >
+                <p className="overlay-kicker">
+                  {luckyDialog.phase === "choice"
+                    ? "MYSTERY BAG"
+                    : "MYSTERY REVEALED"}
+                </p>
+                <div className="lucky-dialog-icon" aria-hidden="true">
+                  {luckyDialog.phase === "choice"
+                    ? "?"
+                    : luckyDialog.outcome === "double"
+                      ? "×2"
+                      : "÷2"}
+                </div>
+
+                {luckyDialog.phase === "choice" ? (
+                  <>
+                    <h2>是否开启锦囊？</h2>
+                    <p className="lucky-dialog-copy">
+                      开启后可能让粉丝翻倍，也可能直接减少一半。<br />
+                      不开启则不会改变当前粉丝数。
+                    </p>
+                    <div className="lucky-risk-row" aria-label="锦囊可能结果">
+                      <span>好运：粉丝 ×2</span>
+                      <i>VS</i>
+                      <span>反转：粉丝 ÷2</span>
+                    </div>
+                    <div className="result-actions lucky-actions">
+                      <button className="primary-button" onClick={openLuckyBag}>
+                        开启锦囊
+                      </button>
+                      <button
+                        className="secondary-button"
+                        onClick={() => void continueLuckyGame()}
+                      >
+                        暂不开启
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2>
+                      {luckyDialog.outcome === "double"
+                        ? "好运翻倍！"
+                        : "锦囊反转…"}
+                    </h2>
+                    <p className="lucky-result-label">
+                      {luckyDialog.outcome === "double"
+                        ? luckyDialog.capped
+                          ? `粉丝翻倍成功，车辆达到 ${luckyDialog.capacity} 人上限`
+                          : "粉丝数量成功翻倍"
+                        : "粉丝数量减少一半，连击已中断"}
+                    </p>
+                    <div className="lucky-result-numbers">
+                      <span>{luckyDialog.before}</span>
+                      <i>→</i>
+                      <strong>{luckyDialog.after}</strong>
+                    </div>
+                    <button
+                      className="primary-button"
+                      onClick={() => void continueLuckyGame()}
+                    >
+                      确认并继续
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
