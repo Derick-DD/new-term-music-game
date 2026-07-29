@@ -10,12 +10,13 @@ const LANE_WIDTH = ROAD_WIDTH / 5;
 const PLAYER_Y = 584;
 const STARTING_FANS = 12;
 const TRAVEL_BEATS = 4;
+const MISS_WINDOW = 190;
 
 type GameStatus = "ready" | "playing" | "finished" | "failed";
 type EntityType = "fan" | "obstacle" | "lucky";
 type ObstacleType = "cone" | "speaker" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
-type TrackId = "neon-highway" | "starlight-sprint" | "encore-heartbeat";
+type TrackId = "renyi-teahouse";
 
 type Entity = {
   id: number;
@@ -40,7 +41,7 @@ type Pedestrian = {
 };
 
 type NoteJudgement = {
-  quality: "PERFECT" | "GREAT" | "GOOD";
+  quality: "PERFECT" | "GREAT" | "GOOD" | "MISS";
   detail: string;
   key: number;
 };
@@ -90,56 +91,21 @@ type Track = {
 
 const TRACKS: Track[] = [
   {
-    id: "neon-highway",
-    name: "霓虹公路",
-    english: "NEON HIGHWAY",
-    description: "稳定四拍，后半段提速",
-    tempoLabel: "112 → 124 BPM",
-    difficulty: "EASY",
-    color: "#72f1ff",
-    totalBeats: 64,
-    grannyBeat: 38,
-    melody: [261.63, 329.63, 392, 523.25, 440, 392, 329.63, 293.66],
-    lanePattern: [
-      2, 2, 3, 3, 4, 4, 3, 2, 1, 1, 0, 0, 1, 2, 3, 3,
-      2, 1, 0, 1, 2, 3, 4, 3, 2, 2, 1, 0, 1, 2, 3, 3,
-    ],
-    bpmAt: (beat) => (beat < 32 ? 112 : 124),
-  },
-  {
-    id: "starlight-sprint",
-    name: "星光冲刺",
-    english: "STARLIGHT SPRINT",
-    description: "每 16 拍加速，路线更活跃",
-    tempoLabel: "104 → 148 BPM",
-    difficulty: "HARD",
-    color: "#ff4fa3",
-    totalBeats: 64,
-    grannyBeat: 42,
-    melody: [329.63, 392, 493.88, 659.25, 587.33, 493.88, 440, 392],
-    lanePattern: [
-      2, 3, 4, 3, 2, 1, 0, 1, 2, 3, 2, 1, 0, 1, 2, 3,
-      4, 3, 2, 1, 2, 3, 4, 3, 2, 1, 0, 1, 0, 1, 2, 3,
-    ],
-    bpmAt: (beat) =>
-      beat < 16 ? 104 : beat < 32 ? 116 : beat < 48 ? 132 : 148,
-  },
-  {
-    id: "encore-heartbeat",
-    name: "返场心跳",
-    english: "ENCORE HEARTBEAT",
-    description: "中段降速，随后强力返场",
-    tempoLabel: "128 → 96 → 136 BPM",
-    difficulty: "EXPERT",
+    id: "renyi-teahouse",
+    name: "仁义茶楼",
+    english: "GAI · REN YI TEAHOUSE",
+    description: "导入本地歌曲，自动分析鼓点与节拍",
+    tempoLabel: "AUTO BPM",
+    difficulty: "RHYTHM",
     color: "#ffe66d",
-    totalBeats: 68,
-    grannyBeat: 46,
+    totalBeats: 96,
+    grannyBeat: 42,
     melody: [220, 277.18, 329.63, 440, 415.3, 329.63, 277.18, 246.94],
     lanePattern: [
-      2, 1, 2, 3, 2, 1, 0, 1, 2, 3, 4, 3, 2, 1, 2, 3,
-      4, 4, 3, 2, 1, 1, 2, 3, 2, 2, 1, 0, 1, 2, 3, 3,
+      2, 3, 2, 1, 0, 1, 3, 4, 3, 1, 2, 4, 3, 2, 0, 1,
+      2, 4, 3, 2, 1, 0, 2, 3, 4, 2, 0, 1, 3, 4, 2, 1,
     ],
-    bpmAt: (beat) => (beat < 24 ? 128 : beat < 40 ? 96 : 136),
+    bpmAt: () => 96,
   },
 ];
 
@@ -155,20 +121,146 @@ function getBeatTimes(track: Track) {
   return times;
 }
 
-function getNearestBeat(elapsed: number, beatTimes: number[]) {
-  let low = 0;
-  let high = beatTimes.length - 1;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if (beatTimes[middle] < elapsed) low = middle + 1;
-    else high = middle;
+function analyzeAudioBuffer(buffer: AudioBuffer) {
+  const hopSize = 1024;
+  const frameCount = Math.floor(buffer.length / hopSize);
+  const envelope = new Float32Array(frameCount);
+  const channels = Math.min(2, buffer.numberOfChannels);
+
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    let energy = 0;
+    const start = frame * hopSize;
+    const end = Math.min(start + hopSize, buffer.length);
+    for (let channel = 0; channel < channels; channel += 1) {
+      const data = buffer.getChannelData(channel);
+      for (let sample = start; sample < end; sample += 4) {
+        energy += Math.abs(data[sample]);
+      }
+    }
+    envelope[frame] = energy / Math.max(1, ((end - start) / 4) * channels);
   }
-  const next = low;
-  const previous = Math.max(0, next - 1);
-  return Math.abs(beatTimes[next] - elapsed) <
-    Math.abs(beatTimes[previous] - elapsed)
-    ? next
-    : previous;
+
+  const flux = new Float32Array(frameCount);
+  for (let frame = 1; frame < frameCount; frame += 1) {
+    flux[frame] = Math.max(0, envelope[frame] - envelope[frame - 1]);
+  }
+
+  const secondsPerFrame = hopSize / buffer.sampleRate;
+  const onsets: Array<{ time: number; strength: number }> = [];
+  let lastOnset = -1;
+  const rollingRadius = Math.max(4, Math.round(0.45 / secondsPerFrame));
+  const minGapFrames = Math.max(1, Math.round(0.16 / secondsPerFrame));
+
+  for (let frame = rollingRadius; frame < frameCount - rollingRadius; frame += 1) {
+    let localAverage = 0;
+    for (let index = frame - rollingRadius; index <= frame + rollingRadius; index += 1) {
+      localAverage += flux[index];
+    }
+    localAverage /= rollingRadius * 2 + 1;
+    const isPeak = flux[frame] > flux[frame - 1] && flux[frame] >= flux[frame + 1];
+    if (
+      isPeak &&
+      flux[frame] > Math.max(0.002, localAverage * 1.45) &&
+      frame - lastOnset >= minGapFrames
+    ) {
+      onsets.push({ time: frame * secondsPerFrame, strength: flux[frame] });
+      lastOnset = frame;
+    }
+  }
+
+  const bpmScores = new Map<number, number>();
+  const strongest = [...onsets]
+    .sort((a, b) => b.strength - a.strength)
+    .slice(0, 220)
+    .sort((a, b) => a.time - b.time);
+
+  for (let first = 0; first < strongest.length; first += 1) {
+    for (let second = first + 1; second < Math.min(strongest.length, first + 9); second += 1) {
+      const gap = strongest[second].time - strongest[first].time;
+      if (gap < 0.28 || gap > 1.35) continue;
+      let candidate = 60 / gap;
+      while (candidate < 78) candidate *= 2;
+      while (candidate > 168) candidate /= 2;
+      const rounded = Math.round(candidate);
+      const weight = Math.sqrt(strongest[first].strength * strongest[second].strength);
+      bpmScores.set(rounded, (bpmScores.get(rounded) ?? 0) + weight);
+    }
+  }
+
+  let bpm = 96;
+  let bestScore = -1;
+  for (const [candidate, score] of bpmScores) {
+    const smoothed =
+      score +
+      (bpmScores.get(candidate - 1) ?? 0) * 0.55 +
+      (bpmScores.get(candidate + 1) ?? 0) * 0.55;
+    if (smoothed > bestScore) {
+      bestScore = smoothed;
+      bpm = candidate;
+    }
+  }
+
+  const beatInterval = 60 / bpm;
+  const phaseCandidates = strongest.filter((onset) => onset.time < Math.min(20, buffer.duration));
+  let phase = phaseCandidates[0]?.time ?? 0;
+  let phaseScore = -1;
+  for (const candidate of phaseCandidates.slice(0, 80)) {
+    let score = 0;
+    for (const onset of strongest) {
+      const distanceInBeats = Math.abs((onset.time - candidate.time) / beatInterval);
+      const distanceToGrid = Math.abs(distanceInBeats - Math.round(distanceInBeats));
+      if (distanceToGrid < 0.16) {
+        score += onset.strength * (1 - distanceToGrid / 0.16);
+      }
+    }
+    if (score > phaseScore) {
+      phaseScore = score;
+      phase = candidate.time;
+    }
+  }
+
+  while (phase - beatInterval >= 0) phase -= beatInterval;
+  const beatTimes: number[] = [];
+  for (let time = phase; time <= buffer.duration; time += beatInterval) {
+    beatTimes.push(Math.round(time * 1000));
+  }
+  if (beatTimes.length < 12) {
+    beatTimes.length = 0;
+    for (let time = 0; time <= buffer.duration; time += 60 / 96) {
+      beatTimes.push(Math.round(time * 1000));
+    }
+    bpm = 96;
+  }
+
+  const averageFlux =
+    flux.reduce((total, value) => total + value, 0) / Math.max(1, flux.length);
+  let lane = 2;
+  let laneDirection: -1 | 1 = 1;
+  const lanePattern = beatTimes.map((time, beat) => {
+    const frame = Math.min(
+      flux.length - 1,
+      Math.max(0, Math.round(time / 1000 / secondsPerFrame)),
+    );
+    let localStrength = 0;
+    for (
+      let index = Math.max(0, frame - 2);
+      index <= Math.min(flux.length - 1, frame + 2);
+      index += 1
+    ) {
+      localStrength = Math.max(localStrength, flux[index]);
+    }
+    if (beat > 0 && (localStrength > averageFlux * 1.7 || beat % 4 === 0)) {
+      const step = localStrength > averageFlux * 3.2 && beat % 8 === 0 ? 2 : 1;
+      const nextLane = lane + laneDirection * step;
+      if (nextLane < 0 || nextLane > 4) {
+        laneDirection = laneDirection === 1 ? -1 : 1;
+      }
+      lane = clampLane(lane + laneDirection * step);
+    }
+    return lane;
+  });
+
+  return { beatTimes, bpm, lanePattern };
 }
 
 function laneCenter(lane: number) {
@@ -225,18 +317,6 @@ function getConcertTier(fans: number): ConcertTier {
   };
 }
 
-function roundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-) {
-  ctx.beginPath();
-  ctx.roundRect(x, y, width, height, radius);
-}
-
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationRef = useRef<number | null>(null);
@@ -259,6 +339,11 @@ export default function Home() {
   const floatTextRef = useRef<FloatText[]>([]);
   const pedestrianRef = useRef<Pedestrian | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
+  const songRef = useRef<HTMLAudioElement | null>(null);
+  const songUrlRef = useRef<string | null>(null);
+  const detectedBeatTimesRef = useRef<number[]>([]);
+  const detectedLanePatternRef = useRef<number[]>(TRACKS[0].lanePattern);
+  const detectedBpmRef = useRef(96);
   const mutedRef = useRef(false);
   const beatPulseRef = useRef(0);
   const shakeRef = useRef(0);
@@ -267,7 +352,6 @@ export default function Home() {
   const busBounceRef = useRef(0);
   const screenPunchRef = useRef(0);
   const invulnerableUntilRef = useRef(0);
-  const lastMoveBeatRef = useRef(-1);
   const shieldRef = useRef(false);
   const perfectCountRef = useRef(0);
   const arrangementShiftRef = useRef(0);
@@ -277,8 +361,12 @@ export default function Home() {
   const judgementTimerRef = useRef<number | null>(null);
 
   const [status, setStatus] = useState<GameStatus>("ready");
-  const [selectedTrackId, setSelectedTrackId] =
-    useState<TrackId>("neon-highway");
+  const [songReady, setSongReady] = useState(false);
+  const [songLoading, setSongLoading] = useState(false);
+  const [songFileName, setSongFileName] = useState("");
+  const [songError, setSongError] = useState("");
+  const [detectedBpm, setDetectedBpm] = useState(96);
+  const [songDuration, setSongDuration] = useState(0);
   const [fans, setFans] = useState(STARTING_FANS);
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
@@ -303,7 +391,7 @@ export default function Home() {
     tone: ToastTone;
     key: number;
   } | null>(null);
-  const selectedTrack = getTrack(selectedTrackId);
+  const selectedTrack = getTrack("renyi-teahouse");
 
   const showToast = useCallback((text: string, tone: ToastTone) => {
     if (toastTimerRef.current) {
@@ -386,46 +474,80 @@ export default function Home() {
     });
   }, []);
 
-  const selectAndPreviewTrack = useCallback((track: Track) => {
-    setSelectedTrackId(track.id);
-    trackRef.current = track;
-    beatTimesRef.current = getBeatTimes(track);
-    setCurrentBpm(track.bpmAt(0));
-    window.localStorage.setItem("fan-bus-track", track.id);
+  const handleSongUpload = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      setSongLoading(true);
+      setSongReady(false);
+      setSongError("");
+      setSongFileName(file.name);
 
-    if (mutedRef.current) return;
-    if (audioRef.current) {
-      void audioRef.current.close();
-      audioRef.current = null;
-    }
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioContextClass) return;
+      try {
+        const supportedExtension = /\.(mp3|m4a|wav|aac|ogg|flac)$/i.test(file.name);
+        if (!file.type.startsWith("audio/") && !supportedExtension) {
+          throw new Error("请选择 MP3、M4A、WAV 等音频文件");
+        }
+        if (file.size > 80 * 1024 * 1024) {
+          throw new Error("音频文件请控制在 80MB 以内");
+        }
+        const AudioContextClass =
+          window.AudioContext ||
+          (
+            window as typeof window & {
+              webkitAudioContext?: typeof AudioContext;
+            }
+          ).webkitAudioContext;
+        if (!AudioContextClass) {
+          throw new Error("当前浏览器不支持音频节拍分析");
+        }
 
-    const audio = new AudioContextClass();
-    audioRef.current = audio;
-    const noteLength = 60 / track.bpmAt(0);
-    for (let step = 0; step < 4; step += 1) {
-      const start = audio.currentTime + 0.04 + step * noteLength;
-      const oscillator = audio.createOscillator();
-      const gain = audio.createGain();
-      oscillator.type = step % 2 === 0 ? "square" : "triangle";
-      oscillator.frequency.setValueAtTime(track.melody[step], start);
-      gain.gain.setValueAtTime(0.065, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + noteLength * 0.7);
-      oscillator.connect(gain).connect(audio.destination);
-      oscillator.start(start);
-      oscillator.stop(start + noteLength * 0.72);
-    }
-    window.setTimeout(() => {
-      if (audioRef.current === audio && statusRef.current === "ready") {
-        void audio.close();
-        audioRef.current = null;
+        const analysisContext = new AudioContextClass();
+        const decoded = await analysisContext.decodeAudioData(
+          await file.arrayBuffer(),
+        );
+        const analysis = analyzeAudioBuffer(decoded);
+        await analysisContext.close();
+
+        if (songUrlRef.current) URL.revokeObjectURL(songUrlRef.current);
+        const url = URL.createObjectURL(file);
+        const song = new Audio(url);
+        song.preload = "auto";
+        song.muted = mutedRef.current;
+        (
+          song as HTMLAudioElement & {
+            webkitPreservesPitch?: boolean;
+          }
+        ).preservesPitch = false;
+        (
+          song as HTMLAudioElement & {
+            webkitPreservesPitch?: boolean;
+          }
+        ).webkitPreservesPitch = false;
+
+        songUrlRef.current = url;
+        songRef.current = song;
+        detectedBeatTimesRef.current = analysis.beatTimes;
+        detectedLanePatternRef.current = analysis.lanePattern;
+        detectedBpmRef.current = analysis.bpm;
+        setDetectedBpm(analysis.bpm);
+        setSongDuration(decoded.duration);
+        setCurrentBpm(analysis.bpm);
+        setSongReady(true);
+        showToast(`节拍分析完成 · ${analysis.bpm} BPM`, "gold");
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "音频解析失败，请换一个文件";
+        setSongError(message);
+        setSongFileName("");
+        songRef.current = null;
+      } finally {
+        setSongLoading(false);
+        event.target.value = "";
       }
-    }, noteLength * 4 * 1000 + 250);
-  }, []);
+    },
+    [showToast],
+  );
 
   const playBeat = useCallback((beat: number) => {
     const audio = audioRef.current;
@@ -446,6 +568,10 @@ export default function Home() {
     kick.connect(kickGain).connect(audio.destination);
     kick.start(now);
     kick.stop(now + 0.18);
+
+    // The imported song is the backing track. Keep only a short arcade click
+    // on top so the player can feel the analysed beat without masking the song.
+    if (songRef.current) return;
 
     const note = audio.createOscillator();
     const noteGain = audio.createGain();
@@ -581,6 +707,10 @@ export default function Home() {
     arrangementShiftRef.current = beatRef.current % 2 === 0 ? -3 : 2;
     arrangementUntilRef.current = beatRef.current + 8;
     setArrangement("variation");
+    if (songRef.current) {
+      songRef.current.playbackRate =
+        arrangementShiftRef.current < 0 ? 0.88 : 1.1;
+    }
 
     const audio = audioRef.current;
     if (!audio || mutedRef.current) return;
@@ -710,6 +840,20 @@ export default function Home() {
         ctx.translate(Math.round(x + wobble), Math.round(entity.y));
 
         if (entity.type === "fan") {
+          const timingDistance = Math.abs(entity.hitAt - elapsed);
+          if (timingDistance < 260) {
+            const ringScale = 1 + timingDistance / 520;
+            ctx.strokeStyle =
+              timingDistance < 110 ? "#ffe66d" : "rgba(114, 241, 255, 0.82)";
+            ctx.lineWidth = timingDistance < 110 ? 5 : 3;
+            ctx.beginPath();
+            ctx.arc(0, -5, 29 * ringScale, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = timingDistance < 110 ? "#ffe66d" : "#72f1ff";
+            ctx.font = "bold 9px monospace";
+            ctx.textAlign = "center";
+            ctx.fillText(timingDistance < 110 ? "HIT!" : "SPACE", 0, -38);
+          }
           ctx.shadowColor = "#72f1ff";
           ctx.shadowBlur = 13;
           ctx.fillStyle = "#72f1ff";
@@ -889,6 +1033,10 @@ export default function Home() {
     setBestFans(nextBest);
 
     addBurst(GAME_WIDTH / 2, PLAYER_Y - 120, tier.color, 38);
+    if (songRef.current) {
+      songRef.current.pause();
+      songRef.current.playbackRate = 1;
+    }
     if (audioRef.current) {
       void audioRef.current.close();
       audioRef.current = null;
@@ -904,6 +1052,10 @@ export default function Home() {
     shakeRef.current = 0.7;
     hitFlashRef.current = 1;
     addBurst(busXRef.current, PLAYER_Y - 8, "#ffe66d", 34);
+    if (songRef.current) {
+      songRef.current.pause();
+      songRef.current.playbackRate = 1;
+    }
 
     const audio = audioRef.current;
     if (audio && !mutedRef.current) {
@@ -928,11 +1080,14 @@ export default function Home() {
   }, [addBurst]);
 
   const gameLoop = useCallback(
-    (now: number) => {
+    function gameLoopFrame(now: number) {
       if (statusRef.current !== "playing") return;
       const delta = Math.min(0.035, Math.max(0, (now - lastTimeRef.current) / 1000));
       lastTimeRef.current = now;
-      const elapsed = now - startTimeRef.current;
+      const elapsed =
+        songRef.current && !songRef.current.paused
+          ? songRef.current.currentTime * 1000
+          : now - startTimeRef.current;
       const track = trackRef.current;
       const beatTimes = beatTimesRef.current;
 
@@ -956,11 +1111,11 @@ export default function Home() {
               beatTimes[
                 Math.min(track.grannyBeat + 4, beatTimes.length - 1)
               ],
-            direction: track.id === "starlight-sprint" ? -1 : 1,
+            direction: track.grannyBeat % 2 === 0 ? 1 : -1,
             x:
-              track.id === "starlight-sprint"
-                ? ROAD_LEFT + ROAD_WIDTH + 24
-                : ROAD_LEFT - 24,
+              track.grannyBeat % 2 === 0
+                ? ROAD_LEFT - 24
+                : ROAD_LEFT + ROAD_WIDTH + 24,
             y: -70,
           };
           showToast("注意！4 拍后行人抵达中间车道", "gold");
@@ -975,6 +1130,7 @@ export default function Home() {
           arrangementUntilRef.current = -1;
           arrangementShiftRef.current = 0;
           setArrangement("normal");
+          if (songRef.current) songRef.current.playbackRate = 1;
           showToast("伴奏恢复原调", "cyan");
         }
 
@@ -985,59 +1141,51 @@ export default function Home() {
       busXRef.current +=
         (laneCenter(laneRef.current) - busXRef.current) * Math.min(1, delta * 14);
 
-      for (const entity of entitiesRef.current) {
+      const nextEntities: Entity[] = [];
+      for (const currentEntity of entitiesRef.current) {
         const travelProgress =
-          (elapsed - entity.spawnAt) / Math.max(1, entity.hitAt - entity.spawnAt);
-        entity.y = -70 + (PLAYER_Y + 70) * travelProgress;
+          (elapsed - currentEntity.spawnAt) /
+          Math.max(1, currentEntity.hitAt - currentEntity.spawnAt);
+        const entity: Entity = {
+          ...currentEntity,
+          y: -70 + (PLAYER_Y + 70) * travelProgress,
+        };
+
+        if (entity.type === "fan") {
+          if (!entity.handled && elapsed > entity.hitAt + MISS_WINDOW) {
+            entity.handled = true;
+            comboRef.current = 0;
+            setCombo(0);
+            showJudgement("MISS", "节拍漏击 · COMBO BREAK");
+            addFloatText(
+              laneCenter(entity.lane),
+              PLAYER_Y - 54,
+              "MISS",
+              "#ff526f",
+            );
+            hitFlashRef.current = 0.32;
+          }
+          if (!entity.handled && entity.y < GAME_HEIGHT + 90) {
+            nextEntities.push(entity);
+          }
+          continue;
+        }
+
         const colliding =
           !entity.handled &&
           entity.lane === laneRef.current &&
           entity.y > PLAYER_Y - 48 &&
           entity.y < PLAYER_Y + 52;
 
-        if (!colliding) continue;
+        if (!colliding) {
+          if (!entity.handled && entity.y < GAME_HEIGHT + 90) {
+            nextEntities.push(entity);
+          }
+          continue;
+        }
 
         const x = laneCenter(entity.lane);
-        if (entity.type === "fan") {
-          entity.handled = true;
-          const timingError = Math.abs(elapsed - entity.hitAt);
-          const quality: NoteJudgement["quality"] =
-            timingError <= 70
-              ? "PERFECT"
-              : timingError <= 135
-                ? "GREAT"
-                : "GOOD";
-          fansRef.current += 1;
-          comboRef.current += quality === "PERFECT" ? 2 : 1;
-          maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
-          if (quality === "PERFECT") {
-            perfectCountRef.current += 1;
-          }
-          setFans(fansRef.current);
-          setCombo(comboRef.current);
-          setMaxCombo(maxComboRef.current);
-          showJudgement(quality, `+1 FAN · ×${comboRef.current}`);
-          playFanHit(entity.targetBeat);
-          addBurst(x, PLAYER_Y - 22, "#72f1ff", 24);
-          if (quality === "PERFECT") {
-            addBurst(x, PLAYER_Y - 22, "#ffe66d", 14);
-          }
-          addFloatText(x, PLAYER_Y - 55, "+1", "#ffffff");
-          beatPulseRef.current = 1.5;
-          collectFlashRef.current = 1;
-          busBounceRef.current = 1;
-          screenPunchRef.current = quality === "PERFECT" ? 1 : 0.65;
-          navigator.vibrate?.(quality === "PERFECT" ? 35 : 20);
-          if (
-            perfectCountRef.current > 0 &&
-            perfectCountRef.current % 8 === 0 &&
-            !shieldRef.current
-          ) {
-            shieldRef.current = true;
-            setShield(true);
-            showToast("8 次 PERFECT！获得应援护盾", "gold");
-          }
-        } else if (entity.type === "lucky") {
+        if (entity.type === "lucky") {
           entity.handled = true;
           const doubled = Math.random() < 0.55;
           if (doubled) {
@@ -1084,9 +1232,7 @@ export default function Home() {
         }
       }
 
-      entitiesRef.current = entitiesRef.current.filter(
-        (entity) => !entity.handled && entity.y < GAME_HEIGHT + 90,
-      );
+      entitiesRef.current = nextEntities;
 
       const pedestrian = pedestrianRef.current;
       if (pedestrian) {
@@ -1100,37 +1246,46 @@ export default function Home() {
           pedestrian.direction === 1 ? ROAD_LEFT - 24 : ROAD_LEFT + ROAD_WIDTH + 24;
         const toX =
           pedestrian.direction === 1 ? ROAD_LEFT + ROAD_WIDTH + 24 : ROAD_LEFT - 24;
-        pedestrian.x = fromX + (toX - fromX) * crossingProgress;
-        pedestrian.y = -70 + (PLAYER_Y + 70) * approachProgress;
+        const pedestrianX = fromX + (toX - fromX) * crossingProgress;
+        const pedestrianY = -70 + (PLAYER_Y + 70) * approachProgress;
+        pedestrianRef.current = {
+          ...pedestrian,
+          x: pedestrianX,
+          y: pedestrianY,
+        };
 
         if (
           crossingProgress >= 0 &&
           crossingProgress <= 1 &&
-          Math.abs(pedestrian.y - PLAYER_Y) < 48 &&
-          Math.abs(pedestrian.x - busXRef.current) < 36
+          Math.abs(pedestrianY - PLAYER_Y) < 48 &&
+          Math.abs(pedestrianX - busXRef.current) < 36
         ) {
           failGame();
           return;
         }
-        if (crossingProgress > 1.05 || pedestrian.y > GAME_HEIGHT + 80) {
+        if (crossingProgress > 1.05 || pedestrianY > GAME_HEIGHT + 80) {
           pedestrianRef.current = null;
           showToast("行人已安全通过", "cyan");
         }
       }
 
-      for (const particle of particlesRef.current) {
-        particle.x += particle.vx * delta;
-        particle.y += particle.vy * delta;
-        particle.vy += 115 * delta;
-        particle.life -= delta;
-      }
-      particlesRef.current = particlesRef.current.filter((item) => item.life > 0);
+      particlesRef.current = particlesRef.current
+        .map((particle) => ({
+          ...particle,
+          x: particle.x + particle.vx * delta,
+          y: particle.y + particle.vy * delta,
+          vy: particle.vy + 115 * delta,
+          life: particle.life - delta,
+        }))
+        .filter((item) => item.life > 0);
 
-      for (const item of floatTextRef.current) {
-        item.y -= 38 * delta;
-        item.life -= delta;
-      }
-      floatTextRef.current = floatTextRef.current.filter((item) => item.life > 0);
+      floatTextRef.current = floatTextRef.current
+        .map((item) => ({
+          ...item,
+          y: item.y - 38 * delta,
+          life: item.life - delta,
+        }))
+        .filter((item) => item.life > 0);
 
       beatPulseRef.current = Math.max(0, beatPulseRef.current - delta * 4.6);
       shakeRef.current = Math.max(0, shakeRef.current - delta);
@@ -1156,12 +1311,15 @@ export default function Home() {
         );
       }
 
-      if (elapsed >= beatTimes[track.totalBeats]) {
+      if (
+        elapsed >= beatTimes[track.totalBeats] ||
+        (songRef.current?.ended ?? false)
+      ) {
         finishGame();
         return;
       }
 
-      animationRef.current = window.requestAnimationFrame(gameLoop);
+      animationRef.current = window.requestAnimationFrame(gameLoopFrame);
     },
     [
       addBurst,
@@ -1169,7 +1327,6 @@ export default function Home() {
       drawGame,
       failGame,
       finishGame,
-      playFanHit,
       playBeat,
       showJudgement,
       showToast,
@@ -1178,7 +1335,86 @@ export default function Home() {
     ],
   );
 
-  const startGame = useCallback(() => {
+  const hitNote = useCallback(() => {
+    if (statusRef.current !== "playing") return;
+    const elapsed =
+      songRef.current && !songRef.current.paused
+        ? songRef.current.currentTime * 1000
+        : performance.now() - startTimeRef.current;
+    const candidate = entitiesRef.current
+      .filter(
+        (entity) =>
+          entity.type === "fan" &&
+          !entity.handled &&
+          entity.lane === laneRef.current &&
+          Math.abs(elapsed - entity.hitAt) <= MISS_WINDOW,
+      )
+      .sort(
+        (first, second) =>
+          Math.abs(elapsed - first.hitAt) - Math.abs(elapsed - second.hitAt),
+      )[0];
+
+    if (!candidate) {
+      comboRef.current = 0;
+      setCombo(0);
+      showJudgement("MISS", "不在节拍点或车道错误");
+      addFloatText(busXRef.current, PLAYER_Y - 72, "MISS", "#ff526f");
+      hitFlashRef.current = 0.34;
+      navigator.vibrate?.(12);
+      return;
+    }
+
+    candidate.handled = true;
+    const timingError = Math.abs(elapsed - candidate.hitAt);
+    const quality: NoteJudgement["quality"] =
+      timingError <= 55
+        ? "PERFECT"
+        : timingError <= 110
+          ? "GREAT"
+          : "GOOD";
+    fansRef.current += 1;
+    comboRef.current += 1;
+    maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
+    if (quality === "PERFECT") perfectCountRef.current += 1;
+    setFans(fansRef.current);
+    setCombo(comboRef.current);
+    setMaxCombo(maxComboRef.current);
+    showJudgement(quality, `JUST HIT · +1 FAN · ×${comboRef.current}`);
+    playFanHit(candidate.targetBeat);
+
+    const x = laneCenter(candidate.lane);
+    addBurst(x, PLAYER_Y - 22, "#72f1ff", 28);
+    if (quality === "PERFECT") addBurst(x, PLAYER_Y - 22, "#ffe66d", 20);
+    addFloatText(
+      x,
+      PLAYER_Y - 64,
+      quality === "PERFECT" ? "点上了! +1" : "+1 FAN",
+      quality === "PERFECT" ? "#ffe66d" : "#ffffff",
+    );
+    beatPulseRef.current = 1.65;
+    collectFlashRef.current = 1;
+    busBounceRef.current = 1;
+    screenPunchRef.current = quality === "PERFECT" ? 1.2 : 0.72;
+    navigator.vibrate?.(quality === "PERFECT" ? [18, 16, 28] : 22);
+
+    if (
+      quality === "PERFECT" &&
+      perfectCountRef.current % 8 === 0 &&
+      !shieldRef.current
+    ) {
+      shieldRef.current = true;
+      setShield(true);
+      showToast("8 次 PERFECT！获得应援护盾", "gold");
+    }
+  }, [addBurst, addFloatText, playFanHit, showJudgement, showToast]);
+
+  const startGame = useCallback(async () => {
+    const song = songRef.current;
+    const analysedBeats = detectedBeatTimesRef.current;
+    if (!songReady || !song || analysedBeats.length < 12) {
+      showToast("请先导入本地《仁义茶楼》音频", "pink");
+      return;
+    }
     if (animationRef.current) {
       window.cancelAnimationFrame(animationRef.current);
     }
@@ -1192,9 +1428,18 @@ export default function Home() {
         .webkitAudioContext;
     audioRef.current = AudioContextClass ? new AudioContextClass() : null;
 
-    trackRef.current = selectedTrack;
-    beatTimesRef.current = getBeatTimes(selectedTrack);
-    window.localStorage.setItem("fan-bus-track", selectedTrack.id);
+    const totalBeats = analysedBeats.length - 1;
+    const runtimeTrack: Track = {
+      ...selectedTrack,
+      totalBeats,
+      grannyBeat: Math.max(8, Math.min(totalBeats - 6, Math.floor(totalBeats * 0.56))),
+      tempoLabel: `${detectedBpmRef.current} BPM`,
+      bpmAt: () => detectedBpmRef.current,
+      lanePattern: detectedLanePatternRef.current,
+    };
+    trackRef.current = runtimeTrack;
+    beatTimesRef.current = analysedBeats;
+    window.localStorage.setItem("fan-bus-track", runtimeTrack.id);
     statusRef.current = "playing";
     setStatus("playing");
     laneRef.current = 2;
@@ -1211,7 +1456,6 @@ export default function Home() {
     pedestrianRef.current = null;
     shieldRef.current = false;
     perfectCountRef.current = 0;
-    lastMoveBeatRef.current = -1;
     arrangementShiftRef.current = 0;
     arrangementUntilRef.current = -1;
     grannyWarnedRef.current = false;
@@ -1227,17 +1471,32 @@ export default function Home() {
     setMaxCombo(0);
     setProgress(0);
     setShield(false);
-    setCurrentBpm(selectedTrack.bpmAt(0));
+    setCurrentBpm(detectedBpmRef.current);
     setArrangement("normal");
     setToast(null);
     setNoteJudgement(null);
+
+    song.pause();
+    song.currentTime = 0;
+    song.playbackRate = 1;
+    song.muted = mutedRef.current;
+    try {
+      await song.play();
+      await audioRef.current?.resume();
+    } catch {
+      statusRef.current = "ready";
+      setStatus("ready");
+      setSongError("浏览器未能播放该音频，请重新导入后再试");
+      showToast("音频播放失败", "danger");
+      return;
+    }
 
     const now = performance.now();
     startTimeRef.current = now;
     lastTimeRef.current = now;
     lastHudRef.current = 0;
     animationRef.current = window.requestAnimationFrame(gameLoop);
-  }, [gameLoop, selectedTrack]);
+  }, [gameLoop, selectedTrack, showToast, songReady]);
 
   const move = useCallback(
     (direction: -1 | 1) => {
@@ -1245,43 +1504,9 @@ export default function Home() {
       const nextLane = clampLane(laneRef.current + direction);
       if (nextLane === laneRef.current) return;
       laneRef.current = nextLane;
-
-      const elapsed = performance.now() - startTimeRef.current;
-      const nearestBeat = getNearestBeat(elapsed, beatTimesRef.current);
-      const distance = Math.abs(elapsed - beatTimesRef.current[nearestBeat]);
-      const localBeatMs = 60_000 / trackRef.current.bpmAt(nearestBeat);
-      const perfectWindow = Math.min(125, localBeatMs * 0.25);
-      const goodWindow = Math.min(220, localBeatMs * 0.43);
-      if (nearestBeat === lastMoveBeatRef.current) return;
-      lastMoveBeatRef.current = nearestBeat;
-
-      if (distance <= perfectWindow) {
-        comboRef.current += 1;
-        maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
-        perfectCountRef.current += 1;
-        setCombo(comboRef.current);
-        setMaxCombo(maxComboRef.current);
-        addBurst(laneCenter(nextLane), PLAYER_Y + 26, "#ffe66d", 7);
-        addFloatText(
-          laneCenter(nextLane),
-          PLAYER_Y - 66,
-          "PERFECT!",
-          "#ffe66d",
-        );
-        if (perfectCountRef.current % 8 === 0 && !shieldRef.current) {
-          shieldRef.current = true;
-          setShield(true);
-          showToast("8 次合拍！获得应援护盾", "gold");
-        }
-      } else if (distance <= goodWindow) {
-        addFloatText(laneCenter(nextLane), PLAYER_Y - 66, "GOOD", "#72f1ff");
-      } else {
-        comboRef.current = 0;
-        setCombo(0);
-        addFloatText(laneCenter(nextLane), PLAYER_Y - 66, "MISS", "#ff7ac8");
-      }
+      addBurst(laneCenter(nextLane), PLAYER_Y + 32, "#72f1ff", 4);
     },
-    [addBurst, addFloatText, showToast],
+    [addBurst],
   );
 
   const returnToSongSelect = useCallback(() => {
@@ -1292,6 +1517,11 @@ export default function Home() {
     if (audioRef.current) {
       void audioRef.current.close();
       audioRef.current = null;
+    }
+    if (songRef.current) {
+      songRef.current.pause();
+      songRef.current.currentTime = 0;
+      songRef.current.playbackRate = 1;
     }
     statusRef.current = "ready";
     setStatus("ready");
@@ -1304,23 +1534,23 @@ export default function Home() {
 
   const toggleMute = useCallback(() => {
     mutedRef.current = !mutedRef.current;
+    if (songRef.current) songRef.current.muted = mutedRef.current;
     setMuted(mutedRef.current);
   }, []);
 
   useEffect(() => {
     const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
     const savedCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
-    const savedTrack = window.localStorage.getItem("fan-bus-track") as TrackId | null;
-    setBestFans(savedBest);
-    setBankCoins(savedCoins);
-    if (savedTrack && TRACKS.some((track) => track.id === savedTrack)) {
-      setSelectedTrackId(savedTrack);
-    }
+    const savedScoreTimer = window.setTimeout(() => {
+      setBestFans(savedBest);
+      setBankCoins(savedCoins);
+    }, 0);
 
     const keydown = (event: KeyboardEvent) => {
       if (["ArrowLeft", "ArrowRight", " ", "a", "A", "d", "D"].includes(event.key)) {
         event.preventDefault();
       }
+      if (event.repeat && event.key === " ") return;
       if (event.key === "ArrowLeft" || event.key === "a" || event.key === "A") {
         move(-1);
       } else if (
@@ -1331,13 +1561,18 @@ export default function Home() {
         move(1);
       } else if (event.key === "m" || event.key === "M") {
         toggleMute();
+      } else if (event.key === " " && statusRef.current === "playing") {
+        hitNote();
       } else if (event.key === " " && statusRef.current !== "playing") {
-        startGame();
+        void startGame();
       }
     };
     window.addEventListener("keydown", keydown);
-    return () => window.removeEventListener("keydown", keydown);
-  }, [move, startGame, toggleMute]);
+    return () => {
+      window.clearTimeout(savedScoreTimer);
+      window.removeEventListener("keydown", keydown);
+    };
+  }, [hitNote, move, startGame, toggleMute]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1350,6 +1585,14 @@ export default function Home() {
       if (audioRef.current) {
         void audioRef.current.close();
         audioRef.current = null;
+      }
+      if (songRef.current) {
+        songRef.current.pause();
+        songRef.current = null;
+      }
+      if (songUrlRef.current) {
+        URL.revokeObjectURL(songUrlRef.current);
+        songUrlRef.current = null;
       }
       if (toastTimerRef.current) {
         window.clearTimeout(toastTimerRef.current);
@@ -1366,7 +1609,8 @@ export default function Home() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-kicker">
-            PIXEL TOUR / {status === "playing" ? currentBpm : selectedTrack.bpmAt(0)} BPM
+            PIXEL TOUR /{" "}
+            {status === "playing" ? currentBpm : songReady ? detectedBpm : "--"} BPM
           </span>
           <span className="brand-title">应援巴士</span>
         </div>
@@ -1396,13 +1640,13 @@ export default function Home() {
           <h2>载着明星，奔赴下一场演唱会</h2>
           <div className="pixel-rule" />
           <ul>
-            <li><i className="legend fan-stick" />应援棒：粉丝 +1</li>
+            <li><i className="legend fan-stick" />对准应援棒：按 HIT 粉丝 +1</li>
             <li><i className="legend warning" />障碍物：掉粉并触发变调</li>
             <li><i className="legend lucky-bag">?</i>锦囊：×2 或 ÷2</li>
             <li><i className="legend pedestrian-icon">♿</i>行人：按预警换到安全车道</li>
           </ul>
           <p className="tip-copy">
-            应援棒会沿每首歌的节拍路线出现；节奏加速或转折时，路线也会随之换道。
+            ← → 负责换道，SPACE / HIT 负责击打；只有在正确车道踩中点子才会收集。
           </p>
         </aside>
 
@@ -1410,7 +1654,7 @@ export default function Home() {
           <div className="cabinet-top">
             <div>
               <span className="live-dot" />
-              {status === "playing" ? selectedTrack.english : "SELECT A TRACK"}
+              {status === "playing" ? selectedTrack.english : "LOAD LOCAL TRACK"}
             </div>
             <div className="bpm-bars" aria-hidden="true">
               {[0, 1, 2, 3].map((bar) => (
@@ -1440,7 +1684,7 @@ export default function Home() {
                   ? "伴奏变调中"
                   : shield
                     ? "护盾减伤 READY"
-                    : "跟拍换道"}
+                    : "对准点子按 HIT"}
               </span>
             </div>
           </div>
@@ -1477,45 +1721,64 @@ export default function Home() {
             {status === "ready" && (
               <div className="game-overlay intro-overlay">
                 <div className="song-select-title">
-                  <p className="overlay-kicker">SONG SELECT</p>
-                  <h1>选歌</h1>
-                  <span>点击曲目即可试听 4 拍</span>
+                  <p className="overlay-kicker">SONG LOCKED</p>
+                  <h1>仁义茶楼</h1>
+                  <span>GAI · 本地音频节拍分析</span>
                 </div>
-                <div className="track-picker" aria-label="选择歌曲">
-                  {TRACKS.map((track, index) => (
-                    <button
-                      key={track.id}
-                      className={selectedTrackId === track.id ? "is-selected" : ""}
-                      style={
-                        selectedTrackId === track.id
-                          ? { borderColor: track.color, color: track.color }
-                          : undefined
-                      }
-                      onClick={() => selectAndPreviewTrack(track)}
-                      aria-pressed={selectedTrackId === track.id}
-                    >
-                      <span className="song-number">0{index + 1}</span>
-                      <span className="track-copy">
-                        <b>{track.name}</b>
-                        <small>{track.description}</small>
-                      </span>
-                      <em>{track.tempoLabel}</em>
-                      <i>
-                        {selectedTrackId === track.id
-                          ? "✓ 已选择"
-                          : `▶ ${track.difficulty}`}
-                      </i>
-                    </button>
-                  ))}
+                <div
+                  className={`song-import-card ${songReady ? "is-ready" : ""}`}
+                  aria-label="导入仁义茶楼音频"
+                >
+                  <div className="record-art" aria-hidden="true">
+                    <i />
+                    <span>GAI</span>
+                  </div>
+                  <div className="import-copy">
+                    <small>SELECTED TRACK</small>
+                    <strong>《仁义茶楼》</strong>
+                    <span>
+                      {songLoading
+                        ? "正在拆解节拍与鼓点…"
+                        : songReady
+                          ? `${detectedBpm} BPM · ${Math.floor(songDuration / 60)}:${String(
+                              Math.floor(songDuration % 60),
+                            ).padStart(2, "0")}`
+                          : "等待导入你有权使用的歌曲文件"}
+                    </span>
+                  </div>
+                  <b className="analysis-badge">
+                    {songLoading ? "ANALYZING" : songReady ? "READY" : "LOCAL"}
+                  </b>
                 </div>
+                <input
+                  id="renyi-song-upload"
+                  className="visually-hidden"
+                  type="file"
+                  accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg"
+                  onChange={handleSongUpload}
+                />
+                <label className="upload-button" htmlFor="renyi-song-upload">
+                  {songReady ? "↻ 重新导入音频" : "＋ 导入本地《仁义茶楼》音频"}
+                </label>
+                {songFileName && (
+                  <p className="file-status" title={songFileName}>
+                    {songReady ? "✓" : "…"} {songFileName}
+                  </p>
+                )}
+                {songError && <p className="song-error">{songError}</p>}
                 <p className="intro-copy">
-                  当前曲目：<strong>《{selectedTrack.name}》</strong><br />
-                  应援棒沿歌曲节拍生成，跟着点子换道！
+                  应援棒到达黄色判定线时按 <strong>SPACE / HIT</strong><br />
+                  音频只保留在当前浏览器，不会上传服务器
                 </p>
-                <button className="primary-button" onClick={startGame}>
-                  <span>▶</span> 用这首歌发车
+                <button
+                  className="primary-button"
+                  onClick={() => void startGame()}
+                  disabled={!songReady || songLoading}
+                >
+                  <span>▶</span>{" "}
+                  {songReady ? "用《仁义茶楼》发车" : "请先导入音频"}
                 </button>
-                <p className="control-hint">← → / A D / 下方按钮</p>
+                <p className="control-hint">← → / A D 换道 · SPACE 击打</p>
               </div>
             )}
 
@@ -1548,7 +1811,7 @@ export default function Home() {
                   场馆奖励 {resultTier.coins} + 合拍奖励 {maxCombo * 3}
                 </p>
                 <div className="result-actions">
-                  <button className="primary-button" onClick={startGame}>
+                  <button className="primary-button" onClick={() => void startGame()}>
                     再跑一场
                   </button>
                   <button className="secondary-button" onClick={returnToSongSelect}>
@@ -1574,7 +1837,7 @@ export default function Home() {
                   <small>COINS +0</small>
                 </div>
                 <div className="result-actions">
-                  <button className="primary-button" onClick={startGame}>
+                  <button className="primary-button" onClick={() => void startGame()}>
                     重新发车
                   </button>
                   <button className="secondary-button" onClick={returnToSongSelect}>
@@ -1594,10 +1857,15 @@ export default function Home() {
               <span>←</span>
               LEFT
             </button>
-            <div className="beat-orb" aria-hidden="true">
-              <i className={status === "playing" ? "is-playing" : ""} />
-              BEAT
-            </div>
+            <button
+              className="hit-button"
+              onPointerDown={hitNote}
+              aria-label="击打当前节拍"
+              disabled={status !== "playing"}
+            >
+              <span>HIT</span>
+              <small>SPACE</small>
+            </button>
             <button
               onPointerDown={() => move(1)}
               aria-label="向右换道"
@@ -1635,7 +1903,7 @@ export default function Home() {
             <span>NOW PLAYING</span>
             <strong>{selectedTrack.english}</strong>
             <small>
-              {status === "playing" ? currentBpm : selectedTrack.bpmAt(0)} BPM ·{" "}
+              {songReady ? detectedBpm : "--"} BPM ·{" "}
               {selectedTrack.difficulty}
             </small>
             <div className="equalizer" aria-hidden="true">
