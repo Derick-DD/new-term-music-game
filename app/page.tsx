@@ -22,6 +22,7 @@ type Entity = {
   type: EntityType;
   lane: number;
   y: number;
+  targetBeat: number;
   spawnAt: number;
   hitAt: number;
   obstacle?: ObstacleType;
@@ -31,10 +32,17 @@ type Entity = {
 
 type Pedestrian = {
   startAt: number;
+  hitAt: number;
   endAt: number;
   direction: 1 | -1;
   x: number;
   y: number;
+};
+
+type NoteJudgement = {
+  quality: "PERFECT" | "GREAT" | "GOOD";
+  detail: string;
+  key: number;
 };
 
 type Particle = {
@@ -255,6 +263,9 @@ export default function Home() {
   const beatPulseRef = useRef(0);
   const shakeRef = useRef(0);
   const hitFlashRef = useRef(0);
+  const collectFlashRef = useRef(0);
+  const busBounceRef = useRef(0);
+  const screenPunchRef = useRef(0);
   const invulnerableUntilRef = useRef(0);
   const lastMoveBeatRef = useRef(-1);
   const shieldRef = useRef(false);
@@ -263,6 +274,7 @@ export default function Home() {
   const arrangementUntilRef = useRef(-1);
   const grannyWarnedRef = useRef(false);
   const toastTimerRef = useRef<number | null>(null);
+  const judgementTimerRef = useRef<number | null>(null);
 
   const [status, setStatus] = useState<GameStatus>("ready");
   const [selectedTrackId, setSelectedTrackId] =
@@ -281,6 +293,8 @@ export default function Home() {
   const [bestFans, setBestFans] = useState(0);
   const [bankCoins, setBankCoins] = useState(0);
   const [earnedCoins, setEarnedCoins] = useState(0);
+  const [noteJudgement, setNoteJudgement] =
+    useState<NoteJudgement | null>(null);
   const [resultTier, setResultTier] = useState<ConcertTier>(
     getConcertTier(STARTING_FANS),
   );
@@ -298,6 +312,20 @@ export default function Home() {
     setToast({ text, tone, key: Date.now() });
     toastTimerRef.current = window.setTimeout(() => setToast(null), 820);
   }, []);
+
+  const showJudgement = useCallback(
+    (quality: NoteJudgement["quality"], detail: string) => {
+      if (judgementTimerRef.current) {
+        window.clearTimeout(judgementTimerRef.current);
+      }
+      setNoteJudgement({ quality, detail, key: Date.now() });
+      judgementTimerRef.current = window.setTimeout(
+        () => setNoteJudgement(null),
+        560,
+      );
+    },
+    [],
+  );
 
   const addBurst = useCallback(
     (x: number, y: number, color: string, count = 10) => {
@@ -332,6 +360,72 @@ export default function Home() {
     },
     [],
   );
+
+  const playFanHit = useCallback((targetBeat: number) => {
+    const audio = audioRef.current;
+    if (!audio || mutedRef.current) return;
+    const now = audio.currentTime;
+    const base =
+      trackRef.current.melody[
+        targetBeat % trackRef.current.melody.length
+      ];
+
+    [base, base * 2].forEach((frequency, index) => {
+      const sparkle = audio.createOscillator();
+      const gain = audio.createGain();
+      sparkle.type = index === 0 ? "square" : "sine";
+      sparkle.frequency.setValueAtTime(frequency, now + index * 0.045);
+      gain.gain.setValueAtTime(index === 0 ? 0.085 : 0.055, now + index * 0.045);
+      gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        now + 0.2 + index * 0.045,
+      );
+      sparkle.connect(gain).connect(audio.destination);
+      sparkle.start(now + index * 0.045);
+      sparkle.stop(now + 0.22 + index * 0.045);
+    });
+  }, []);
+
+  const selectAndPreviewTrack = useCallback((track: Track) => {
+    setSelectedTrackId(track.id);
+    trackRef.current = track;
+    beatTimesRef.current = getBeatTimes(track);
+    setCurrentBpm(track.bpmAt(0));
+    window.localStorage.setItem("fan-bus-track", track.id);
+
+    if (mutedRef.current) return;
+    if (audioRef.current) {
+      void audioRef.current.close();
+      audioRef.current = null;
+    }
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const audio = new AudioContextClass();
+    audioRef.current = audio;
+    const noteLength = 60 / track.bpmAt(0);
+    for (let step = 0; step < 4; step += 1) {
+      const start = audio.currentTime + 0.04 + step * noteLength;
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.type = step % 2 === 0 ? "square" : "triangle";
+      oscillator.frequency.setValueAtTime(track.melody[step], start);
+      gain.gain.setValueAtTime(0.065, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + noteLength * 0.7);
+      oscillator.connect(gain).connect(audio.destination);
+      oscillator.start(start);
+      oscillator.stop(start + noteLength * 0.72);
+    }
+    window.setTimeout(() => {
+      if (audioRef.current === audio && statusRef.current === "ready") {
+        void audio.close();
+        audioRef.current = null;
+      }
+    }, noteLength * 4 * 1000 + 250);
+  }, []);
 
   const playBeat = useCallback((beat: number) => {
     const audio = audioRef.current;
@@ -437,6 +531,7 @@ export default function Home() {
           type: "lucky",
           lane: safeLane,
           y: spawnY,
+          targetBeat: beat + TRAVEL_BEATS,
           spawnAt,
           hitAt,
           handled: false,
@@ -448,6 +543,7 @@ export default function Home() {
           type: "fan",
           lane: safeLane,
           y: spawnY,
+          targetBeat: beat + TRAVEL_BEATS,
           spawnAt,
           hitAt,
           handled: false,
@@ -472,6 +568,7 @@ export default function Home() {
         obstacle: obstacleTypes[(beat + i) % obstacleTypes.length],
         lane: obstacleLane,
         y: spawnY - i * 8,
+        targetBeat: beat + TRAVEL_BEATS,
         spawnAt,
         hitAt,
         handled: false,
@@ -510,6 +607,12 @@ export default function Home() {
 
       ctx.save();
       ctx.translate(shakeX, shakeY);
+      if (screenPunchRef.current > 0) {
+        const scale = 1 + screenPunchRef.current * 0.014;
+        ctx.translate(GAME_WIDTH / 2, GAME_HEIGHT / 2);
+        ctx.scale(scale, scale);
+        ctx.translate(-GAME_WIDTH / 2, -GAME_HEIGHT / 2);
+      }
       ctx.clearRect(-16, -16, GAME_WIDTH + 32, GAME_HEIGHT + 32);
       ctx.fillStyle = "#090823";
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -682,8 +785,9 @@ export default function Home() {
 
       // Bus shadow and body.
       const busX = busXRef.current;
+      const busY = PLAYER_Y - busBounceRef.current * 18;
       ctx.save();
-      ctx.translate(Math.round(busX), PLAYER_Y);
+      ctx.translate(Math.round(busX), Math.round(busY));
       ctx.fillStyle = "rgba(0,0,0,0.38)";
       ctx.fillRect(-31, 45, 62, 16);
       if (shieldRef.current) {
@@ -750,6 +854,10 @@ export default function Home() {
 
       if (hitFlashRef.current > 0) {
         ctx.fillStyle = `rgba(255, 40, 95, ${hitFlashRef.current * 0.38})`;
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      }
+      if (collectFlashRef.current > 0) {
+        ctx.fillStyle = `rgba(114, 241, 255, ${collectFlashRef.current * 0.16})`;
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       }
       ctx.restore();
@@ -841,17 +949,24 @@ export default function Home() {
 
         if (beat === track.grannyBeat - 4 && !grannyWarnedRef.current) {
           grannyWarnedRef.current = true;
-          showToast("注意！前方有人过马路", "gold");
-        }
-        if (beat === track.grannyBeat) {
           pedestrianRef.current = {
             startAt: beatTimes[beat],
-            endAt: beatTimes[Math.min(beat + 10, beatTimes.length - 1)],
+            hitAt: beatTimes[track.grannyBeat],
+            endAt:
+              beatTimes[
+                Math.min(track.grannyBeat + 4, beatTimes.length - 1)
+              ],
             direction: track.id === "starlight-sprint" ? -1 : 1,
-            x: track.id === "starlight-sprint" ? ROAD_LEFT + ROAD_WIDTH + 24 : ROAD_LEFT - 24,
-            y: PLAYER_Y - 6,
+            x:
+              track.id === "starlight-sprint"
+                ? ROAD_LEFT + ROAD_WIDTH + 24
+                : ROAD_LEFT - 24,
+            y: -70,
           };
-          showToast("行人正在通过 · 立即避让", "danger");
+          showToast("注意！4 拍后行人抵达中间车道", "gold");
+        }
+        if (beat === track.grannyBeat) {
+          showToast("危险！离开中间车道", "danger");
         }
         if (
           arrangementUntilRef.current > 0 &&
@@ -885,11 +1000,43 @@ export default function Home() {
         const x = laneCenter(entity.lane);
         if (entity.type === "fan") {
           entity.handled = true;
+          const timingError = Math.abs(elapsed - entity.hitAt);
+          const quality: NoteJudgement["quality"] =
+            timingError <= 70
+              ? "PERFECT"
+              : timingError <= 135
+                ? "GREAT"
+                : "GOOD";
           fansRef.current += 1;
+          comboRef.current += quality === "PERFECT" ? 2 : 1;
+          maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
+          if (quality === "PERFECT") {
+            perfectCountRef.current += 1;
+          }
           setFans(fansRef.current);
-          addBurst(x, PLAYER_Y - 22, "#72f1ff", 9);
-          addFloatText(x, PLAYER_Y - 55, "+1 粉丝", "#72f1ff");
-          showToast("应援棒 +1 粉丝", "cyan");
+          setCombo(comboRef.current);
+          setMaxCombo(maxComboRef.current);
+          showJudgement(quality, `+1 FAN · ×${comboRef.current}`);
+          playFanHit(entity.targetBeat);
+          addBurst(x, PLAYER_Y - 22, "#72f1ff", 24);
+          if (quality === "PERFECT") {
+            addBurst(x, PLAYER_Y - 22, "#ffe66d", 14);
+          }
+          addFloatText(x, PLAYER_Y - 55, "+1", "#ffffff");
+          beatPulseRef.current = 1.5;
+          collectFlashRef.current = 1;
+          busBounceRef.current = 1;
+          screenPunchRef.current = quality === "PERFECT" ? 1 : 0.65;
+          navigator.vibrate?.(quality === "PERFECT" ? 35 : 20);
+          if (
+            perfectCountRef.current > 0 &&
+            perfectCountRef.current % 8 === 0 &&
+            !shieldRef.current
+          ) {
+            shieldRef.current = true;
+            setShield(true);
+            showToast("8 次 PERFECT！获得应援护盾", "gold");
+          }
         } else if (entity.type === "lucky") {
           entity.handled = true;
           const doubled = Math.random() < 0.55;
@@ -946,21 +1093,26 @@ export default function Home() {
         const crossingProgress =
           (elapsed - pedestrian.startAt) /
           Math.max(1, pedestrian.endAt - pedestrian.startAt);
+        const approachProgress =
+          (elapsed - pedestrian.startAt) /
+          Math.max(1, pedestrian.hitAt - pedestrian.startAt);
         const fromX =
           pedestrian.direction === 1 ? ROAD_LEFT - 24 : ROAD_LEFT + ROAD_WIDTH + 24;
         const toX =
           pedestrian.direction === 1 ? ROAD_LEFT + ROAD_WIDTH + 24 : ROAD_LEFT - 24;
         pedestrian.x = fromX + (toX - fromX) * crossingProgress;
+        pedestrian.y = -70 + (PLAYER_Y + 70) * approachProgress;
 
         if (
           crossingProgress >= 0 &&
           crossingProgress <= 1 &&
+          Math.abs(pedestrian.y - PLAYER_Y) < 48 &&
           Math.abs(pedestrian.x - busXRef.current) < 36
         ) {
           failGame();
           return;
         }
-        if (crossingProgress > 1.05) {
+        if (crossingProgress > 1.05 || pedestrian.y > GAME_HEIGHT + 80) {
           pedestrianRef.current = null;
           showToast("行人已安全通过", "cyan");
         }
@@ -983,6 +1135,15 @@ export default function Home() {
       beatPulseRef.current = Math.max(0, beatPulseRef.current - delta * 4.6);
       shakeRef.current = Math.max(0, shakeRef.current - delta);
       hitFlashRef.current = Math.max(0, hitFlashRef.current - delta * 3.4);
+      collectFlashRef.current = Math.max(
+        0,
+        collectFlashRef.current - delta * 5.8,
+      );
+      busBounceRef.current = Math.max(0, busBounceRef.current - delta * 5.2);
+      screenPunchRef.current = Math.max(
+        0,
+        screenPunchRef.current - delta * 7,
+      );
 
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext("2d");
@@ -1008,7 +1169,9 @@ export default function Home() {
       drawGame,
       failGame,
       finishGame,
+      playFanHit,
       playBeat,
+      showJudgement,
       showToast,
       spawnBeat,
       triggerDamageVariation,
@@ -1056,6 +1219,9 @@ export default function Home() {
     beatPulseRef.current = 0;
     shakeRef.current = 0;
     hitFlashRef.current = 0;
+    collectFlashRef.current = 0;
+    busBounceRef.current = 0;
+    screenPunchRef.current = 0;
     setFans(STARTING_FANS);
     setCombo(0);
     setMaxCombo(0);
@@ -1064,6 +1230,7 @@ export default function Home() {
     setCurrentBpm(selectedTrack.bpmAt(0));
     setArrangement("normal");
     setToast(null);
+    setNoteJudgement(null);
 
     const now = performance.now();
     startTimeRef.current = now;
@@ -1117,6 +1284,24 @@ export default function Home() {
     [addBurst, addFloatText, showToast],
   );
 
+  const returnToSongSelect = useCallback(() => {
+    if (animationRef.current) {
+      window.cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    if (audioRef.current) {
+      void audioRef.current.close();
+      audioRef.current = null;
+    }
+    statusRef.current = "ready";
+    setStatus("ready");
+    setProgress(0);
+    setToast(null);
+    setNoteJudgement(null);
+    entitiesRef.current = [];
+    pedestrianRef.current = null;
+  }, []);
+
   const toggleMute = useCallback(() => {
     mutedRef.current = !mutedRef.current;
     setMuted(mutedRef.current);
@@ -1169,6 +1354,9 @@ export default function Home() {
       if (toastTimerRef.current) {
         window.clearTimeout(toastTimerRef.current);
       }
+      if (judgementTimerRef.current) {
+        window.clearTimeout(judgementTimerRef.current);
+      }
     };
   }, [drawGame]);
 
@@ -1211,7 +1399,7 @@ export default function Home() {
             <li><i className="legend fan-stick" />应援棒：粉丝 +1</li>
             <li><i className="legend warning" />障碍物：掉粉并触发变调</li>
             <li><i className="legend lucky-bag">?</i>锦囊：×2 或 ÷2</li>
-            <li><i className="legend pedestrian-icon">♿</i>行人：立即避让</li>
+            <li><i className="legend pedestrian-icon">♿</i>行人：按预警换到安全车道</li>
           </ul>
           <p className="tip-copy">
             应援棒会沿每首歌的节拍路线出现；节奏加速或转折时，路线也会随之换道。
@@ -1275,16 +1463,26 @@ export default function Home() {
               </div>
             )}
 
+            {noteJudgement && (
+              <div
+                key={noteJudgement.key}
+                className={`note-judgement quality-${noteJudgement.quality.toLowerCase()}`}
+                aria-live="polite"
+              >
+                <strong>{noteJudgement.quality}</strong>
+                <span>{noteJudgement.detail}</span>
+              </div>
+            )}
+
             {status === "ready" && (
               <div className="game-overlay intro-overlay">
-                <p className="overlay-kicker">CHOOSE YOUR SONG</p>
-                <h1>
-                  <span>应援</span>
-                  <span>巴士</span>
-                </h1>
-                <p className="english-title">RHYTHM RUSH</p>
+                <div className="song-select-title">
+                  <p className="overlay-kicker">SONG SELECT</p>
+                  <h1>选歌</h1>
+                  <span>点击曲目即可试听 4 拍</span>
+                </div>
                 <div className="track-picker" aria-label="选择歌曲">
-                  {TRACKS.map((track) => (
+                  {TRACKS.map((track, index) => (
                     <button
                       key={track.id}
                       className={selectedTrackId === track.id ? "is-selected" : ""}
@@ -1293,24 +1491,29 @@ export default function Home() {
                           ? { borderColor: track.color, color: track.color }
                           : undefined
                       }
-                      onClick={() => setSelectedTrackId(track.id)}
+                      onClick={() => selectAndPreviewTrack(track)}
                       aria-pressed={selectedTrackId === track.id}
                     >
-                      <span>
+                      <span className="song-number">0{index + 1}</span>
+                      <span className="track-copy">
                         <b>{track.name}</b>
                         <small>{track.description}</small>
                       </span>
                       <em>{track.tempoLabel}</em>
-                      <i>{track.difficulty}</i>
+                      <i>
+                        {selectedTrackId === track.id
+                          ? "✓ 已选择"
+                          : `▶ ${track.difficulty}`}
+                      </i>
                     </button>
                   ))}
                 </div>
                 <p className="intro-copy">
-                  应援棒就是音符轨迹：听到节拍变化，<br />
-                  立刻左右换道追上它！
+                  当前曲目：<strong>《{selectedTrack.name}》</strong><br />
+                  应援棒沿歌曲节拍生成，跟着点子换道！
                 </p>
                 <button className="primary-button" onClick={startGame}>
-                  <span>▶</span> 播放并发车
+                  <span>▶</span> 用这首歌发车
                 </button>
                 <p className="control-hint">← → / A D / 下方按钮</p>
               </div>
@@ -1344,9 +1547,14 @@ export default function Home() {
                 <p className="coin-formula">
                   场馆奖励 {resultTier.coins} + 合拍奖励 {maxCombo * 3}
                 </p>
-                <button className="primary-button" onClick={startGame}>
-                  再跑一场
-                </button>
+                <div className="result-actions">
+                  <button className="primary-button" onClick={startGame}>
+                    再跑一场
+                  </button>
+                  <button className="secondary-button" onClick={returnToSongSelect}>
+                    返回选歌
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1365,9 +1573,14 @@ export default function Home() {
                   <strong>{fans}</strong>
                   <small>COINS +0</small>
                 </div>
-                <button className="primary-button" onClick={startGame}>
-                  重新发车
-                </button>
+                <div className="result-actions">
+                  <button className="primary-button" onClick={startGame}>
+                    重新发车
+                  </button>
+                  <button className="secondary-button" onClick={returnToSongSelect}>
+                    返回选歌
+                  </button>
+                </div>
               </div>
             )}
           </div>
