@@ -32,17 +32,22 @@ test("server-renders the uploadable rhythm game", async () => {
   assert.match(html, /<title>应援巴士 · Rhythm Rush<\/title>/i);
   assert.match(html, /SONG SELECT/);
   assert.match(html, />选歌</);
-  assert.match(html, /上传歌曲后自动分析节拍/);
+  assert.match(html, /每首歌都有独立卡点、换道路线与道路主题/);
+  assert.match(html, /怪火/);
+  assert.match(html, /略略略略略/);
+  assert.match(html, /昨晚我环游了地球/);
+  assert.match(html, /幻火夜城/);
+  assert.match(html, /糖果街区/);
+  assert.match(html, /星球环线/);
   assert.match(html, /id="custom-song-upload"/);
   assert.match(html, /type="file"/);
+  assert.doesNotMatch(html, /class="side-panel/);
   assert.match(html, /class="hit-button"/);
   assert.match(html, /SPACE 击打/);
   assert.match(html, /Ⅱ PAUSE/);
-  assert.match(html, /BUS LV\./);
+  assert.match(html, /<small>BUS<\/small>/);
   assert.match(html, /星芽小巴/);
   assert.match(html, /载客上限/);
-  assert.match(html, /磁铁：5 秒吸收附近应援棒并判定 PERFECT/);
-  assert.match(html, /无敌：5 秒无视道路障碍/);
 });
 
 test("keeps beat analysis and active hit judgement in the client game", async () => {
@@ -53,6 +58,12 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
 
   assert.match(page, /function analyzeAudioBuffer/);
   assert.match(page, /decodeAudioData/);
+  assert.match(page, /const notePattern = intensityPattern\.map/);
+  assert.match(page, /detectedNotePatternRef/);
+  assert.match(page, /if \(noteLevel === 0\) return/);
+  assert.match(page, /mapTheme: "illusion-city"/);
+  assert.match(page, /mapTheme: "candy-blocks"/);
+  assert.match(page, /mapTheme: "earth-orbit"/);
   assert.match(page, /const hitNote = useCallback/);
   assert.match(page, /"PERFECT" \| "GREAT" \| "GOOD" \| "MISS"/);
   assert.match(page, /const VEHICLE_LEVELS/);
@@ -70,6 +81,8 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /type: pickupType/);
   assert.match(page, /MAGNET PERFECT · \+1 FAN/);
   assert.match(page, /MAGNET ACTIVE · AUTO PERFECT/);
+  assert.match(page, /附近应援棒自动 PERFECT/);
+  assert.match(page, /5 秒内无视所有障碍/);
   assert.match(page, /elapsed < invincibleUntilRef\.current/);
   assert.match(page, /audioRef\.current\?\.suspend/);
   assert.match(page, /vehicleLevelRef\.current = 1/);

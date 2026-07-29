@@ -29,8 +29,13 @@ type EntityType =
   | "invincible";
 type ObstacleType = "cone" | "speaker" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
-type TrackId = "custom-upload";
+type TrackId =
+  | "guaihuo"
+  | "lueluelue"
+  | "earth-tour"
+  | "custom-upload";
 type ToneMode = "normal" | "thick" | "thin";
+type MapTheme = "illusion-city" | "candy-blocks" | "earth-orbit" | "custom";
 
 type VehicleLevel = {
   level: number;
@@ -116,15 +121,21 @@ type ConcertTier = {
 type Track = {
   id: TrackId;
   name: string;
+  artist: string;
   english: string;
   description: string;
   tempoLabel: string;
   difficulty: string;
   color: string;
+  audioSrc?: string;
+  mapTheme: MapTheme;
+  mapLabel: string;
   totalBeats: number;
   grannyBeat: number;
   melody: number[];
   lanePattern: number[];
+  notePattern: number[];
+  intensityPattern: number[];
   bpmAt: (beat: number) => number;
 };
 
@@ -201,13 +212,76 @@ function getVehicleTaskProgress(
 
 const TRACKS: Track[] = [
   {
+    id: "guaihuo",
+    name: "怪火",
+    artist: "aespa",
+    english: "ILLUSION",
+    description: "低频强拍谱面 · 重拍折返换道",
+    tempoLabel: "AUTO MAP",
+    difficulty: "HARD",
+    color: "#ff5b9f",
+    audioSrc: "/audio/guaihuo.mp3",
+    mapTheme: "illusion-city",
+    mapLabel: "幻火夜城",
+    totalBeats: 96,
+    grannyBeat: 48,
+    melody: [220, 277.18, 329.63, 440, 415.3, 329.63, 277.18, 246.94],
+    lanePattern: [2, 3, 2, 1, 0, 1, 3, 4],
+    notePattern: [1],
+    intensityPattern: [0.7],
+    bpmAt: () => 96,
+  },
+  {
+    id: "lueluelue",
+    name: "略略略略略",
+    artist: "TOP登陆少年组合",
+    english: "LUE LUE LUE",
+    description: "跳跃节拍谱面 · 高频连续变道",
+    tempoLabel: "AUTO MAP",
+    difficulty: "EXPERT",
+    color: "#ffe66d",
+    audioSrc: "/audio/lueluelue.mp3",
+    mapTheme: "candy-blocks",
+    mapLabel: "糖果街区",
+    totalBeats: 96,
+    grannyBeat: 52,
+    melody: [246.94, 329.63, 392, 493.88, 440, 392, 329.63, 293.66],
+    lanePattern: [2, 1, 3, 4, 2, 0, 1, 3],
+    notePattern: [1],
+    intensityPattern: [0.7],
+    bpmAt: () => 112,
+  },
+  {
+    id: "earth-tour",
+    name: "昨晚我环游了地球",
+    artist: "汪苏泷",
+    english: "AROUND THE EARTH",
+    description: "旋律流动谱面 · 随段落能量展开",
+    tempoLabel: "AUTO MAP",
+    difficulty: "NORMAL",
+    color: "#72f1ff",
+    audioSrc: "/audio/earth-tour.mp3",
+    mapTheme: "earth-orbit",
+    mapLabel: "星球环线",
+    totalBeats: 96,
+    grannyBeat: 44,
+    melody: [196, 246.94, 293.66, 369.99, 329.63, 293.66, 246.94, 220],
+    lanePattern: [2, 2, 3, 4, 3, 2, 1, 0],
+    notePattern: [1],
+    intensityPattern: [0.6],
+    bpmAt: () => 92,
+  },
+  {
     id: "custom-upload",
     name: "自选歌曲",
+    artist: "本地音乐",
     english: "CUSTOM TRACK",
     description: "上传本地歌曲，自动分析鼓点与节拍",
     tempoLabel: "AUTO BPM",
     difficulty: "RHYTHM",
     color: "#ffe66d",
+    mapTheme: "custom",
+    mapLabel: "自定义巡演",
     totalBeats: 96,
     grannyBeat: 42,
     melody: [220, 277.18, 329.63, 440, 415.3, 329.63, 277.18, 246.94],
@@ -215,9 +289,66 @@ const TRACKS: Track[] = [
       2, 3, 2, 1, 0, 1, 3, 4, 3, 1, 2, 4, 3, 2, 0, 1,
       2, 4, 3, 2, 1, 0, 2, 3, 4, 2, 0, 1, 3, 4, 2, 1,
     ],
+    notePattern: [1],
+    intensityPattern: [0.65],
     bpmAt: () => 96,
   },
 ];
+
+const MAP_PALETTES: Record<
+  MapTheme,
+  {
+    sky: string;
+    sidewalk: string;
+    building: string;
+    road: string;
+    edgeLeft: string;
+    edgeRight: string;
+    windowA: string;
+    windowB: string;
+  }
+> = {
+  "illusion-city": {
+    sky: "#09061b",
+    sidewalk: "#1c1037",
+    building: "#32184d",
+    road: "#120f24",
+    edgeLeft: "#ff4fa3",
+    edgeRight: "#8a5cff",
+    windowA: "#ff6e3f",
+    windowB: "#ff4fa3",
+  },
+  "candy-blocks": {
+    sky: "#120d2d",
+    sidewalk: "#27194c",
+    building: "#56326b",
+    road: "#17122d",
+    edgeLeft: "#ffe66d",
+    edgeRight: "#ff73bd",
+    windowA: "#ffe66d",
+    windowB: "#72f1ff",
+  },
+  "earth-orbit": {
+    sky: "#050f2b",
+    sidewalk: "#0c2450",
+    building: "#163466",
+    road: "#071a33",
+    edgeLeft: "#72f1ff",
+    edgeRight: "#4f7cff",
+    windowA: "#72f1ff",
+    windowB: "#bca7ff",
+  },
+  custom: {
+    sky: "#090823",
+    sidewalk: "#15113b",
+    building: "#272054",
+    road: "#111129",
+    edgeLeft: "#72f1ff",
+    edgeRight: "#ff4fa3",
+    windowA: "#ff4faf",
+    windowB: "#5ff6ff",
+  },
+};
 
 function getTrack(id: TrackId) {
   return TRACKS.find((track) => track.id === id) ?? TRACKS[0];
@@ -342,36 +473,112 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
     bpm = 96;
   }
 
-  const averageFlux =
-    flux.reduce((total, value) => total + value, 0) / Math.max(1, flux.length);
-  let lane = 2;
-  let laneDirection: -1 | 1 = 1;
-  const lanePattern = beatTimes.map((time, beat) => {
+  const beatFeatures = beatTimes.map((time) => {
     const frame = Math.min(
       flux.length - 1,
       Math.max(0, Math.round(time / 1000 / secondsPerFrame)),
     );
-    let localStrength = 0;
+    let onset = 0;
+    let energy = 0;
+    let samples = 0;
     for (
-      let index = Math.max(0, frame - 2);
-      index <= Math.min(flux.length - 1, frame + 2);
+      let index = Math.max(0, frame - 3);
+      index <= Math.min(flux.length - 1, frame + 3);
       index += 1
     ) {
-      localStrength = Math.max(localStrength, flux[index]);
+      onset = Math.max(onset, flux[index]);
+      energy += envelope[index];
+      samples += 1;
     }
-    if (beat > 0 && (localStrength > averageFlux * 1.7 || beat % 4 === 0)) {
-      const step = localStrength > averageFlux * 3.2 && beat % 8 === 0 ? 2 : 1;
-      const nextLane = lane + laneDirection * step;
+    return { onset, energy: energy / Math.max(1, samples) };
+  });
+  const percentile = (values: number[], ratio: number) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))] ?? 0;
+  };
+  const onsetReference = Math.max(
+    0.0001,
+    percentile(
+      beatFeatures.map((feature) => feature.onset),
+      0.82,
+    ),
+  );
+  const energyFloor = percentile(
+    beatFeatures.map((feature) => feature.energy),
+    0.16,
+  );
+  const energyReference = Math.max(
+    energyFloor + 0.0001,
+    percentile(
+      beatFeatures.map((feature) => feature.energy),
+      0.78,
+    ),
+  );
+  const intensityPattern = beatFeatures.map((feature) => {
+    const onsetStrength = Math.min(1, feature.onset / onsetReference);
+    const bodyStrength = Math.min(
+      1,
+      Math.max(
+        0,
+        (feature.energy - energyFloor) / (energyReference - energyFloor),
+      ),
+    );
+    return Math.round((onsetStrength * 0.72 + bodyStrength * 0.28) * 100) / 100;
+  });
+  const notePattern = intensityPattern.map((intensity, beat) => {
+    const feature = beatFeatures[beat];
+    const hasBody = feature.energy > Math.max(0.002, energyFloor * 0.72);
+    if (!hasBody) return 0;
+    if (intensity >= 0.72 || (beat % 4 === 0 && intensity >= 0.42)) return 2;
+    if (intensity >= 0.34 || (beat % 2 === 0 && intensity >= 0.24)) return 1;
+    return 0;
+  });
+
+  // Avoid long empty stretches in sustained sections, while keeping intros and
+  // breakdowns sparse. Every inserted note still sits on the analysed beat grid.
+  let emptyRun = 0;
+  for (let beat = 0; beat < notePattern.length; beat += 1) {
+    if (notePattern[beat] > 0) {
+      emptyRun = 0;
+      continue;
+    }
+    emptyRun += 1;
+    if (
+      emptyRun >= 4 &&
+      beatFeatures[beat].energy > Math.max(0.002, energyFloor)
+    ) {
+      notePattern[beat] = 1;
+      emptyRun = 0;
+    }
+  }
+
+  let lane = 2;
+  let laneDirection: -1 | 1 = 1;
+  const lanePattern = beatTimes.map((time, beat) => {
+    if (
+      beat > 0 &&
+      notePattern[beat] > 0 &&
+      (notePattern[beat] === 2 || beat % 4 === 0)
+    ) {
+      const audioSeed = Math.round(
+        time + beatFeatures[beat].onset * 100_000 + beatFeatures[beat].energy * 10_000,
+      );
+      if (audioSeed % 3 === 0) {
+        laneDirection = laneDirection === 1 ? -1 : 1;
+      }
+      const nextLane = lane + laneDirection;
       if (nextLane < 0 || nextLane > 4) {
         laneDirection = laneDirection === 1 ? -1 : 1;
       }
-      lane = clampLane(lane + laneDirection * step);
+      lane = clampLane(lane + laneDirection);
     }
     return lane;
   });
 
-  return { beatTimes, bpm, lanePattern };
+  return { beatTimes, bpm, lanePattern, notePattern, intensityPattern };
 }
+
+type AudioAnalysis = ReturnType<typeof analyzeAudioBuffer>;
 
 function laneCenter(lane: number) {
   return ROAD_LEFT + LANE_WIDTH * lane + LANE_WIDTH / 2;
@@ -456,7 +663,15 @@ export default function Home() {
   const songUrlRef = useRef<string | null>(null);
   const detectedBeatTimesRef = useRef<number[]>([]);
   const detectedLanePatternRef = useRef<number[]>(TRACKS[0].lanePattern);
+  const detectedNotePatternRef = useRef<number[]>(TRACKS[0].notePattern);
+  const detectedIntensityPatternRef = useRef<number[]>(
+    TRACKS[0].intensityPattern,
+  );
   const detectedBpmRef = useRef(96);
+  const songLoadRequestRef = useRef(0);
+  const analysisCacheRef = useRef<
+    Partial<Record<TrackId, { analysis: AudioAnalysis; duration: number }>>
+  >({});
   const mutedRef = useRef(false);
   const beatPulseRef = useRef(0);
   const shakeRef = useRef(0);
@@ -485,6 +700,8 @@ export default function Home() {
   const [songError, setSongError] = useState("");
   const [detectedBpm, setDetectedBpm] = useState(96);
   const [songDuration, setSongDuration] = useState(0);
+  const [selectedTrackId, setSelectedTrackId] =
+    useState<TrackId>("guaihuo");
   const [fans, setFans] = useState(STARTING_FANS);
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
@@ -512,7 +729,7 @@ export default function Home() {
     key: number;
   } | null>(null);
   const [luckyDialog, setLuckyDialog] = useState<LuckyDialog | null>(null);
-  const selectedTrack = getTrack("custom-upload");
+  const selectedTrack = getTrack(selectedTrackId);
   const currentVehicle = getVehicle(vehicleLevel);
   const vehicleTaskProgress = getVehicleTaskProgress(
     currentVehicle,
@@ -647,10 +864,146 @@ export default function Home() {
     });
   }, []);
 
+  const installPreparedSong = useCallback(
+    async ({
+      track,
+      title,
+      fileName,
+      sourceUrl,
+      objectUrl,
+      analysis,
+      duration,
+    }: {
+      track: Track;
+      title: string;
+      fileName: string;
+      sourceUrl: string;
+      objectUrl: boolean;
+      analysis: AudioAnalysis;
+      duration: number;
+    }) => {
+      songRef.current?.pause();
+      if (audioRef.current) {
+        await audioRef.current.close();
+        audioRef.current = null;
+      }
+      mediaSourceRef.current = null;
+      lowShelfRef.current = null;
+      highShelfRef.current = null;
+      if (songUrlRef.current) {
+        URL.revokeObjectURL(songUrlRef.current);
+        songUrlRef.current = null;
+      }
+
+      const song = new Audio(sourceUrl);
+      song.preload = "auto";
+      song.muted = mutedRef.current;
+      song.playbackRate = 1;
+
+      songUrlRef.current = objectUrl ? sourceUrl : null;
+      songRef.current = song;
+      detectedBeatTimesRef.current = analysis.beatTimes;
+      detectedLanePatternRef.current = analysis.lanePattern;
+      detectedNotePatternRef.current = analysis.notePattern;
+      detectedIntensityPatternRef.current = analysis.intensityPattern;
+      detectedBpmRef.current = analysis.bpm;
+      setSongFileName(fileName);
+      setSongTitle(title);
+      setDetectedBpm(analysis.bpm);
+      setSongDuration(duration);
+      setCurrentBpm(analysis.bpm);
+      setSongReady(true);
+      showToast(
+        `${track.mapLabel}谱面完成 · ${analysis.bpm} BPM`,
+        "gold",
+      );
+    },
+    [showToast],
+  );
+
+  const loadBuiltInTrack = useCallback(
+    async (trackId: Exclude<TrackId, "custom-upload">) => {
+      const track = getTrack(trackId);
+      if (!track.audioSrc) return;
+      const requestId = ++songLoadRequestRef.current;
+      setSelectedTrackId(trackId);
+      setSongLoading(true);
+      setSongReady(false);
+      setSongError("");
+      setSongTitle(track.name);
+      setSongFileName("");
+
+      try {
+        const cached = analysisCacheRef.current[trackId];
+        if (cached) {
+          await installPreparedSong({
+            track,
+            title: track.name,
+            fileName: `${track.name}.mp3`,
+            sourceUrl: track.audioSrc,
+            objectUrl: false,
+            analysis: cached.analysis,
+            duration: cached.duration,
+          });
+          return;
+        }
+
+        const response = await fetch(track.audioSrc);
+        if (!response.ok) {
+          throw new Error("内置歌曲读取失败，请刷新页面重试");
+        }
+        const AudioContextClass =
+          window.AudioContext ||
+          (
+            window as typeof window & {
+              webkitAudioContext?: typeof AudioContext;
+            }
+          ).webkitAudioContext;
+        if (!AudioContextClass) {
+          throw new Error("当前浏览器不支持音频节拍分析");
+        }
+        const analysisContext = new AudioContextClass();
+        const decoded = await analysisContext.decodeAudioData(
+          await response.arrayBuffer(),
+        );
+        const analysis = analyzeAudioBuffer(decoded);
+        const duration = decoded.duration;
+        await analysisContext.close();
+        if (requestId !== songLoadRequestRef.current) return;
+
+        analysisCacheRef.current[trackId] = { analysis, duration };
+        await installPreparedSong({
+          track,
+          title: track.name,
+          fileName: `${track.name}.mp3`,
+          sourceUrl: track.audioSrc,
+          objectUrl: false,
+          analysis,
+          duration,
+        });
+      } catch (error) {
+        if (requestId !== songLoadRequestRef.current) return;
+        setSongError(
+          error instanceof Error
+            ? error.message
+            : "歌曲解析失败，请换一首歌曲",
+        );
+        setSongReady(false);
+      } finally {
+        if (requestId === songLoadRequestRef.current) {
+          setSongLoading(false);
+        }
+      }
+    },
+    [installPreparedSong],
+  );
+
   const handleSongUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
+      const requestId = ++songLoadRequestRef.current;
+      setSelectedTrackId("custom-upload");
       setSongLoading(true);
       setSongReady(false);
       setSongError("");
@@ -684,34 +1037,21 @@ export default function Home() {
           await file.arrayBuffer(),
         );
         const analysis = analyzeAudioBuffer(decoded);
+        const duration = decoded.duration;
         await analysisContext.close();
-
-        songRef.current?.pause();
-        if (audioRef.current) {
-          await audioRef.current.close();
-          audioRef.current = null;
-        }
-        mediaSourceRef.current = null;
-        lowShelfRef.current = null;
-        highShelfRef.current = null;
-        if (songUrlRef.current) URL.revokeObjectURL(songUrlRef.current);
+        if (requestId !== songLoadRequestRef.current) return;
         const url = URL.createObjectURL(file);
-        const song = new Audio(url);
-        song.preload = "auto";
-        song.muted = mutedRef.current;
-        song.playbackRate = 1;
-
-        songUrlRef.current = url;
-        songRef.current = song;
-        detectedBeatTimesRef.current = analysis.beatTimes;
-        detectedLanePatternRef.current = analysis.lanePattern;
-        detectedBpmRef.current = analysis.bpm;
-        setDetectedBpm(analysis.bpm);
-        setSongDuration(decoded.duration);
-        setCurrentBpm(analysis.bpm);
-        setSongReady(true);
-        showToast(`节拍分析完成 · ${analysis.bpm} BPM`, "gold");
+        await installPreparedSong({
+          track: getTrack("custom-upload"),
+          title: file.name.replace(/\.[^.]+$/, ""),
+          fileName: file.name,
+          sourceUrl: url,
+          objectUrl: true,
+          analysis,
+          duration,
+        });
       } catch (error) {
+        if (requestId !== songLoadRequestRef.current) return;
         const message =
           error instanceof Error ? error.message : "音频解析失败，请换一个文件";
         setSongError(message);
@@ -719,11 +1059,13 @@ export default function Home() {
         setSongTitle("未选择歌曲");
         songRef.current = null;
       } finally {
-        setSongLoading(false);
+        if (requestId === songLoadRequestRef.current) {
+          setSongLoading(false);
+        }
         event.target.value = "";
       }
     },
-    [showToast],
+    [installPreparedSong],
   );
 
   const playBeat = useCallback((beat: number) => {
@@ -827,35 +1169,43 @@ export default function Home() {
     const track = trackRef.current;
     if (beat >= track.totalBeats - TRAVEL_BEATS) return;
 
-    const safeLane = track.lanePattern[beat % track.lanePattern.length];
+    const targetBeat = beat + TRAVEL_BEATS;
+    const safeLane =
+      track.lanePattern[targetBeat % track.lanePattern.length];
+    const noteLevel =
+      track.notePattern[targetBeat % track.notePattern.length] ?? 0;
+    const intensity =
+      track.intensityPattern[targetBeat % track.intensityPattern.length] ?? 0;
+    if (noteLevel === 0) return;
     const spawnY = -70;
     const spawnAt = beatTimesRef.current[beat];
-    const hitAt = beatTimesRef.current[beat + TRAVEL_BEATS];
+    const hitAt = beatTimesRef.current[targetBeat];
+    const activeNoteOrdinal = track.notePattern
+      .slice(0, targetBeat + 1)
+      .reduce((total, level) => total + (level > 0 ? 1 : 0), 0);
 
-    if (beat > 0) {
-      const pickupType: EntityType =
-        beat % 24 === 8
-          ? "magnet"
-          : beat % 24 === 20
-            ? "invincible"
-            : beat % 16 === 15
-              ? "lucky"
-              : "fan";
-      entitiesRef.current.push({
-        id: entityIdRef.current++,
-        type: pickupType,
-        lane: safeLane,
-        y: spawnY,
-        targetBeat: beat + TRAVEL_BEATS,
-        spawnAt,
-        hitAt,
-        handled: false,
-        wobble: Math.random() * Math.PI,
-      });
-    }
+    const pickupType: EntityType =
+      activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 8
+        ? "magnet"
+        : activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 20
+          ? "invincible"
+          : activeNoteOrdinal > 8 && activeNoteOrdinal % 19 === 0
+            ? "lucky"
+            : "fan";
+    entitiesRef.current.push({
+      id: entityIdRef.current++,
+      type: pickupType,
+      lane: safeLane,
+      y: spawnY,
+      targetBeat,
+      spawnAt,
+      hitAt,
+      handled: false,
+      wobble: Math.random() * Math.PI,
+    });
 
     if (beat < 2) return;
-    const obstacleCount = beat > 12 && beat % 4 === 0 ? 2 : 1;
+    const obstacleCount = beat > 12 && noteLevel === 2 && intensity > 0.68 ? 2 : 1;
     const used = new Set<number>([safeLane]);
     for (let i = 0; i < obstacleCount; i += 1) {
       let obstacleLane = (beat * 2 + i * 3) % 5;
@@ -870,7 +1220,7 @@ export default function Home() {
         obstacle: obstacleTypes[(beat + i) % obstacleTypes.length],
         lane: obstacleLane,
         y: spawnY - i * 8,
-        targetBeat: beat + TRAVEL_BEATS,
+        targetBeat,
         spawnAt,
         hitAt,
         handled: false,
@@ -929,7 +1279,9 @@ export default function Home() {
   const drawGame = useCallback(
     (ctx: CanvasRenderingContext2D, elapsed: number) => {
       const pulse = beatPulseRef.current;
-      const visualSpeed = 180 + trackRef.current.bpmAt(beatRef.current) * 1.2;
+      const activeTrack = trackRef.current;
+      const palette = MAP_PALETTES[activeTrack.mapTheme];
+      const visualSpeed = 180 + activeTrack.bpmAt(beatRef.current) * 1.2;
       const roadOffset = ((elapsed / 1000) * visualSpeed) % 92;
       const shakeX = shakeRef.current > 0 ? (Math.random() - 0.5) * 12 : 0;
       const shakeY = shakeRef.current > 0 ? (Math.random() - 0.5) * 8 : 0;
@@ -943,35 +1295,57 @@ export default function Home() {
         ctx.translate(-GAME_WIDTH / 2, -GAME_HEIGHT / 2);
       }
       ctx.clearRect(-16, -16, GAME_WIDTH + 32, GAME_HEIGHT + 32);
-      ctx.fillStyle = "#090823";
+      ctx.fillStyle = palette.sky;
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
       // Pixel city and sidewalks.
-      ctx.fillStyle = pulse > 0 ? "#1d174f" : "#15113b";
+      ctx.fillStyle = palette.sidewalk;
       ctx.fillRect(0, 0, ROAD_LEFT, GAME_HEIGHT);
       ctx.fillRect(ROAD_LEFT + ROAD_WIDTH, 0, GAME_WIDTH - ROAD_LEFT - ROAD_WIDTH, GAME_HEIGHT);
       for (let y = -92 + roadOffset; y < GAME_HEIGHT + 92; y += 92) {
-        ctx.fillStyle = "#272054";
+        ctx.fillStyle = palette.building;
         ctx.fillRect(5, y, 31, 78);
         ctx.fillRect(444, y, 31, 78);
-        ctx.fillStyle = y % 184 < 10 ? "#ff4faf" : "#5ff6ff";
+        ctx.fillStyle = y % 184 < 10 ? palette.windowA : palette.windowB;
         ctx.fillRect(10, y + 12, 10, 15);
         ctx.fillRect(459, y + 36, 10, 15);
         ctx.fillStyle = "#ffe66d";
         ctx.fillRect(24, y + 45, 6, 12);
         ctx.fillRect(447, y + 9, 6, 12);
+        if (activeTrack.mapTheme === "illusion-city") {
+          ctx.fillStyle = "#ff623f";
+          ctx.fillRect(15, y + 61, 16, 8 + pulse * 5);
+          ctx.fillStyle = "#ffb23f";
+          ctx.fillRect(20, y + 55, 6, 9 + pulse * 4);
+        } else if (activeTrack.mapTheme === "candy-blocks") {
+          ctx.fillStyle = "#ff73bd";
+          ctx.fillRect(7, y + 55, 12, 12);
+          ctx.fillStyle = "#72f1ff";
+          ctx.fillRect(22, y + 55, 12, 12);
+        } else if (activeTrack.mapTheme === "earth-orbit") {
+          ctx.fillStyle = "rgba(114, 241, 255, 0.7)";
+          ctx.fillRect(15, y + 61, 3, 3);
+          ctx.fillRect(28, y + 30, 3, 3);
+          ctx.strokeStyle = "rgba(188, 167, 255, 0.5)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(458, y + 63, 10, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
 
       // Neon road.
-      ctx.fillStyle = "#111129";
+      ctx.fillStyle = palette.road;
       ctx.fillRect(ROAD_LEFT, 0, ROAD_WIDTH, GAME_HEIGHT);
       ctx.fillStyle = "#2a245b";
       ctx.fillRect(ROAD_LEFT, 0, 5, GAME_HEIGHT);
       ctx.fillRect(ROAD_LEFT + ROAD_WIDTH - 5, 0, 5, GAME_HEIGHT);
-      ctx.fillStyle = `rgba(114, 241, 255, ${0.22 + pulse * 0.5})`;
+      ctx.globalAlpha = 0.34 + pulse * 0.5;
+      ctx.fillStyle = palette.edgeLeft;
       ctx.fillRect(ROAD_LEFT + 5, 0, 2, GAME_HEIGHT);
-      ctx.fillStyle = `rgba(255, 77, 166, ${0.22 + pulse * 0.5})`;
+      ctx.fillStyle = palette.edgeRight;
       ctx.fillRect(ROAD_LEFT + ROAD_WIDTH - 7, 0, 2, GAME_HEIGHT);
+      ctx.globalAlpha = 1;
 
       for (let lane = 1; lane < 5; lane += 1) {
         const x = ROAD_LEFT + lane * LANE_WIDTH;
@@ -1838,7 +2212,7 @@ export default function Home() {
     const song = songRef.current;
     const analysedBeats = detectedBeatTimesRef.current;
     if (!songReady || !song || analysedBeats.length < 12) {
-      showToast("请先上传一首本地歌曲", "pink");
+      showToast("请先选择一首歌曲", "pink");
       return;
     }
     if (animationRef.current) {
@@ -1882,6 +2256,8 @@ export default function Home() {
       tempoLabel: `${detectedBpmRef.current} BPM`,
       bpmAt: () => detectedBpmRef.current,
       lanePattern: detectedLanePatternRef.current,
+      notePattern: detectedNotePatternRef.current,
+      intensityPattern: detectedIntensityPatternRef.current,
     };
     trackRef.current = runtimeTrack;
     beatTimesRef.current = analysedBeats;
@@ -2120,6 +2496,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    void loadBuiltInTrack("guaihuo");
+  }, [loadBuiltInTrack]);
+
+  useEffect(() => {
     const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
     const savedCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
     window.localStorage.removeItem("fan-bus-vehicle-level");
@@ -2259,29 +2639,6 @@ export default function Home() {
       </header>
 
       <section className="game-layout">
-        <aside className="side-panel mission-panel" aria-label="巡演任务">
-          <span className="panel-number">01</span>
-          <p className="eyebrow">TONIGHT&apos;S MISSION</p>
-          <h2>载着明星，奔赴下一场演唱会</h2>
-          <div className="pixel-rule" />
-          <ul>
-            <li><i className="legend fan-stick" />对准应援棒：按 HIT 粉丝 +1</li>
-            <li><i className="legend warning" />障碍物：掉粉并改变音色，节奏不变</li>
-            <li><i className="legend lucky-bag">?</i>锦囊：碰到后选择是否开启，再揭晓 ×2 或 ÷2</li>
-            <li><i className="legend magnet-tool" />磁铁：5 秒吸收附近应援棒并判定 PERFECT</li>
-            <li><i className="legend invincible-tool">★</i>无敌：5 秒无视道路障碍</li>
-            <li><i className="legend pedestrian-icon">♿</i>行人：按预警换到安全车道</li>
-          </ul>
-          <div className="side-upgrade-card">
-            <small>BUS LV.{currentVehicle.level} · 容量 {currentVehicle.capacity}</small>
-            <strong>{currentVehicle.name}</strong>
-            <span>{currentVehicle.task}</span>
-          </div>
-          <p className="tip-copy">
-            ← → 负责换道，SPACE / HIT 负责击打，P / ESC 暂停；只有在正确车道踩中点子才会收集。
-          </p>
-        </aside>
-
         <div className="game-cabinet">
           <div className="cabinet-top">
             <div>
@@ -2446,34 +2803,87 @@ export default function Home() {
                 <div className="song-select-title">
                   <p className="overlay-kicker">SONG SELECT</p>
                   <h1>选歌</h1>
-                  <span>上传歌曲后自动分析节拍</span>
+                  <span>每首歌都有独立卡点、换道路线与道路主题</span>
                 </div>
-                <div className="track-picker" aria-label="选择本地歌曲">
+                <div className="track-picker" aria-label="选择歌曲">
+                  {TRACKS.filter((track) => track.audioSrc).map(
+                    (track, index) => {
+                      const isSelected = selectedTrackId === track.id;
+                      return (
+                        <button
+                          type="button"
+                          key={track.id}
+                          className={isSelected ? "is-selected" : ""}
+                          onClick={() =>
+                            void loadBuiltInTrack(
+                              track.id as Exclude<TrackId, "custom-upload">,
+                            )
+                          }
+                          style={{ color: track.color }}
+                          aria-pressed={isSelected}
+                        >
+                          <span className="song-number">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span className="track-copy">
+                            <b>{track.name}</b>
+                            <small>
+                              {track.artist} · {track.description}
+                            </small>
+                          </span>
+                          <em>
+                            {isSelected && songReady
+                              ? `${detectedBpm} BPM`
+                              : track.mapLabel}
+                          </em>
+                          <i>
+                            {isSelected && songLoading
+                              ? "ANALYZING"
+                              : isSelected && songReady
+                                ? "✓ 已选择"
+                                : track.difficulty}
+                          </i>
+                        </button>
+                      );
+                    },
+                  )}
                   <label
-                    className={`uploaded-track-row ${songReady ? "is-selected" : ""}`}
+                    className={`uploaded-track-row ${
+                      selectedTrackId === "custom-upload" ? "is-selected" : ""
+                    }`}
                     htmlFor="custom-song-upload"
                   >
-                    <span className="song-number">01</span>
+                    <span className="song-number">04</span>
                     <span className="track-copy">
-                      <b>{songReady ? songTitle : "本地歌曲"}</b>
+                      <b>
+                        {selectedTrackId === "custom-upload" && songReady
+                          ? songTitle
+                          : "上传自己的歌曲"}
+                      </b>
                       <small>
-                        {songLoading
+                        {selectedTrackId === "custom-upload" && songLoading
                           ? "正在拆解节拍与鼓点…"
-                          : songReady
+                          : selectedTrackId === "custom-upload" && songReady
                             ? "节拍分析完成，可以发车"
                             : "支持 MP3 / M4A / WAV / AAC / OGG"}
                       </small>
                     </span>
                     <em>
-                      {songLoading
+                      {selectedTrackId === "custom-upload" && songLoading
                         ? "分析中"
-                        : songReady
+                        : selectedTrackId === "custom-upload" && songReady
                           ? `${detectedBpm} BPM · ${Math.floor(songDuration / 60)}:${String(
                               Math.floor(songDuration % 60),
                             ).padStart(2, "0")}`
-                          : "AUTO BPM"}
+                          : "自定义巡演"}
                     </em>
-                    <i>{songLoading ? "ANALYZING" : songReady ? "✓ 已选择" : "UPLOAD"}</i>
+                    <i>
+                      {selectedTrackId === "custom-upload" && songLoading
+                        ? "ANALYZING"
+                        : selectedTrackId === "custom-upload" && songReady
+                          ? "✓ 已选择"
+                          : "UPLOAD"}
+                    </i>
                   </label>
                 </div>
                 <input
@@ -2484,9 +2894,9 @@ export default function Home() {
                   onChange={handleSongUpload}
                 />
                 <label className="upload-button" htmlFor="custom-song-upload">
-                  {songReady ? "↻ 更换歌曲" : "＋ 上传本地歌曲"}
+                  ＋ 上传本地歌曲
                 </label>
-                {songFileName && (
+                {songFileName && selectedTrackId === "custom-upload" && (
                   <p className="file-status" title={songFileName}>
                     {songReady ? "✓" : "…"} {songFileName}
                   </p>
@@ -2494,8 +2904,10 @@ export default function Home() {
                 {songError && <p className="song-error">{songError}</p>}
                 <p className="intro-copy">
                   应援棒到达黄色判定线时按 <strong>SPACE / HIT</strong><br />
-                  当前 {currentVehicle.name} · 上限 {currentVehicle.capacity} 粉丝<br />
-                  音频只保留在当前浏览器，不会上传服务器
+                  {selectedTrack.mapLabel} · {selectedTrack.description}<br />
+                  {selectedTrackId === "custom-upload"
+                    ? "你上传的音频只保留在当前浏览器"
+                    : `当前 ${currentVehicle.name} · 上限 ${currentVehicle.capacity} 粉丝`}
                 </p>
                 <button
                   className="primary-button"
@@ -2503,7 +2915,11 @@ export default function Home() {
                   disabled={!songReady || songLoading}
                 >
                   <span>▶</span>{" "}
-                  {songReady ? "用这首歌发车" : "请先上传歌曲"}
+                  {songLoading
+                    ? "正在生成卡点地图…"
+                    : songReady
+                      ? `用《${songTitle}》发车`
+                      : "请选择歌曲"}
                 </button>
                 <p className="control-hint">
                   ← → / A D 换道 · SPACE 击打 · P / ESC 暂停
@@ -2742,41 +3158,6 @@ export default function Home() {
             </button>
           </div>
         </div>
-
-        <aside className="side-panel schedule-panel" aria-label="演唱会等级">
-          <span className="panel-number">02</span>
-          <p className="eyebrow">VENUE LADDER</p>
-          <h2>粉丝越多，舞台越大</h2>
-          <div className="venue-list">
-            {[
-              ["080+", "星河体育场", "880"],
-              ["055+", "霓虹体育馆", "560"],
-              ["035+", "城市剧场", "320"],
-              ["020+", "Livehouse", "180"],
-              ["000+", "街角快闪", "80"],
-            ].map(([count, name, coins], index) => (
-              <div className="venue-row" key={name}>
-                <span className="venue-rank">0{index + 1}</span>
-                <span>
-                  <small>{count} FANS</small>
-                  {name}
-                </span>
-                <b>● {coins}</b>
-              </div>
-            ))}
-          </div>
-          <div className="now-playing">
-            <span>NOW PLAYING</span>
-            <strong>{songReady ? songTitle : "WAITING FOR SONG"}</strong>
-            <small>
-              {songReady ? detectedBpm : "--"} BPM ·{" "}
-              {selectedTrack.difficulty}
-            </small>
-            <div className="equalizer" aria-hidden="true">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((bar) => <i key={bar} />)}
-            </div>
-          </div>
-        </aside>
       </section>
 
       <footer>

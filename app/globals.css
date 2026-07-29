@@ -65,7 +65,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: min(1440px, 100%);
+  width: min(760px, 100%);
   margin: 0 auto 18px;
   border-bottom: 2px solid rgba(114, 241, 255, 0.22);
   padding-bottom: 14px;
@@ -141,12 +141,10 @@ button:focus-visible {
 }
 
 .game-layout {
-  display: grid;
-  grid-template-columns: minmax(200px, 280px) minmax(340px, 520px) minmax(200px, 280px);
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(20px, 3vw, 56px);
-  width: min(1440px, 100%);
+  width: min(600px, 100%);
   margin: 0 auto;
 }
 
@@ -326,7 +324,7 @@ button:focus-visible {
 }
 
 .game-cabinet {
-  width: min(100%, 520px);
+  width: min(100%, 560px);
   border: 3px solid #342b70;
   background: #151239;
   padding: 8px;
@@ -1204,6 +1202,11 @@ button:focus-visible {
   margin-bottom: 12px;
 }
 
+.intro-overlay {
+  overflow-y: auto;
+  padding: 14px 10px;
+}
+
 .song-select-title h1 {
   display: block;
   margin: 3px 0 2px;
@@ -1233,9 +1236,9 @@ button:focus-visible {
 
 .track-picker {
   display: grid;
-  width: min(88%, 386px);
+  width: min(92%, 430px);
   gap: 6px;
-  margin: 2px 0 12px;
+  margin: 2px 0 10px;
 }
 
 .track-picker button,
@@ -1811,7 +1814,7 @@ footer {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  width: min(1440px, 100%);
+  width: min(760px, 100%);
   margin: 14px auto 0;
   color: #5d557f;
   font-size: 8px;
@@ -1827,7 +1830,7 @@ footer i {
 
 @media (max-width: 1120px) {
   .game-layout {
-    grid-template-columns: minmax(340px, 500px) minmax(205px, 270px);
+    width: min(600px, 100%);
   }
 
   .mission-panel {
