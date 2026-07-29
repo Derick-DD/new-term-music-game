@@ -1466,24 +1466,53 @@ export default function Home() {
           ) {
             entity.handled = true;
             currentEntity.handled = true;
+            comboRef.current += 1;
+            maxComboRef.current = Math.max(
+              maxComboRef.current,
+              comboRef.current,
+            );
+            perfectCountRef.current += 1;
+            successfulHitsRef.current += 1;
+            setCombo(comboRef.current);
+            setMaxCombo(maxComboRef.current);
+            setSuccessfulHits(successfulHitsRef.current);
+            checkVehicleUpgrade();
             const capacity = getVehicle(vehicleLevelRef.current).capacity;
             const fanGained = fansRef.current < capacity;
             fansRef.current = Math.min(capacity, fansRef.current + 1);
             setFans(fansRef.current);
+            showJudgement(
+              "PERFECT",
+              fanGained
+                ? `MAGNET PERFECT · +1 FAN · ×${comboRef.current}`
+                : `MAGNET PERFECT · BUS FULL ${capacity} · ×${comboRef.current}`,
+            );
             addBurst(
               laneCenter(entity.lane),
               entity.y,
-              fanGained ? "#72f1ff" : "#ffe66d",
-              14,
+              "#ffe66d",
+              24,
             );
             addFloatText(
               laneCenter(entity.lane),
               entity.y - 18,
-              fanGained ? "MAGNET +1" : `满载 ${capacity}`,
-              fanGained ? "#72f1ff" : "#ffe66d",
+              fanGained ? "PERFECT +1" : `PERFECT · 满载 ${capacity}`,
+              "#ffe66d",
             );
             playFanHit(entity.targetBeat);
-            collectFlashRef.current = 0.72;
+            beatPulseRef.current = 1.45;
+            collectFlashRef.current = 1;
+            busBounceRef.current = 0.8;
+            screenPunchRef.current = 0.75;
+            navigator.vibrate?.([14, 10, 20]);
+            if (
+              perfectCountRef.current % 8 === 0 &&
+              !shieldRef.current
+            ) {
+              shieldRef.current = true;
+              setShield(true);
+              showToast("8 次 PERFECT！获得应援护盾", "gold");
+            }
             continue;
           }
           if (!entity.handled && elapsed > entity.hitAt + MISS_WINDOW) {
@@ -1542,7 +1571,7 @@ export default function Home() {
           busBounceRef.current = 1.15;
           addBurst(x, PLAYER_Y - 10, "#72f1ff", 30);
           addFloatText(x, PLAYER_Y - 66, "磁铁 5 秒", "#72f1ff");
-          showToast("获得磁铁！5 秒内自动吸收附近应援棒", "cyan");
+          showToast("获得磁铁！5 秒内附近应援棒自动 PERFECT", "cyan");
           navigator.vibrate?.([24, 15, 32]);
         } else if (entity.type === "invincible") {
           entity.handled = true;
@@ -1693,6 +1722,7 @@ export default function Home() {
     [
       addBurst,
       addFloatText,
+      checkVehicleUpgrade,
       drawGame,
       failGame,
       finishGame,
@@ -1727,7 +1757,7 @@ export default function Home() {
 
     if (!candidate) {
       if (elapsed < magnetUntilRef.current) {
-        showJudgement("GREAT", "MAGNET ACTIVE · AUTO COLLECT");
+        showJudgement("PERFECT", "MAGNET ACTIVE · AUTO PERFECT");
         return;
       }
       comboRef.current = 0;
@@ -2238,7 +2268,7 @@ export default function Home() {
             <li><i className="legend fan-stick" />对准应援棒：按 HIT 粉丝 +1</li>
             <li><i className="legend warning" />障碍物：掉粉并改变音色，节奏不变</li>
             <li><i className="legend lucky-bag">?</i>锦囊：碰到后选择是否开启，再揭晓 ×2 或 ÷2</li>
-            <li><i className="legend magnet-tool" />磁铁：5 秒自动吸收附近应援棒</li>
+            <li><i className="legend magnet-tool" />磁铁：5 秒吸收附近应援棒并判定 PERFECT</li>
             <li><i className="legend invincible-tool">★</i>无敌：5 秒无视道路障碍</li>
             <li><i className="legend pedestrian-icon">♿</i>行人：按预警换到安全车道</li>
           </ul>
