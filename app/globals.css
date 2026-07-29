@@ -340,6 +340,35 @@ button:focus-visible {
   gap: 4px;
 }
 
+.cabinet-tools {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.pause-toggle {
+  border: 1px solid #51458b;
+  background: #18143d;
+  color: #a89fd1;
+  padding: 4px 7px;
+  font-size: 7px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.pause-toggle:hover:not(:disabled),
+.pause-toggle.is-paused {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(255, 230, 109, 0.1);
+}
+
+.pause-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.32;
+}
+
 .bpm-bars i {
   width: 16px;
   height: 4px;
@@ -716,6 +745,67 @@ button:focus-visible {
     rgba(8, 7, 29, 0.86);
   text-align: center;
   backdrop-filter: blur(1.5px);
+}
+
+.pause-overlay {
+  z-index: 7;
+  padding: 24px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(114, 241, 255, 0.045) 0 3px,
+      transparent 3px 32px
+    ),
+    rgba(8, 7, 29, 0.95);
+}
+
+.pause-icon {
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 86px;
+  margin: 14px 0 8px;
+  border: 4px solid var(--cyan);
+  color: var(--gold);
+  font-family: "Arial Black", sans-serif;
+  font-size: 43px;
+  box-shadow:
+    7px 7px 0 #492c79,
+    0 0 22px rgba(114, 241, 255, 0.28);
+}
+
+.pause-overlay h2 {
+  margin: 4px 0 8px;
+  color: #fff;
+  font-family: "Arial Black", "PingFang SC", sans-serif;
+  font-size: clamp(36px, 10vw, 56px);
+  letter-spacing: -0.06em;
+  text-shadow:
+    4px 0 0 var(--pink),
+    -3px 4px 0 #5037c4;
+}
+
+.pause-overlay > p:not(.overlay-kicker) {
+  margin: 0 0 22px;
+  color: #c8c1e7;
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.pause-actions {
+  width: min(100%, 430px);
+  flex-wrap: wrap;
+}
+
+.pause-actions .primary-button {
+  min-width: 144px;
+}
+
+.pause-hint {
+  margin-top: 18px;
+  color: #756c9f;
+  font-size: 8px;
+  letter-spacing: 0.12em;
 }
 
 .intro-overlay h1 {
@@ -1425,6 +1515,30 @@ footer i {
 
   .cabinet-top {
     height: 24px;
+  }
+
+  .cabinet-top > div:first-child {
+    max-width: 42%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cabinet-tools {
+    gap: 5px;
+  }
+
+  .pause-toggle {
+    padding: 3px 5px;
+    font-size: 6px;
+  }
+
+  .bpm-bars {
+    gap: 2px;
+  }
+
+  .bpm-bars i {
+    width: 10px;
   }
 
   .hud {

@@ -37,6 +37,7 @@ test("server-renders the uploadable rhythm game", async () => {
   assert.match(html, /type="file"/);
   assert.match(html, /class="hit-button"/);
   assert.match(html, /SPACE 击打/);
+  assert.match(html, /Ⅱ PAUSE/);
   assert.match(html, /BUS LV\./);
   assert.match(html, /星芽小巴/);
   assert.match(html, /载客上限/);
@@ -53,7 +54,11 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /const hitNote = useCallback/);
   assert.match(page, /"PERFECT" \| "GREAT" \| "GOOD" \| "MISS"/);
   assert.match(page, /const VEHICLE_LEVELS/);
-  assert.match(page, /fan-bus-vehicle-level/);
+  assert.match(page, /const pauseGame = useCallback/);
+  assert.match(page, /const resumeGame = useCallback/);
+  assert.match(page, /audioRef\.current\?\.suspend/);
+  assert.match(page, /vehicleLevelRef\.current = 1/);
+  assert.doesNotMatch(page, /localStorage\.setItem\("fan-bus-vehicle-level"/);
   assert.match(page, /requirement: \{ hits: 4, perfect: 1 \}/);
   assert.match(page, /requirement: \{ hits: 12, maxCombo: 6 \}/);
   assert.match(page, /requirement: \{ hits: 22, perfect: 7, maxCombo: 10 \}/);

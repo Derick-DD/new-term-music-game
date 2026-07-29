@@ -12,7 +12,7 @@ const STARTING_FANS = 12;
 const TRAVEL_BEATS = 4;
 const MISS_WINDOW = 190;
 
-type GameStatus = "ready" | "playing" | "finished" | "failed";
+type GameStatus = "ready" | "playing" | "paused" | "finished" | "failed";
 type EntityType = "fan" | "obstacle" | "lucky";
 type ObstacleType = "cone" | "speaker" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
@@ -578,7 +578,6 @@ export default function Home() {
     const next = getVehicle(current.level + 1);
     vehicleLevelRef.current = next.level;
     setVehicleLevel(next.level);
-    window.localStorage.setItem("fan-bus-vehicle-level", String(next.level));
     screenPunchRef.current = 1.8;
     collectFlashRef.current = 1.4;
     busBounceRef.current = 1.35;
@@ -1672,6 +1671,7 @@ export default function Home() {
     setStatus("playing");
     laneRef.current = 2;
     busXRef.current = laneCenter(2);
+    vehicleLevelRef.current = 1;
     fansRef.current = STARTING_FANS;
     comboRef.current = 0;
     maxComboRef.current = 0;
@@ -1685,8 +1685,6 @@ export default function Home() {
     shieldRef.current = false;
     perfectCountRef.current = 0;
     successfulHitsRef.current = 0;
-    toneModeRef.current = "normal";
-    arrangementUntilRef.current = -1;
     grannyWarnedRef.current = false;
     invulnerableUntilRef.current = 0;
     beatPulseRef.current = 0;
@@ -1696,15 +1694,16 @@ export default function Home() {
     busBounceRef.current = 0;
     screenPunchRef.current = 0;
     setFans(STARTING_FANS);
+    setVehicleLevel(1);
     setCombo(0);
     setMaxCombo(0);
     setSuccessfulHits(0);
     setProgress(0);
     setShield(false);
     setCurrentBpm(detectedBpmRef.current);
-    setToneMode("normal");
     setToast(null);
     setNoteJudgement(null);
+    resetSongTone();
 
     song.pause();
     song.currentTime = 0;
@@ -1726,7 +1725,43 @@ export default function Home() {
     lastTimeRef.current = now;
     lastHudRef.current = 0;
     animationRef.current = window.requestAnimationFrame(gameLoop);
-  }, [gameLoop, selectedTrack, showToast, songReady, songTitle]);
+  }, [
+    gameLoop,
+    resetSongTone,
+    selectedTrack,
+    showToast,
+    songReady,
+    songTitle,
+  ]);
+
+  const pauseGame = useCallback(() => {
+    if (statusRef.current !== "playing") return;
+    statusRef.current = "paused";
+    setStatus("paused");
+    if (animationRef.current) {
+      window.cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    songRef.current?.pause();
+    void audioRef.current?.suspend();
+    setNoteJudgement(null);
+  }, []);
+
+  const resumeGame = useCallback(async () => {
+    if (statusRef.current !== "paused" || !songRef.current) return;
+    statusRef.current = "playing";
+    setStatus("playing");
+    try {
+      await audioRef.current?.resume();
+      await songRef.current.play();
+      lastTimeRef.current = performance.now();
+      animationRef.current = window.requestAnimationFrame(gameLoop);
+    } catch {
+      statusRef.current = "paused";
+      setStatus("paused");
+      showToast("歌曲继续播放失败，请重新发车", "danger");
+    }
+  }, [gameLoop, showToast]);
 
   const move = useCallback(
     (direction: -1 | 1) => {
@@ -1751,6 +1786,21 @@ export default function Home() {
     resetSongTone();
     statusRef.current = "ready";
     setStatus("ready");
+    laneRef.current = 2;
+    busXRef.current = laneCenter(2);
+    vehicleLevelRef.current = 1;
+    fansRef.current = STARTING_FANS;
+    comboRef.current = 0;
+    maxComboRef.current = 0;
+    successfulHitsRef.current = 0;
+    perfectCountRef.current = 0;
+    shieldRef.current = false;
+    setVehicleLevel(1);
+    setFans(STARTING_FANS);
+    setCombo(0);
+    setMaxCombo(0);
+    setSuccessfulHits(0);
+    setShield(false);
     setProgress(0);
     setToast(null);
     setNoteJudgement(null);
@@ -1767,26 +1817,43 @@ export default function Home() {
   useEffect(() => {
     const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
     const savedCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
-    const savedVehicleLevel = Math.max(
-      1,
-      Math.min(
-        VEHICLE_LEVELS.length,
-        Number(window.localStorage.getItem("fan-bus-vehicle-level") || 1),
-      ),
-    );
+    window.localStorage.removeItem("fan-bus-vehicle-level");
     const savedScoreTimer = window.setTimeout(() => {
       setBestFans(savedBest);
       setBankCoins(savedCoins);
-      vehicleLevelRef.current = savedVehicleLevel;
-      setVehicleLevel(savedVehicleLevel);
+      vehicleLevelRef.current = 1;
+      setVehicleLevel(1);
     }, 0);
 
     const keydown = (event: KeyboardEvent) => {
-      if (["ArrowLeft", "ArrowRight", " ", "a", "A", "d", "D"].includes(event.key)) {
+      if (
+        [
+          "ArrowLeft",
+          "ArrowRight",
+          " ",
+          "a",
+          "A",
+          "d",
+          "D",
+          "p",
+          "P",
+          "Escape",
+        ].includes(event.key)
+      ) {
         event.preventDefault();
       }
-      if (event.repeat && event.key === " ") return;
-      if (event.key === "ArrowLeft" || event.key === "a" || event.key === "A") {
+      const isPauseKey =
+        event.key === "p" || event.key === "P" || event.key === "Escape";
+      if (event.repeat && (event.key === " " || isPauseKey)) return;
+      if (isPauseKey && statusRef.current === "playing") {
+        pauseGame();
+      } else if (isPauseKey && statusRef.current === "paused") {
+        void resumeGame();
+      } else if (
+        event.key === "ArrowLeft" ||
+        event.key === "a" ||
+        event.key === "A"
+      ) {
         move(-1);
       } else if (
         event.key === "ArrowRight" ||
@@ -1798,7 +1865,10 @@ export default function Home() {
         toggleMute();
       } else if (event.key === " " && statusRef.current === "playing") {
         hitNote();
-      } else if (event.key === " " && statusRef.current !== "playing") {
+      } else if (
+        event.key === " " &&
+        ["ready", "finished", "failed"].includes(statusRef.current)
+      ) {
         void startGame();
       }
     };
@@ -1807,7 +1877,14 @@ export default function Home() {
       window.clearTimeout(savedScoreTimer);
       window.removeEventListener("keydown", keydown);
     };
-  }, [hitNote, move, startGame, toggleMute]);
+  }, [
+    hitNote,
+    move,
+    pauseGame,
+    resumeGame,
+    startGame,
+    toggleMute,
+  ]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1848,7 +1925,12 @@ export default function Home() {
         <div className="brand">
           <span className="brand-kicker">
             PIXEL TOUR /{" "}
-            {status === "playing" ? currentBpm : songReady ? detectedBpm : "--"} BPM
+            {status === "playing" || status === "paused"
+              ? currentBpm
+              : songReady
+                ? detectedBpm
+                : "--"}{" "}
+            BPM
           </span>
           <span className="brand-title">应援巴士</span>
         </div>
@@ -1889,7 +1971,7 @@ export default function Home() {
             <span>{currentVehicle.task}</span>
           </div>
           <p className="tip-copy">
-            ← → 负责换道，SPACE / HIT 负责击打；只有在正确车道踩中点子才会收集。
+            ← → 负责换道，SPACE / HIT 负责击打，P / ESC 暂停；只有在正确车道踩中点子才会收集。
           </p>
         </aside>
 
@@ -1897,15 +1979,34 @@ export default function Home() {
           <div className="cabinet-top">
             <div>
               <span className="live-dot" />
-              {status === "playing" ? songTitle : "SELECT A TRACK"}
+              {status === "playing" || status === "paused"
+                ? songTitle
+                : "SELECT A TRACK"}
             </div>
-            <div className="bpm-bars" aria-hidden="true">
-              {[0, 1, 2, 3].map((bar) => (
-                <i
-                  key={bar}
-                  className={beatIndex % 4 === bar && status === "playing" ? "active" : ""}
-                />
-              ))}
+            <div className="cabinet-tools">
+              <button
+                className={`pause-toggle ${status === "paused" ? "is-paused" : ""}`}
+                onClick={() =>
+                  status === "paused" ? void resumeGame() : pauseGame()
+                }
+                disabled={status !== "playing" && status !== "paused"}
+                aria-label={status === "paused" ? "继续游戏" : "暂停游戏"}
+                aria-pressed={status === "paused"}
+              >
+                {status === "paused" ? "▶ CONTINUE" : "Ⅱ PAUSE"}
+              </button>
+              <div className="bpm-bars" aria-hidden="true">
+                {[0, 1, 2, 3].map((bar) => (
+                  <i
+                    key={bar}
+                    className={
+                      beatIndex % 4 === bar && status === "playing"
+                        ? "active"
+                        : ""
+                    }
+                  />
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1926,7 +2027,9 @@ export default function Home() {
             >
               <strong>{songReady ? currentBpm : "--"} BPM</strong>
               <span>
-                {toneMode !== "normal"
+                {status === "paused"
+                  ? "已暂停 · P / ESC 继续"
+                  : toneMode !== "normal"
                   ? `${toneMode === "thick" ? "厚" : "细"}音色中 · TEMPO LOCK`
                   : shield
                     ? "护盾减伤 READY"
@@ -2046,7 +2149,44 @@ export default function Home() {
                   <span>▶</span>{" "}
                   {songReady ? "用这首歌发车" : "请先上传歌曲"}
                 </button>
-                <p className="control-hint">← → / A D 换道 · SPACE 击打</p>
+                <p className="control-hint">
+                  ← → / A D 换道 · SPACE 击打 · P / ESC 暂停
+                </p>
+              </div>
+            )}
+
+            {status === "paused" && (
+              <div className="game-overlay pause-overlay">
+                <p className="overlay-kicker">TOUR PAUSED</p>
+                <div className="pause-icon" aria-hidden="true">
+                  Ⅱ
+                </div>
+                <h2>巡演暂停</h2>
+                <p>
+                  歌曲、节拍和道路已经冻结。<br />
+                  继续后从当前拍点重新出发。
+                </p>
+                <div className="result-actions pause-actions">
+                  <button
+                    className="primary-button"
+                    onClick={() => void resumeGame()}
+                  >
+                    ▶ 继续游戏
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => void startGame()}
+                  >
+                    ↻ 重新开局
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={returnToSongSelect}
+                  >
+                    返回选歌
+                  </button>
+                </div>
+                <small className="pause-hint">P / ESC 继续</small>
               </div>
             )}
 
