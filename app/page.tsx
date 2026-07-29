@@ -2,17 +2,33 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type Phase = "intro" | "playing" | "paused" | "bag" | "revive" | "result";
-type EntityType = "fan" | "barrier" | "lightstick" | "bag";
+const GAME_WIDTH = 480;
+const GAME_HEIGHT = 720;
+const ROAD_LEFT = 42;
+const ROAD_WIDTH = 396;
+const LANE_WIDTH = ROAD_WIDTH / 5;
+const PLAYER_Y = 584;
+const BPM = 120;
+const BEAT_MS = 60_000 / BPM;
+const SPAWN_BEATS = 60;
+const TOTAL_BEATS = 64;
+const STARTING_FANS = 12;
+const TRAVEL_BEATS = 4;
+const ENTITY_SPEED = (PLAYER_Y + 70) / ((BEAT_MS / 1000) * TRAVEL_BEATS);
+
+type GameStatus = "ready" | "playing" | "finished";
+type EntityType = "fan" | "obstacle" | "lucky";
+type ObstacleType = "cone" | "speaker" | "barrier";
+type ToastTone = "cyan" | "pink" | "gold" | "danger";
 
 type Entity = {
   id: number;
-  world: number;
-  offset: number;
   type: EntityType;
-  value: number;
-  hard?: boolean;
-  hit?: boolean;
+  lane: number;
+  y: number;
+  obstacle?: ObstacleType;
+  handled: boolean;
+  wobble: number;
 };
 
 type Particle = {
@@ -21,1071 +37,1032 @@ type Particle = {
   vx: number;
   vy: number;
   life: number;
+  maxLife: number;
   color: string;
+  size: number;
 };
 
-type Feedback = {
+type FloatText = {
   x: number;
   y: number;
   text: string;
   color: string;
   life: number;
+  maxLife: number;
 };
 
-type GameData = {
-  elapsed: number;
-  distance: number;
-  carX: number;
-  fans: number;
-  lightsticks: number;
-  combo: number;
-  bestCombo: number;
+type ConcertTier = {
+  name: string;
+  place: string;
   coins: number;
-  entities: Entity[];
-  particles: Particle[];
-  feedback: Feedback[];
-  spawnClock: number;
-  entityId: number;
-  invincible: number;
-  shake: number;
-  lastBeat: number;
+  color: string;
+  icon: string;
 };
 
-type GameResult = {
-  venue: string;
-  kicker: string;
-  reward: number;
-  score: number;
-};
-
-const GOAL_DISTANCE = 1200;
-const WORLD_SCALE = 2.25;
-const STARTING_COINS = 60;
-const DEMO_NOTES = [
-  220, 261.63, 293.66, 329.63, 293.66, 261.63, 220, 196,
-  220, 261.63, 329.63, 392, 329.63, 293.66, 261.63, 220,
+const SAFE_PATH = [
+  2, 2, 3, 3, 4, 3, 2, 1, 1, 0, 1, 2, 3, 4, 4, 3,
+  2, 1, 0, 0, 1, 2, 2, 3, 4, 3, 2, 1, 0, 1, 2, 3,
 ];
 
-const createGame = (): GameData => ({
-  elapsed: 0,
-  distance: 0,
-  carX: 0,
-  fans: 12,
-  lightsticks: 0,
-  combo: 0,
-  bestCombo: 0,
-  coins: STARTING_COINS,
-  entities: [],
-  particles: [],
-  feedback: [],
-  spawnClock: 0,
-  entityId: 0,
-  invincible: 0,
-  shake: 0,
-  lastBeat: -1,
-});
+const MELODY = [261.63, 329.63, 392, 523.25, 440, 392, 329.63, 293.66];
 
-function trackX(world: number, width: number) {
-  return (
-    width * 0.5 +
-    Math.sin(world * 0.017) * width * 0.2 +
-    Math.sin(world * 0.006 + 1.3) * width * 0.075
-  );
+function laneCenter(lane: number) {
+  return ROAD_LEFT + LANE_WIDTH * lane + LANE_WIDTH / 2;
 }
 
-function venueFor(fans: number, lightsticks: number): GameResult {
-  const score = fans + lightsticks * 4;
-  if (score >= 105) {
-    return { venue: "万人体育场", kicker: "全城沸腾", reward: 200, score };
+function clampLane(lane: number) {
+  return Math.max(0, Math.min(4, lane));
+}
+
+function getConcertTier(fans: number): ConcertTier {
+  if (fans >= 80) {
+    return {
+      name: "星河体育场",
+      place: "五万人全景演唱会",
+      coins: 880,
+      color: "#ffe66d",
+      icon: "✦",
+    };
   }
-  if (score >= 72) {
-    return { venue: "万人体育馆", kicker: "热浪出圈", reward: 120, score };
+  if (fans >= 55) {
+    return {
+      name: "霓虹体育馆",
+      place: "万人应援演唱会",
+      coins: 560,
+      color: "#72f1ff",
+      icon: "★",
+    };
   }
-  if (score >= 42) {
-    return { venue: "星光剧院", kicker: "一票难求", reward: 80, score };
+  if (fans >= 35) {
+    return {
+      name: "城市剧场",
+      place: "千人专场",
+      coins: 320,
+      color: "#ff7ac8",
+      icon: "♪",
+    };
   }
-  return { venue: "LIVEHOUSE", kicker: "首演成功", reward: 40, score };
+  if (fans >= 20) {
+    return {
+      name: "星光 Livehouse",
+      place: "百人见面会",
+      coins: 180,
+      color: "#bca7ff",
+      icon: "♫",
+    };
+  }
+  return {
+    name: "街角快闪",
+    place: "小型惊喜舞台",
+    coins: 80,
+    color: "#a8ff78",
+    icon: "♬",
+  };
+}
+
+function roundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, radius);
 }
 
 export default function Home() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const phaseRef = useRef<Phase>("intro");
-  const soundRef = useRef(true);
-  const onTrackRef = useRef(true);
-  const gameRef = useRef<GameData>(createGame());
-  const keysRef = useRef({ left: false, right: false });
-  const draggingRef = useRef(false);
-  const sizeRef = useRef({ width: 1200, height: 680, dpr: 1 });
-  const audioRef = useRef<{
-    context: AudioContext;
-    master: GainNode;
-    filter: BiquadFilterNode;
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const statusRef = useRef<GameStatus>("ready");
+  const laneRef = useRef(2);
+  const busXRef = useRef(laneCenter(2));
+  const fansRef = useRef(STARTING_FANS);
+  const comboRef = useRef(0);
+  const maxComboRef = useRef(0);
+  const beatRef = useRef(0);
+  const nextBeatRef = useRef(0);
+  const startTimeRef = useRef(0);
+  const lastTimeRef = useRef(0);
+  const lastHudRef = useRef(0);
+  const entityIdRef = useRef(0);
+  const entitiesRef = useRef<Entity[]>([]);
+  const particlesRef = useRef<Particle[]>([]);
+  const floatTextRef = useRef<FloatText[]>([]);
+  const audioRef = useRef<AudioContext | null>(null);
+  const mutedRef = useRef(false);
+  const beatPulseRef = useRef(0);
+  const shakeRef = useRef(0);
+  const hitFlashRef = useRef(0);
+  const invulnerableUntilRef = useRef(0);
+  const lastMoveBeatRef = useRef(-1);
+  const shieldRef = useRef(false);
+  const perfectCountRef = useRef(0);
+  const toastTimerRef = useRef<number | null>(null);
+
+  const [status, setStatus] = useState<GameStatus>("ready");
+  const [fans, setFans] = useState(STARTING_FANS);
+  const [combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [beatIndex, setBeatIndex] = useState(0);
+  const [muted, setMuted] = useState(false);
+  const [shield, setShield] = useState(false);
+  const [bestFans, setBestFans] = useState(0);
+  const [bankCoins, setBankCoins] = useState(0);
+  const [earnedCoins, setEarnedCoins] = useState(0);
+  const [resultTier, setResultTier] = useState<ConcertTier>(
+    getConcertTier(STARTING_FANS),
+  );
+  const [toast, setToast] = useState<{
+    text: string;
+    tone: ToastTone;
+    key: number;
   } | null>(null);
 
-  const [phase, setPhaseState] = useState<Phase>("intro");
-  const [soundOn, setSoundOn] = useState(true);
-  const [onTrack, setOnTrack] = useState(true);
-  const [hud, setHud] = useState({
-    fans: 12,
-    lightsticks: 0,
-    combo: 0,
-    distance: 0,
-    coins: STARTING_COINS,
-  });
-  const [result, setResult] = useState<GameResult>(() => venueFor(12, 0));
-
-  const setPhase = useCallback((next: Phase) => {
-    phaseRef.current = next;
-    setPhaseState(next);
-  }, []);
-
-  const initAudio = useCallback(() => {
-    if (audioRef.current) {
-      void audioRef.current.context.resume();
-      return;
+  const showToast = useCallback((text: string, tone: ToastTone) => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
     }
-    const context = new AudioContext();
-    const master = context.createGain();
-    const filter = context.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 10000;
-    master.gain.value = 0.13;
-    filter.connect(master);
-    master.connect(context.destination);
-    audioRef.current = { context, master, filter };
+    setToast({ text, tone, key: Date.now() });
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 820);
   }, []);
 
-  const playNote = useCallback((frequency: number, strong: boolean) => {
-    const audio = audioRef.current;
-    if (!audio || !soundRef.current) return;
-
-    const now = audio.context.currentTime;
-    const oscillator = audio.context.createOscillator();
-    const noteGain = audio.context.createGain();
-    oscillator.type = strong ? "triangle" : "sine";
-    oscillator.frequency.setValueAtTime(frequency, now);
-    noteGain.gain.setValueAtTime(0.0001, now);
-    noteGain.gain.exponentialRampToValueAtTime(strong ? 0.34 : 0.22, now + 0.025);
-    noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
-    oscillator.connect(noteGain);
-    noteGain.connect(audio.filter);
-    oscillator.start(now);
-    oscillator.stop(now + 0.4);
-
-    if (strong) {
-      const bass = audio.context.createOscillator();
-      const bassGain = audio.context.createGain();
-      bass.type = "sine";
-      bass.frequency.value = frequency / 2;
-      bassGain.gain.setValueAtTime(0.12, now);
-      bassGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.46);
-      bass.connect(bassGain);
-      bassGain.connect(audio.filter);
-      bass.start(now);
-      bass.stop(now + 0.48);
-    }
-  }, []);
-
-  const syncHud = useCallback(() => {
-    const game = gameRef.current;
-    setHud({
-      fans: game.fans,
-      lightsticks: game.lightsticks,
-      combo: game.combo,
-      distance: Math.min(GOAL_DISTANCE, Math.floor(game.distance)),
-      coins: game.coins,
-    });
-  }, []);
-
-  const startGame = useCallback(() => {
-    initAudio();
-    const width = sizeRef.current.width;
-    const next = createGame();
-    next.carX = trackX(0, width);
-    next.coins = gameRef.current.coins || STARTING_COINS;
-    gameRef.current = next;
-    onTrackRef.current = true;
-    setOnTrack(true);
-    syncHud();
-    setPhase("playing");
-  }, [initAudio, setPhase, syncHud]);
-
-  const finishGame = useCallback(() => {
-    const game = gameRef.current;
-    const nextResult = venueFor(game.fans, game.lightsticks);
-    game.coins += nextResult.reward;
-    setResult(nextResult);
-    syncHud();
-    setPhase("result");
-  }, [setPhase, syncHud]);
-
-  const togglePause = useCallback(() => {
-    if (phaseRef.current === "playing") setPhase("paused");
-    else if (phaseRef.current === "paused") setPhase("playing");
-  }, [setPhase]);
-
-  const toggleSound = useCallback(() => {
-    const next = !soundRef.current;
-    soundRef.current = next;
-    setSoundOn(next);
-    if (next) {
-      initAudio();
-      void audioRef.current?.context.resume();
-    }
-  }, [initAudio]);
-
-  const setMove = useCallback((direction: "left" | "right", active: boolean) => {
-    keysRef.current[direction] = active;
-  }, []);
-
-  const useBag = useCallback(() => {
-    const game = gameRef.current;
-    const lucky = Math.random() >= 0.42;
-    if (lucky) {
-      game.fans *= 2;
-      game.feedback.push({
-        x: game.carX,
-        y: sizeRef.current.height * 0.58,
-        text: "欧气爆棚 · 粉丝翻倍",
-        color: "#dfff4f",
-        life: 2,
-      });
-    } else {
-      game.fans = Math.floor(game.fans / 2);
-      game.combo = 0;
-      game.feedback.push({
-        x: game.carX,
-        y: sizeRef.current.height * 0.58,
-        text: "舆情突袭 · 粉丝减半",
-        color: "#ff6685",
-        life: 2,
-      });
-    }
-    syncHud();
-    if (game.fans <= 0) setPhase("revive");
-    else setPhase("playing");
-  }, [setPhase, syncHud]);
-
-  const skipBag = useCallback(() => {
-    gameRef.current.feedback.push({
-      x: gameRef.current.carX,
-      y: sizeRef.current.height * 0.58,
-      text: "稳住节奏",
-      color: "#ffffff",
-      life: 1.5,
-    });
-    setPhase("playing");
-  }, [setPhase]);
-
-  const revive = useCallback(() => {
-    const game = gameRef.current;
-    if (game.coins < 30) return;
-    game.coins -= 30;
-    game.fans = 8;
-    game.combo = 0;
-    game.invincible = 3;
-    game.feedback.push({
-      x: game.carX,
-      y: sizeRef.current.height * 0.62,
-      text: "返场成功 · 3秒无敌",
-      color: "#dfff4f",
-      life: 2,
-    });
-    syncHud();
-    setPhase("playing");
-  }, [setPhase, syncHud]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const context = canvas.getContext("2d");
-    if (!context) return;
-
-    let animationFrame = 0;
-    let previous = performance.now();
-    let hudClock = 0;
-
-    const resize = () => {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.round(rect.width * dpr));
-      canvas.height = Math.max(1, Math.round(rect.height * dpr));
-      sizeRef.current = { width: rect.width, height: rect.height, dpr };
-      if (!gameRef.current.carX) {
-        gameRef.current.carX = trackX(gameRef.current.distance, rect.width);
-      }
-    };
-
-    const burst = (x: number, y: number, color: string, count = 14) => {
-      const particles = gameRef.current.particles;
+  const addBurst = useCallback(
+    (x: number, y: number, color: string, count = 10) => {
       for (let i = 0; i < count; i += 1) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 35 + Math.random() * 90;
-        particles.push({
+        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;
+        const speed = 45 + Math.random() * 95;
+        particlesRef.current.push({
           x,
           y,
           vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - 25,
-          life: 0.7 + Math.random() * 0.5,
+          vy: Math.sin(angle) * speed,
+          life: 0.65,
+          maxLife: 0.65,
           color,
+          size: 3 + Math.random() * 5,
         });
       }
-    };
+    },
+    [],
+  );
 
-    const spawnEntity = () => {
-      const game = gameRef.current;
-      const roll = Math.random();
-      let type: EntityType;
-      if (roll < 0.5) type = "fan";
-      else if (roll < 0.73) type = "barrier";
-      else if (roll < 0.9) type = "lightstick";
-      else type = "bag";
-
-      const hard = type === "barrier" && Math.random() > 0.64;
-      const width = sizeRef.current.width;
-      const roadWidth = Math.max(92, Math.min(168, width * 0.15));
-      let offset = (Math.random() - 0.5) * roadWidth * 0.72;
-      if (type === "lightstick") {
-        offset =
-          (Math.random() > 0.5 ? 1 : -1) *
-          (roadWidth * (0.78 + Math.random() * 0.62));
-      }
-      if (type === "bag") {
-        offset = (Math.random() - 0.5) * roadWidth * 1.55;
-      }
-
-      const world = game.distance + 255 + Math.random() * 18;
-      game.entities.push({
-        id: game.entityId++,
-        world,
-        offset,
-        type,
-        value: type === "fan" ? (hard ? 6 : 2 + Math.floor(Math.random() * 3)) : 1,
-        hard,
+  const addFloatText = useCallback(
+    (x: number, y: number, text: string, color: string) => {
+      floatTextRef.current.push({
+        x,
+        y,
+        text,
+        color,
+        life: 0.9,
+        maxLife: 0.9,
       });
+    },
+    [],
+  );
 
-      if (type === "barrier" && hard) {
-        game.entities.push({
-          id: game.entityId++,
-          world: world + 5,
-          offset: offset + (Math.random() > 0.5 ? roadWidth * 0.62 : -roadWidth * 0.62),
-          type: "fan",
-          value: 7,
-          hard: true,
+  const playBeat = useCallback((beat: number) => {
+    const audio = audioRef.current;
+    if (!audio || mutedRef.current) return;
+
+    const now = audio.currentTime;
+    const kick = audio.createOscillator();
+    const kickGain = audio.createGain();
+    kick.type = "sine";
+    kick.frequency.setValueAtTime(120, now);
+    kick.frequency.exponentialRampToValueAtTime(48, now + 0.13);
+    kickGain.gain.setValueAtTime(0.34, now);
+    kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    kick.connect(kickGain).connect(audio.destination);
+    kick.start(now);
+    kick.stop(now + 0.18);
+
+    const note = audio.createOscillator();
+    const noteGain = audio.createGain();
+    note.type = beat % 4 === 0 ? "square" : "triangle";
+    note.frequency.setValueAtTime(MELODY[beat % MELODY.length], now);
+    noteGain.gain.setValueAtTime(beat % 2 === 0 ? 0.075 : 0.045, now);
+    noteGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    note.connect(noteGain).connect(audio.destination);
+    note.start(now);
+    note.stop(now + 0.17);
+
+    if (beat % 4 === 2) {
+      const snareBuffer = audio.createBuffer(
+        1,
+        Math.floor(audio.sampleRate * 0.11),
+        audio.sampleRate,
+      );
+      const data = snareBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i += 1) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+      }
+      const snare = audio.createBufferSource();
+      const snareGain = audio.createGain();
+      snare.buffer = snareBuffer;
+      snareGain.gain.setValueAtTime(0.1, now);
+      snareGain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+      snare.connect(snareGain).connect(audio.destination);
+      snare.start(now);
+    }
+  }, []);
+
+  const spawnBeat = useCallback((beat: number) => {
+    if (beat >= SPAWN_BEATS) return;
+
+    const safeLane = SAFE_PATH[beat % SAFE_PATH.length];
+    const spawnY = -70;
+
+    if (beat > 0) {
+      if (beat % 16 === 15) {
+        entitiesRef.current.push({
+          id: entityIdRef.current++,
+          type: "lucky",
+          lane: safeLane,
+          y: spawnY,
+          handled: false,
+          wobble: Math.random() * Math.PI,
         });
-      }
-    };
-
-    const drawStar = (ctx: CanvasRenderingContext2D, x: number, y: number, r: number) => {
-      ctx.beginPath();
-      for (let i = 0; i < 10; i += 1) {
-        const radius = i % 2 === 0 ? r : r * 0.42;
-        const angle = -Math.PI / 2 + (i * Math.PI) / 5;
-        const px = x + Math.cos(angle) * radius;
-        const py = y + Math.sin(angle) * radius;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-    };
-
-    const drawFan = (
-      ctx: CanvasRenderingContext2D,
-      x: number,
-      y: number,
-      scale: number,
-      valuable: boolean,
-    ) => {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(scale, scale);
-      ctx.fillStyle = valuable ? "#dfff4f" : "#ffffff";
-      ctx.beginPath();
-      ctx.arc(0, -8, 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = valuable ? "#dfff4f" : "#5ff0e8";
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(0, 17);
-      ctx.moveTo(0, 5);
-      ctx.lineTo(-10, -2);
-      ctx.moveTo(0, 5);
-      ctx.lineTo(10, -3);
-      ctx.moveTo(0, 17);
-      ctx.lineTo(-8, 28);
-      ctx.moveTo(0, 17);
-      ctx.lineTo(8, 28);
-      ctx.stroke();
-      ctx.fillStyle = valuable ? "#dfff4f" : "#ff6685";
-      ctx.fillRect(9, -16, 4, 17);
-      ctx.fillRect(12, -16, 16, 9);
-      ctx.restore();
-    };
-
-    const drawEntity = (
-      ctx: CanvasRenderingContext2D,
-      entity: Entity,
-      x: number,
-      y: number,
-      scale: number,
-    ) => {
-      if (entity.type === "fan") {
-        drawFan(ctx, x, y, scale, Boolean(entity.hard));
-        if (entity.value >= 6) {
-          ctx.fillStyle = "#071021";
-          ctx.font = `800 ${Math.max(10, 12 * scale)}px Arial`;
-          ctx.textAlign = "center";
-          ctx.fillText(`+${entity.value}`, x, y - 26 * scale);
-        }
-        return;
-      }
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(scale, scale);
-      if (entity.type === "barrier") {
-        ctx.fillStyle = entity.hard ? "#ff6685" : "#ffb84d";
-        ctx.fillRect(-25, -14, 50, 28);
-        ctx.fillStyle = "#071021";
-        for (let i = -18; i < 20; i += 16) {
-          ctx.save();
-          ctx.translate(i, 0);
-          ctx.rotate(-0.55);
-          ctx.fillRect(-4, -17, 8, 34);
-          ctx.restore();
-        }
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(-21, -20, 8, 8);
-        ctx.fillRect(13, -20, 8, 8);
-      } else if (entity.type === "lightstick") {
-        ctx.rotate(-0.35);
-        ctx.shadowColor = "#5ff0e8";
-        ctx.shadowBlur = 16;
-        ctx.fillStyle = "#5ff0e8";
-        ctx.fillRect(-5, -25, 10, 38);
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(-7, 10, 14, 12);
       } else {
-        ctx.fillStyle = "#825bff";
-        ctx.fillRect(-22, -18, 44, 38);
-        ctx.fillStyle = "#dfff4f";
-        ctx.fillRect(-4, -18, 8, 38);
-        ctx.fillRect(-22, -6, 44, 8);
-        drawStar(ctx, 0, 1, 9);
-        ctx.fill();
-      }
-      ctx.restore();
-    };
-
-    const drawBus = (
-      ctx: CanvasRenderingContext2D,
-      x: number,
-      y: number,
-      invincible: boolean,
-      isOnTrack: boolean,
-    ) => {
-      ctx.save();
-      ctx.translate(x, y);
-      if (invincible) {
-        ctx.globalAlpha = 0.56 + Math.sin(performance.now() * 0.02) * 0.3;
-      }
-      ctx.shadowColor = isOnTrack ? "#5ff0e8" : "#ff6685";
-      ctx.shadowBlur = isOnTrack ? 28 : 10;
-      ctx.fillStyle = "#16d4cd";
-      ctx.fillRect(-34, -49, 68, 94);
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = "#071021";
-      ctx.fillRect(-27, -39, 54, 30);
-      ctx.fillStyle = "#dfff4f";
-      ctx.fillRect(-34, 18, 68, 12);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(-25, 34, 13, 6);
-      ctx.fillRect(12, 34, 13, 6);
-      ctx.fillStyle = "#101b36";
-      ctx.fillRect(-42, -28, 8, 22);
-      ctx.fillRect(34, -28, 8, 22);
-      ctx.fillRect(-42, 19, 8, 22);
-      ctx.fillRect(34, 19, 8, 22);
-      ctx.fillStyle = "#dfff4f";
-      drawStar(ctx, 0, 9, 13);
-      ctx.fill();
-      ctx.restore();
-    };
-
-    const update = (dt: number) => {
-      const game = gameRef.current;
-      const { width, height } = sizeRef.current;
-      const roadWidth = Math.max(92, Math.min(168, width * 0.15));
-      const carY = height * 0.78;
-
-      game.elapsed += dt;
-      game.distance += dt * 30;
-      game.spawnClock += dt;
-      game.invincible = Math.max(0, game.invincible - dt);
-      game.shake = Math.max(0, game.shake - dt * 3.2);
-
-      const moveSpeed = Math.max(260, width * 0.34);
-      if (keysRef.current.left) game.carX -= moveSpeed * dt;
-      if (keysRef.current.right) game.carX += moveSpeed * dt;
-      game.carX = Math.max(48, Math.min(width - 48, game.carX));
-
-      const center = trackX(game.distance, width);
-      const nextOnTrack = Math.abs(game.carX - center) <= roadWidth / 2 + 29;
-      if (nextOnTrack !== onTrackRef.current) {
-        onTrackRef.current = nextOnTrack;
-        setOnTrack(nextOnTrack);
-        game.feedback.push({
-          x: game.carX,
-          y: carY - 70,
-          text: nextOnTrack ? "音轨已接通" : "偏离音轨",
-          color: nextOnTrack ? "#dfff4f" : "#ff6685",
-          life: 1.2,
+        entitiesRef.current.push({
+          id: entityIdRef.current++,
+          type: "fan",
+          lane: safeLane,
+          y: spawnY,
+          handled: false,
+          wobble: Math.random() * Math.PI,
         });
+        if (beat % 4 === 1) {
+          entitiesRef.current.push({
+            id: entityIdRef.current++,
+            type: "fan",
+            lane: safeLane,
+            y: spawnY - 34,
+            handled: false,
+            wobble: Math.random() * Math.PI,
+          });
+        }
+      }
+    }
+
+    if (beat < 2) return;
+    const obstacleCount = beat > 12 && beat % 4 === 0 ? 2 : 1;
+    const used = new Set<number>([safeLane]);
+    for (let i = 0; i < obstacleCount; i += 1) {
+      let obstacleLane = (beat * 2 + i * 3) % 5;
+      while (used.has(obstacleLane)) {
+        obstacleLane = (obstacleLane + 1) % 5;
+      }
+      used.add(obstacleLane);
+      const obstacleTypes: ObstacleType[] = ["cone", "speaker", "barrier"];
+      entitiesRef.current.push({
+        id: entityIdRef.current++,
+        type: "obstacle",
+        obstacle: obstacleTypes[(beat + i) % obstacleTypes.length],
+        lane: obstacleLane,
+        y: spawnY - i * 8,
+        handled: false,
+        wobble: Math.random() * Math.PI,
+      });
+    }
+  }, []);
+
+  const drawGame = useCallback(
+    (ctx: CanvasRenderingContext2D, elapsed: number) => {
+      const pulse = beatPulseRef.current;
+      const roadOffset = ((elapsed / 1000) * ENTITY_SPEED) % 92;
+      const shakeX = shakeRef.current > 0 ? (Math.random() - 0.5) * 12 : 0;
+      const shakeY = shakeRef.current > 0 ? (Math.random() - 0.5) * 8 : 0;
+
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+      ctx.clearRect(-16, -16, GAME_WIDTH + 32, GAME_HEIGHT + 32);
+      ctx.fillStyle = "#090823";
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+      // Pixel city and sidewalks.
+      ctx.fillStyle = pulse > 0 ? "#1d174f" : "#15113b";
+      ctx.fillRect(0, 0, ROAD_LEFT, GAME_HEIGHT);
+      ctx.fillRect(ROAD_LEFT + ROAD_WIDTH, 0, GAME_WIDTH - ROAD_LEFT - ROAD_WIDTH, GAME_HEIGHT);
+      for (let y = -92 + roadOffset; y < GAME_HEIGHT + 92; y += 92) {
+        ctx.fillStyle = "#272054";
+        ctx.fillRect(5, y, 31, 78);
+        ctx.fillRect(444, y, 31, 78);
+        ctx.fillStyle = y % 184 < 10 ? "#ff4faf" : "#5ff6ff";
+        ctx.fillRect(10, y + 12, 10, 15);
+        ctx.fillRect(459, y + 36, 10, 15);
+        ctx.fillStyle = "#ffe66d";
+        ctx.fillRect(24, y + 45, 6, 12);
+        ctx.fillRect(447, y + 9, 6, 12);
       }
 
-      const audio = audioRef.current;
-      if (audio) {
-        const active = soundRef.current && phaseRef.current === "playing";
-        audio.master.gain.setTargetAtTime(active ? (nextOnTrack ? 0.14 : 0.055) : 0.0001, audio.context.currentTime, 0.08);
-        audio.filter.frequency.setTargetAtTime(nextOnTrack ? 10500 : 360, audio.context.currentTime, 0.1);
+      // Neon road.
+      ctx.fillStyle = "#111129";
+      ctx.fillRect(ROAD_LEFT, 0, ROAD_WIDTH, GAME_HEIGHT);
+      ctx.fillStyle = "#2a245b";
+      ctx.fillRect(ROAD_LEFT, 0, 5, GAME_HEIGHT);
+      ctx.fillRect(ROAD_LEFT + ROAD_WIDTH - 5, 0, 5, GAME_HEIGHT);
+      ctx.fillStyle = `rgba(114, 241, 255, ${0.22 + pulse * 0.5})`;
+      ctx.fillRect(ROAD_LEFT + 5, 0, 2, GAME_HEIGHT);
+      ctx.fillStyle = `rgba(255, 77, 166, ${0.22 + pulse * 0.5})`;
+      ctx.fillRect(ROAD_LEFT + ROAD_WIDTH - 7, 0, 2, GAME_HEIGHT);
+
+      for (let lane = 1; lane < 5; lane += 1) {
+        const x = ROAD_LEFT + lane * LANE_WIDTH;
+        for (let y = -60 + roadOffset; y < GAME_HEIGHT; y += 92) {
+          ctx.fillStyle = `rgba(225, 231, 255, ${0.18 + pulse * 0.14})`;
+          ctx.fillRect(Math.round(x - 2), Math.round(y), 4, 45);
+        }
       }
 
-      const beat = Math.floor(game.elapsed * 2.15);
-      if (beat !== game.lastBeat) {
-        game.lastBeat = beat;
-        playNote(DEMO_NOTES[beat % DEMO_NOTES.length], beat % 4 === 0);
+      // Beat hit line.
+      ctx.fillStyle = `rgba(255, 230, 109, ${0.06 + pulse * 0.22})`;
+      ctx.fillRect(ROAD_LEFT + 7, PLAYER_Y - 4, ROAD_WIDTH - 14, 8);
+      ctx.fillStyle = `rgba(255, 255, 255, ${pulse * 0.65})`;
+      for (let lane = 0; lane < 5; lane += 1) {
+        ctx.fillRect(laneCenter(lane) - 18, PLAYER_Y - 6, 36, 3);
       }
 
-      while (game.spawnClock >= 0.64) {
-        game.spawnClock -= 0.64;
-        spawnEntity();
+      // Speed lines.
+      ctx.fillStyle = "rgba(114, 241, 255, 0.22)";
+      for (let i = 0; i < 8; i += 1) {
+        const x = ROAD_LEFT + 18 + ((i * 83 + beatRef.current * 17) % (ROAD_WIDTH - 36));
+        const y = (roadOffset * 2 + i * 113) % GAME_HEIGHT;
+        ctx.fillRect(x, y, 2, 18 + (i % 3) * 8);
       }
 
-      for (const entity of game.entities) {
-        if (entity.hit) continue;
-        const y = carY - (entity.world - game.distance) * WORLD_SCALE;
-        const x = trackX(entity.world, width) + entity.offset;
-        if (Math.abs(y - carY) < 51 && Math.abs(x - game.carX) < 50) {
-          entity.hit = true;
-          if (entity.type === "fan") {
-            game.fans += entity.value;
-            game.combo += 1;
-            game.bestCombo = Math.max(game.bestCombo, game.combo);
-            burst(x, y, entity.hard ? "#dfff4f" : "#5ff0e8", entity.hard ? 22 : 12);
-            game.feedback.push({
-              x,
-              y: y - 28,
-              text: `粉丝 +${entity.value}`,
-              color: entity.hard ? "#dfff4f" : "#ffffff",
-              life: 1.1,
-            });
-          } else if (entity.type === "lightstick") {
-            game.lightsticks += 1;
-            game.combo += 1;
-            game.bestCombo = Math.max(game.bestCombo, game.combo);
-            burst(x, y, "#5ff0e8", 16);
-            game.feedback.push({
-              x,
-              y: y - 28,
-              text: "应援棒 +1",
-              color: "#5ff0e8",
-              life: 1.1,
-            });
-          } else if (entity.type === "bag") {
-            setPhase("bag");
-          } else if (game.invincible <= 0) {
-            const loss = entity.hard ? 8 : 4;
-            game.fans = Math.max(0, game.fans - loss);
-            game.combo = 0;
-            game.shake = 1;
-            burst(x, y, "#ff6685", 22);
-            game.feedback.push({
-              x,
-              y: y - 28,
-              text: `掉粉 -${loss}`,
-              color: "#ff6685",
-              life: 1.25,
-            });
-            if (navigator.vibrate) navigator.vibrate(80);
-            if (game.fans <= 0) setPhase("revive");
+      // Entities.
+      for (const entity of entitiesRef.current) {
+        const x = laneCenter(entity.lane);
+        const wobble = Math.sin(elapsed / 160 + entity.wobble) * 3;
+        ctx.save();
+        ctx.translate(Math.round(x + wobble), Math.round(entity.y));
+
+        if (entity.type === "fan") {
+          ctx.shadowColor = "#72f1ff";
+          ctx.shadowBlur = 13;
+          ctx.fillStyle = "#72f1ff";
+          ctx.fillRect(-6, -21, 12, 26);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(-3, -18, 6, 18);
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = "#ff4fa3";
+          ctx.fillRect(-8, 5, 16, 9);
+          ctx.fillStyle = "#ffe66d";
+          ctx.fillRect(-4, 8, 8, 3);
+          ctx.fillStyle = "rgba(114, 241, 255, 0.25)";
+          ctx.fillRect(-13, -26, 26, 35);
+        } else if (entity.type === "lucky") {
+          ctx.shadowColor = "#ffe66d";
+          ctx.shadowBlur = 15;
+          ctx.fillStyle = "#8c5bff";
+          ctx.fillRect(-18, -17, 36, 34);
+          ctx.fillStyle = "#c9a9ff";
+          ctx.fillRect(-12, -22, 24, 7);
+          ctx.fillStyle = "#ffe66d";
+          ctx.fillRect(-4, -9, 8, 14);
+          ctx.fillRect(-4, 8, 8, 5);
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = "#fff2a8";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(-18, -17, 36, 34);
+        } else if (entity.obstacle === "cone") {
+          ctx.fillStyle = "rgba(255, 86, 94, 0.2)";
+          ctx.fillRect(-23, -22, 46, 44);
+          ctx.fillStyle = "#ff6b4a";
+          ctx.beginPath();
+          ctx.moveTo(0, -23);
+          ctx.lineTo(18, 16);
+          ctx.lineTo(-18, 16);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "#fff4d8";
+          ctx.fillRect(-11, -1, 22, 7);
+          ctx.fillStyle = "#ff9d4d";
+          ctx.fillRect(-24, 16, 48, 8);
+        } else if (entity.obstacle === "speaker") {
+          ctx.fillStyle = "#35284e";
+          ctx.fillRect(-24, -29, 48, 58);
+          ctx.strokeStyle = "#ff4fa3";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(-24, -29, 48, 58);
+          ctx.fillStyle = "#0c0c1c";
+          ctx.beginPath();
+          ctx.arc(0, 11, 13, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#72f1ff";
+          ctx.beginPath();
+          ctx.arc(0, 11, 6 + pulse * 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#ffe66d";
+          ctx.fillRect(-5, -19, 10, 10);
+        } else {
+          ctx.fillStyle = "#f7f1ff";
+          ctx.fillRect(-31, -20, 62, 12);
+          ctx.fillRect(-31, 4, 62, 12);
+          ctx.fillStyle = "#ff526f";
+          for (let i = -28; i < 29; i += 20) {
+            ctx.fillRect(i, -20, 10, 12);
+            ctx.fillRect(i + 10, 4, 10, 12);
+          }
+          ctx.fillStyle = "#f5a623";
+          ctx.fillRect(-25, 16, 8, 14);
+          ctx.fillRect(17, 16, 8, 14);
+        }
+        ctx.restore();
+      }
+
+      // Bus shadow and body.
+      const busX = busXRef.current;
+      ctx.save();
+      ctx.translate(Math.round(busX), PLAYER_Y);
+      ctx.fillStyle = "rgba(0,0,0,0.38)";
+      ctx.fillRect(-31, 45, 62, 16);
+      if (shieldRef.current) {
+        ctx.strokeStyle = `rgba(114, 241, 255, ${0.55 + pulse * 0.35})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(0, 4, 48 + pulse * 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#121225";
+      ctx.fillRect(-37, -37, 9, 24);
+      ctx.fillRect(28, -37, 9, 24);
+      ctx.fillRect(-37, 21, 9, 24);
+      ctx.fillRect(28, 21, 9, 24);
+      ctx.fillStyle = "#ff4fa3";
+      ctx.fillRect(-31, -52, 62, 105);
+      ctx.fillStyle = "#ff78bf";
+      ctx.fillRect(-25, -46, 50, 92);
+      ctx.fillStyle = "#2c225e";
+      ctx.fillRect(-21, -38, 42, 29);
+      ctx.fillStyle = "#72f1ff";
+      ctx.fillRect(-17, -34, 14, 18);
+      ctx.fillRect(3, -34, 14, 18);
+      ctx.fillStyle = "#ffd5aa";
+      ctx.fillRect(-13, -29, 6, 7);
+      ctx.fillRect(7, -29, 6, 7);
+      ctx.fillStyle = "#201740";
+      ctx.fillRect(-12, -27, 2, 2);
+      ctx.fillRect(8, -27, 2, 2);
+      ctx.fillStyle = "#ffe66d";
+      ctx.font = "bold 23px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("★", 0, 24);
+      ctx.fillStyle = "#fff7bd";
+      ctx.fillRect(-22, 40, 14, 7);
+      ctx.fillRect(8, 40, 14, 7);
+      ctx.fillStyle = "#ff285f";
+      ctx.fillRect(-20, -50, 12, 5);
+      ctx.fillRect(8, -50, 12, 5);
+      ctx.restore();
+
+      // Particles and score text.
+      for (const particle of particlesRef.current) {
+        ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
+        ctx.fillStyle = particle.color;
+        ctx.fillRect(
+          Math.round(particle.x),
+          Math.round(particle.y),
+          Math.ceil(particle.size),
+          Math.ceil(particle.size),
+        );
+      }
+      ctx.globalAlpha = 1;
+      ctx.textAlign = "center";
+      ctx.font = "bold 18px monospace";
+      for (const item of floatTextRef.current) {
+        ctx.globalAlpha = Math.max(0, item.life / item.maxLife);
+        ctx.fillStyle = "#0b0920";
+        ctx.fillText(item.text, item.x + 2, item.y + 2);
+        ctx.fillStyle = item.color;
+        ctx.fillText(item.text, item.x, item.y);
+      }
+      ctx.globalAlpha = 1;
+
+      if (hitFlashRef.current > 0) {
+        ctx.fillStyle = `rgba(255, 40, 95, ${hitFlashRef.current * 0.38})`;
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      }
+      ctx.restore();
+    },
+    [],
+  );
+
+  const finishGame = useCallback(() => {
+    if (statusRef.current !== "playing") return;
+    statusRef.current = "finished";
+    setStatus("finished");
+    setProgress(100);
+
+    const tier = getConcertTier(fansRef.current);
+    const coins = tier.coins + maxComboRef.current * 3;
+    setEarnedCoins(coins);
+    setResultTier(tier);
+    setFans(fansRef.current);
+    setCombo(comboRef.current);
+    setMaxCombo(maxComboRef.current);
+
+    const previousCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
+    const previousBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
+    const nextCoins = previousCoins + coins;
+    const nextBest = Math.max(previousBest, fansRef.current);
+    window.localStorage.setItem("fan-bus-coins", String(nextCoins));
+    window.localStorage.setItem("fan-bus-best", String(nextBest));
+    setBankCoins(nextCoins);
+    setBestFans(nextBest);
+
+    addBurst(GAME_WIDTH / 2, PLAYER_Y - 120, tier.color, 38);
+    if (audioRef.current) {
+      void audioRef.current.close();
+      audioRef.current = null;
+    }
+  }, [addBurst]);
+
+  const gameLoop = useCallback(
+    (now: number) => {
+      if (statusRef.current !== "playing") return;
+      const delta = Math.min(0.035, Math.max(0, (now - lastTimeRef.current) / 1000));
+      lastTimeRef.current = now;
+      const elapsed = now - startTimeRef.current;
+
+      while (elapsed >= nextBeatRef.current * BEAT_MS) {
+        const beat = nextBeatRef.current;
+        beatRef.current = beat;
+        beatPulseRef.current = 1;
+        playBeat(beat);
+        spawnBeat(beat);
+        nextBeatRef.current += 1;
+        setBeatIndex(beat);
+      }
+
+      busXRef.current +=
+        (laneCenter(laneRef.current) - busXRef.current) * Math.min(1, delta * 14);
+
+      for (const entity of entitiesRef.current) {
+        entity.y += ENTITY_SPEED * delta;
+        const colliding =
+          !entity.handled &&
+          entity.lane === laneRef.current &&
+          entity.y > PLAYER_Y - 48 &&
+          entity.y < PLAYER_Y + 52;
+
+        if (!colliding) continue;
+
+        const x = laneCenter(entity.lane);
+        if (entity.type === "fan") {
+          entity.handled = true;
+          fansRef.current += 1;
+          setFans(fansRef.current);
+          addBurst(x, PLAYER_Y - 22, "#72f1ff", 9);
+          addFloatText(x, PLAYER_Y - 55, "+1 粉丝", "#72f1ff");
+          showToast("应援棒 +1 粉丝", "cyan");
+        } else if (entity.type === "lucky") {
+          entity.handled = true;
+          const doubled = Math.random() < 0.55;
+          if (doubled) {
+            fansRef.current *= 2;
+            addFloatText(x, PLAYER_Y - 58, "粉丝 ×2!", "#ffe66d");
+            showToast("欧气爆棚！粉丝翻倍", "gold");
+            addBurst(x, PLAYER_Y - 10, "#ffe66d", 22);
+          } else {
+            fansRef.current = Math.max(1, Math.floor(fansRef.current / 2));
+            comboRef.current = 0;
+            setCombo(0);
+            addFloatText(x, PLAYER_Y - 58, "粉丝 ÷2", "#ff7ac8");
+            showToast("锦囊反转…粉丝减半", "pink");
+            addBurst(x, PLAYER_Y - 10, "#ff7ac8", 18);
+          }
+          setFans(fansRef.current);
+        } else {
+          entity.handled = true;
+          if (now < invulnerableUntilRef.current) continue;
+          invulnerableUntilRef.current = now + 720;
+          if (shieldRef.current) {
+            shieldRef.current = false;
+            setShield(false);
+            addBurst(x, PLAYER_Y - 8, "#72f1ff", 24);
+            addFloatText(x, PLAYER_Y - 58, "护盾抵挡!", "#72f1ff");
+            showToast("应援护盾挡住了！", "cyan");
+          } else {
+            const loss =
+              entity.obstacle === "barrier"
+                ? 10
+                : entity.obstacle === "speaker"
+                  ? 7
+                  : 4;
+            const actualLoss = Math.min(fansRef.current, loss);
+            fansRef.current -= actualLoss;
+            comboRef.current = 0;
+            setFans(fansRef.current);
+            setCombo(0);
+            shakeRef.current = 0.34;
+            hitFlashRef.current = 1;
+            addBurst(x, PLAYER_Y, "#ff375f", 17);
+            addFloatText(x, PLAYER_Y - 58, `-${actualLoss} 粉丝`, "#ff526f");
+            showToast(`撞到障碍！-${actualLoss} 粉丝`, "danger");
           }
         }
       }
 
-      game.entities = game.entities.filter(
-        (entity) => !entity.hit && entity.world > game.distance - 48,
+      entitiesRef.current = entitiesRef.current.filter(
+        (entity) => !entity.handled && entity.y < GAME_HEIGHT + 90,
       );
-      game.particles = game.particles.filter((particle) => {
-        particle.x += particle.vx * dt;
-        particle.y += particle.vy * dt;
-        particle.vy += 115 * dt;
-        particle.life -= dt;
-        return particle.life > 0;
-      });
-      game.feedback = game.feedback.filter((item) => {
-        item.y -= 30 * dt;
-        item.life -= dt;
-        return item.life > 0;
-      });
 
-      if (game.distance >= GOAL_DISTANCE) finishGame();
-    };
+      for (const particle of particlesRef.current) {
+        particle.x += particle.vx * delta;
+        particle.y += particle.vy * delta;
+        particle.vy += 115 * delta;
+        particle.life -= delta;
+      }
+      particlesRef.current = particlesRef.current.filter((item) => item.life > 0);
 
-    const draw = () => {
-      const game = gameRef.current;
-      const { width, height, dpr } = sizeRef.current;
-      const carY = height * 0.78;
-      const roadWidth = Math.max(92, Math.min(168, width * 0.15));
-      const idleOffset = phaseRef.current === "intro" ? performance.now() * 0.008 : 0;
-      const drawDistance = game.distance + idleOffset;
+      for (const item of floatTextRef.current) {
+        item.y -= 38 * delta;
+        item.life -= delta;
+      }
+      floatTextRef.current = floatTextRef.current.filter((item) => item.life > 0);
 
-      context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      context.clearRect(0, 0, width, height);
-      context.save();
-      if (game.shake > 0) {
-        context.translate(
-          (Math.random() - 0.5) * game.shake * 13,
-          (Math.random() - 0.5) * game.shake * 9,
+      beatPulseRef.current = Math.max(0, beatPulseRef.current - delta * 4.6);
+      shakeRef.current = Math.max(0, shakeRef.current - delta);
+      hitFlashRef.current = Math.max(0, hitFlashRef.current - delta * 3.4);
+
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (ctx) drawGame(ctx, elapsed);
+
+      if (elapsed - lastHudRef.current > 100) {
+        lastHudRef.current = elapsed;
+        setProgress(Math.min(100, (elapsed / (TOTAL_BEATS * BEAT_MS)) * 100));
+      }
+
+      if (elapsed >= TOTAL_BEATS * BEAT_MS) {
+        finishGame();
+        return;
+      }
+
+      animationRef.current = window.requestAnimationFrame(gameLoop);
+    },
+    [
+      addBurst,
+      addFloatText,
+      drawGame,
+      finishGame,
+      playBeat,
+      showToast,
+      spawnBeat,
+    ],
+  );
+
+  const startGame = useCallback(() => {
+    if (animationRef.current) {
+      window.cancelAnimationFrame(animationRef.current);
+    }
+    if (audioRef.current) {
+      void audioRef.current.close();
+    }
+
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    audioRef.current = AudioContextClass ? new AudioContextClass() : null;
+
+    statusRef.current = "playing";
+    setStatus("playing");
+    laneRef.current = 2;
+    busXRef.current = laneCenter(2);
+    fansRef.current = STARTING_FANS;
+    comboRef.current = 0;
+    maxComboRef.current = 0;
+    beatRef.current = 0;
+    nextBeatRef.current = 0;
+    entityIdRef.current = 0;
+    entitiesRef.current = [];
+    particlesRef.current = [];
+    floatTextRef.current = [];
+    shieldRef.current = false;
+    perfectCountRef.current = 0;
+    lastMoveBeatRef.current = -1;
+    invulnerableUntilRef.current = 0;
+    beatPulseRef.current = 0;
+    shakeRef.current = 0;
+    hitFlashRef.current = 0;
+    setFans(STARTING_FANS);
+    setCombo(0);
+    setMaxCombo(0);
+    setProgress(0);
+    setShield(false);
+    setToast(null);
+
+    const now = performance.now();
+    startTimeRef.current = now;
+    lastTimeRef.current = now;
+    lastHudRef.current = 0;
+    animationRef.current = window.requestAnimationFrame(gameLoop);
+  }, [gameLoop]);
+
+  const move = useCallback(
+    (direction: -1 | 1) => {
+      if (statusRef.current !== "playing") return;
+      const nextLane = clampLane(laneRef.current + direction);
+      if (nextLane === laneRef.current) return;
+      laneRef.current = nextLane;
+
+      const elapsed = performance.now() - startTimeRef.current;
+      const nearestBeat = Math.round(elapsed / BEAT_MS);
+      const distance = Math.abs(elapsed - nearestBeat * BEAT_MS);
+      if (nearestBeat === lastMoveBeatRef.current) return;
+      lastMoveBeatRef.current = nearestBeat;
+
+      if (distance <= 115) {
+        comboRef.current += 1;
+        maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
+        perfectCountRef.current += 1;
+        setCombo(comboRef.current);
+        setMaxCombo(maxComboRef.current);
+        addBurst(laneCenter(nextLane), PLAYER_Y + 26, "#ffe66d", 7);
+        addFloatText(
+          laneCenter(nextLane),
+          PLAYER_Y - 66,
+          "PERFECT!",
+          "#ffe66d",
         );
-      }
-
-      context.fillStyle = "#071021";
-      context.fillRect(0, 0, width, height);
-
-      context.fillStyle = "#101b36";
-      for (let i = 0; i < 24; i += 1) {
-        const bx = ((i * 137.5) % (width + 100)) - 40;
-        const bh = 25 + ((i * 31) % 82);
-        context.fillRect(bx, height * 0.42 - bh, 58, bh);
-      }
-
-      for (let i = 0; i < 72; i += 1) {
-        const sx = (i * 97.17) % width;
-        const sy = (i * 43.71) % (height * 0.62);
-        const pulse = 0.35 + ((Math.sin(performance.now() * 0.002 + i) + 1) / 2) * 0.65;
-        context.globalAlpha = pulse;
-        context.fillStyle = i % 9 === 0 ? "#dfff4f" : "#ffffff";
-        context.fillRect(sx, sy, i % 9 === 0 ? 3 : 1.5, i % 9 === 0 ? 3 : 1.5);
-      }
-      context.globalAlpha = 1;
-
-      context.fillStyle = "#0b1830";
-      context.fillRect(0, height * 0.42, width, height * 0.58);
-
-      context.lineCap = "round";
-      context.lineJoin = "round";
-      const path = new Path2D();
-      const points: Array<{ x: number; y: number }> = [];
-      for (let y = -20; y <= carY + 90; y += 18) {
-        const futureWorld = drawDistance + (carY - y) / WORLD_SCALE;
-        points.push({ x: trackX(futureWorld, width), y });
-      }
-      points.forEach((point, index) => {
-        if (index === 0) path.moveTo(point.x, point.y);
-        else path.lineTo(point.x, point.y);
-      });
-
-      context.strokeStyle = "#342b79";
-      context.lineWidth = roadWidth + 34;
-      context.stroke(path);
-      context.strokeStyle = "#5ff0e8";
-      context.lineWidth = roadWidth;
-      context.globalAlpha = 0.7;
-      context.stroke(path);
-      context.globalAlpha = 1;
-      context.strokeStyle = "#ffffff";
-      context.lineWidth = 3;
-      context.setLineDash([14, 18]);
-      context.lineDashOffset = game.distance * 2;
-      context.stroke(path);
-      context.setLineDash([]);
-
-      for (let y = 18; y < carY; y += 70) {
-        const world = drawDistance + (carY - y) / WORLD_SCALE;
-        const x = trackX(world, width);
-        context.fillStyle = "#dfff4f";
-        drawStar(context, x, y, 5 + y / height * 3);
-        context.fill();
-      }
-
-      context.fillStyle = "#1a2744";
-      for (let i = 0; i < 12; i += 1) {
-        const y = height * 0.47 + (i % 6) * 62;
-        const side = i % 2 === 0 ? 1 : -1;
-        const x = side > 0 ? width - 18 - (i % 3) * 34 : 18 + (i % 3) * 34;
-        context.beginPath();
-        context.arc(x, y, 7, 0, Math.PI * 2);
-        context.fill();
-        context.fillRect(x - 4, y + 7, 8, 18);
-        context.strokeStyle = i % 3 === 0 ? "#ff6685" : "#5ff0e8";
-        context.lineWidth = 3;
-        context.beginPath();
-        context.moveTo(x + side * 4, y + 11);
-        context.lineTo(x + side * 16, y - 9);
-        context.stroke();
-      }
-
-      for (const entity of game.entities) {
-        const y = carY - (entity.world - game.distance) * WORLD_SCALE;
-        if (y < -60 || y > height + 60) continue;
-        const x = trackX(entity.world, width) + entity.offset;
-        const scale = 0.62 + Math.max(0, y / height) * 0.52;
-        drawEntity(context, entity, x, y, scale);
-      }
-
-      for (const particle of game.particles) {
-        context.globalAlpha = Math.max(0, particle.life);
-        context.fillStyle = particle.color;
-        context.fillRect(particle.x - 2, particle.y - 2, 4, 4);
-      }
-      context.globalAlpha = 1;
-
-      const busX =
-        phaseRef.current === "intro"
-          ? trackX(drawDistance, width)
-          : game.carX || trackX(game.distance, width);
-      drawBus(context, busX, carY, game.invincible > 0, onTrackRef.current);
-
-      for (const item of game.feedback) {
-        context.globalAlpha = Math.min(1, item.life * 1.5);
-        context.fillStyle = item.color;
-        context.font = `900 ${Math.max(14, Math.min(22, width * 0.018))}px Arial`;
-        context.textAlign = "center";
-        context.shadowColor = "#071021";
-        context.shadowBlur = 8;
-        context.fillText(item.text, item.x, item.y);
-      }
-      context.shadowBlur = 0;
-      context.globalAlpha = 1;
-      context.restore();
-    };
-
-    const loop = (now: number) => {
-      const dt = Math.min((now - previous) / 1000, 0.034);
-      previous = now;
-      if (phaseRef.current === "playing") {
-        update(dt);
-        hudClock += dt;
-        if (hudClock >= 0.1) {
-          hudClock = 0;
-          syncHud();
+        if (perfectCountRef.current % 8 === 0 && !shieldRef.current) {
+          shieldRef.current = true;
+          setShield(true);
+          showToast("8 次合拍！获得应援护盾", "gold");
         }
-      } else if (audioRef.current) {
-        audioRef.current.master.gain.setTargetAtTime(
-          0.0001,
-          audioRef.current.context.currentTime,
-          0.06,
-        );
+      } else if (distance <= 210) {
+        addFloatText(laneCenter(nextLane), PLAYER_Y - 66, "GOOD", "#72f1ff");
+      } else {
+        comboRef.current = 0;
+        setCombo(0);
+        addFloatText(laneCenter(nextLane), PLAYER_Y - 66, "MISS", "#ff7ac8");
       }
-      draw();
-      animationFrame = requestAnimationFrame(loop);
-    };
+    },
+    [addBurst, addFloatText, showToast],
+  );
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") {
-        event.preventDefault();
-        keysRef.current.left = true;
-      }
-      if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") {
-        event.preventDefault();
-        keysRef.current.right = true;
-      }
-      if (event.code === "Space") {
-        event.preventDefault();
-        togglePause();
-      }
-    };
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") {
-        keysRef.current.left = false;
-      }
-      if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") {
-        keysRef.current.right = false;
-      }
-    };
+  const toggleMute = useCallback(() => {
+    mutedRef.current = !mutedRef.current;
+    setMuted(mutedRef.current);
+  }, []);
 
-    resize();
-    window.addEventListener("resize", resize);
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    animationFrame = requestAnimationFrame(loop);
+  useEffect(() => {
+    const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
+    const savedCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
+    setBestFans(savedBest);
+    setBankCoins(savedCoins);
+
+    const keydown = (event: KeyboardEvent) => {
+      if (["ArrowLeft", "ArrowRight", " ", "a", "A", "d", "D"].includes(event.key)) {
+        event.preventDefault();
+      }
+      if (event.key === "ArrowLeft" || event.key === "a" || event.key === "A") {
+        move(-1);
+      } else if (
+        event.key === "ArrowRight" ||
+        event.key === "d" ||
+        event.key === "D"
+      ) {
+        move(1);
+      } else if (event.key === "m" || event.key === "M") {
+        toggleMute();
+      } else if (event.key === " " && statusRef.current !== "playing") {
+        startGame();
+      }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [move, startGame, toggleMute]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (ctx) drawGame(ctx, 0);
     return () => {
-      cancelAnimationFrame(animationFrame);
-      window.removeEventListener("resize", resize);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
+      if (animationRef.current) {
+        window.cancelAnimationFrame(animationRef.current);
+      }
+      if (audioRef.current) {
+        void audioRef.current.close();
+        audioRef.current = null;
+      }
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
     };
-  }, [finishGame, playNote, setPhase, syncHud, togglePause]);
-
-  const pointToCar = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!draggingRef.current || phaseRef.current !== "playing") return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    gameRef.current.carX = Math.max(
-      48,
-      Math.min(rect.width - 48, event.clientX - rect.left),
-    );
-  };
-
-  const handleControlPointer = (
-    event: React.PointerEvent<HTMLButtonElement>,
-    direction: "left" | "right",
-    active: boolean,
-  ) => {
-    event.preventDefault();
-    if (active) event.currentTarget.setPointerCapture(event.pointerId);
-    setMove(direction, active);
-  };
-
-  const progress = Math.min(100, (hud.distance / GOAL_DISTANCE) * 100);
+  }, [drawGame]);
 
   return (
-    <main className="game-shell">
+    <main className="arcade-page">
+      <div className="sky-grid" aria-hidden="true" />
       <header className="topbar">
-        <div className="brand-lockup">
-          <span className="brand-star" aria-hidden="true">★</span>
-          <div>
-            <strong>星光巡演</strong>
-            <span>STAR ROAD TOUR</span>
-          </div>
+        <div className="brand">
+          <span className="brand-kicker">PIXEL TOUR / 120 BPM</span>
+          <span className="brand-title">应援巴士</span>
         </div>
-
-        <div className="now-playing" aria-label="当前曲目">
-          <span className={phase === "playing" && onTrack ? "equalizer active" : "equalizer"}>
-            <i />
-            <i />
-            <i />
-            <i />
+        <div className="meta-strip" aria-label="游戏记录">
+          <span>
+            <small>BEST</small>
+            {bestFans} 粉丝
           </span>
-          <div>
-            <b>一路向北 · 玩法 DEMO</b>
-            <span>原创示范伴奏 · 非原曲音频</span>
-          </div>
-        </div>
-
-        <div className="top-actions">
+          <span>
+            <small>BANK</small>
+            <b className="coin-dot">●</b> {bankCoins}
+          </span>
           <button
-            className="icon-button"
-            type="button"
-            onClick={toggleSound}
-            aria-label={soundOn ? "关闭声音" : "开启声音"}
-            title={soundOn ? "关闭声音" : "开启声音"}
+            className="sound-button"
+            onClick={toggleMute}
+            aria-label={muted ? "打开声音" : "关闭声音"}
           >
-            {soundOn ? "♪" : "×"}
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={togglePause}
-            aria-label={phase === "paused" ? "继续游戏" : "暂停游戏"}
-            title={phase === "paused" ? "继续游戏" : "暂停游戏"}
-            disabled={phase !== "playing" && phase !== "paused"}
-          >
-            {phase === "paused" ? "▶" : "Ⅱ"}
+            {muted ? "SOUND OFF" : "SOUND ON"}
           </button>
         </div>
       </header>
 
-      <section className="game-stage" aria-label="星光巡演游戏区域">
-        <canvas
-          ref={canvasRef}
-          onPointerDown={(event) => {
-            draggingRef.current = true;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            pointToCar(event);
-          }}
-          onPointerMove={pointToCar}
-          onPointerUp={() => {
-            draggingRef.current = false;
-          }}
-          onPointerCancel={() => {
-            draggingRef.current = false;
-          }}
-        />
+      <section className="game-layout">
+        <aside className="side-panel mission-panel" aria-label="巡演任务">
+          <span className="panel-number">01</span>
+          <p className="eyebrow">TONIGHT&apos;S MISSION</p>
+          <h2>载着明星，奔赴下一场演唱会</h2>
+          <div className="pixel-rule" />
+          <ul>
+            <li><i className="legend fan-stick" />应援棒：粉丝 +1</li>
+            <li><i className="legend warning" />障碍物：掉粉</li>
+            <li><i className="legend lucky-bag">?</i>锦囊：×2 或 ÷2</li>
+          </ul>
+          <p className="tip-copy">
+            在鼓点亮起时换道可积累合拍连击；连续 8 次 PERFECT 获得一次护盾。
+          </p>
+        </aside>
 
-        <div className="hud" aria-live="polite">
-          <div className="hud-stat">
-            <span>粉丝</span>
-            <strong>{hud.fans}</strong>
-            <small>人气值</small>
+        <div className="game-cabinet">
+          <div className="cabinet-top">
+            <div>
+              <span className="live-dot" />
+              TOUR IN PROGRESS
+            </div>
+            <div className="bpm-bars" aria-hidden="true">
+              {[0, 1, 2, 3].map((bar) => (
+                <i
+                  key={bar}
+                  className={beatIndex % 4 === bar && status === "playing" ? "active" : ""}
+                />
+              ))}
+            </div>
           </div>
-          <div className="hud-stat">
-            <span>应援</span>
-            <strong>{hud.lightsticks}</strong>
-            <small>荧光棒</small>
-          </div>
-          <div className="hud-stat combo-stat">
-            <span>连击</span>
-            <strong>{hud.combo}</strong>
-            <small>COMBO</small>
-          </div>
-        </div>
 
-        <div className={onTrack ? "track-status online" : "track-status offline"}>
-          <span className="status-dot" />
-          {onTrack ? "音轨在线 · 原声清晰" : "偏离星光之路 · 音乐失真"}
-        </div>
-
-        <div className="route-progress">
-          <div className="route-copy">
-            <span>巡演进度</span>
-            <b>{hud.distance} / {GOAL_DISTANCE}m</b>
+          <div className="hud">
+            <div className="hud-block">
+              <span>FANS</span>
+              <strong>{String(fans).padStart(3, "0")}</strong>
+            </div>
+            <div className="hud-block combo-block">
+              <span>BEAT COMBO</span>
+              <strong>×{combo}</strong>
+            </div>
+            <div className={`shield-chip ${shield ? "is-active" : ""}`}>
+              {shield ? "SHIELD READY" : "8 PERFECT = SHIELD"}
+            </div>
           </div>
-          <div className="progress-rail" aria-label={`巡演进度 ${Math.round(progress)}%`}>
+
+          <div className="progress-track" aria-label={`巡演进度 ${Math.round(progress)}%`}>
             <span style={{ width: `${progress}%` }} />
           </div>
+
+          <div className="game-screen">
+            <canvas
+              ref={canvasRef}
+              width={GAME_WIDTH}
+              height={GAME_HEIGHT}
+              aria-label="五车道节奏躲避游戏画面"
+            />
+
+            {toast && (
+              <div key={toast.key} className={`game-toast tone-${toast.tone}`}>
+                {toast.text}
+              </div>
+            )}
+
+            {status === "ready" && (
+              <div className="game-overlay intro-overlay">
+                <p className="overlay-kicker">NEXT STOP</p>
+                <h1>
+                  <span>应援</span>
+                  <span>巴士</span>
+                </h1>
+                <p className="english-title">RHYTHM RUSH</p>
+                <div className="mini-bus" aria-hidden="true">
+                  <span>★</span>
+                </div>
+                <p className="intro-copy">
+                  跟着 120 BPM 换道，收集应援棒，<br />
+                  把今晚的舞台越办越大！
+                </p>
+                <button className="primary-button" onClick={startGame}>
+                  <span>▶</span> 点击发车
+                </button>
+                <p className="control-hint">← → / A D / 下方按钮</p>
+              </div>
+            )}
+
+            {status === "finished" && (
+              <div className="game-overlay result-overlay">
+                <p className="overlay-kicker">TOUR COMPLETE</p>
+                <div className="stage-icon" style={{ color: resultTier.color }}>
+                  {resultTier.icon}
+                </div>
+                <p className="result-label">今晚成功解锁</p>
+                <h2 style={{ color: resultTier.color }}>{resultTier.name}</h2>
+                <p className="result-place">{resultTier.place}</p>
+                <div className="result-stats">
+                  <div>
+                    <small>到场粉丝</small>
+                    <strong>{fans}</strong>
+                  </div>
+                  <div>
+                    <small>最高连击</small>
+                    <strong>×{maxCombo}</strong>
+                  </div>
+                  <div>
+                    <small>演出金币</small>
+                    <strong className="gold-text">+{earnedCoins}</strong>
+                  </div>
+                </div>
+                <p className="coin-formula">
+                  场馆奖励 {resultTier.coins} + 合拍奖励 {maxCombo * 3}
+                </p>
+                <button className="primary-button" onClick={startGame}>
+                  再跑一场
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="mobile-controls">
+            <button
+              onPointerDown={() => move(-1)}
+              aria-label="向左换道"
+              disabled={status !== "playing"}
+            >
+              <span>←</span>
+              LEFT
+            </button>
+            <div className="beat-orb" aria-hidden="true">
+              <i className={status === "playing" ? "is-playing" : ""} />
+              BEAT
+            </div>
+            <button
+              onPointerDown={() => move(1)}
+              aria-label="向右换道"
+              disabled={status !== "playing"}
+            >
+              <span>→</span>
+              RIGHT
+            </button>
+          </div>
         </div>
 
-        {phase === "playing" && (
-          <div className="controls" aria-label="移动控制">
-            <button
-              type="button"
-              onPointerDown={(event) => handleControlPointer(event, "left", true)}
-              onPointerUp={(event) => handleControlPointer(event, "left", false)}
-              onPointerCancel={(event) => handleControlPointer(event, "left", false)}
-              onPointerLeave={(event) => setMove("left", false)}
-              aria-label="向左移动"
-              title="向左移动"
-            >
-              ←
-            </button>
-            <span>按住移动 · 也可拖动车身</span>
-            <button
-              type="button"
-              onPointerDown={(event) => handleControlPointer(event, "right", true)}
-              onPointerUp={(event) => handleControlPointer(event, "right", false)}
-              onPointerCancel={(event) => handleControlPointer(event, "right", false)}
-              onPointerLeave={(event) => setMove("right", false)}
-              aria-label="向右移动"
-              title="向右移动"
-            >
-              →
-            </button>
-          </div>
-        )}
-
-        {phase === "intro" && (
-          <div className="overlay intro-overlay">
-            <div className="intro-panel">
-              <div className="eyebrow">TME HACKATHON · PLAYABLE DEMO</div>
-              <h1>开上音轨，<br /><em>把星光装满全场。</em></h1>
-              <p>
-                左右移动巡演大巴。贴住发光音调线才能听清伴奏，
-                沿途接粉、抢应援棒，也要绕开让你掉粉的路障。
-              </p>
-              <div className="mission-grid">
-                <div><b>01</b><span>贴住音轨<br />保持原声</span></div>
-                <div><b>02</b><span>接走粉丝<br />扩大声量</span></div>
-                <div><b>03</b><span>冲进场馆<br />赢取金币</span></div>
+        <aside className="side-panel schedule-panel" aria-label="演唱会等级">
+          <span className="panel-number">02</span>
+          <p className="eyebrow">VENUE LADDER</p>
+          <h2>粉丝越多，舞台越大</h2>
+          <div className="venue-list">
+            {[
+              ["080+", "星河体育场", "880"],
+              ["055+", "霓虹体育馆", "560"],
+              ["035+", "城市剧场", "320"],
+              ["020+", "Livehouse", "180"],
+              ["000+", "街角快闪", "80"],
+            ].map(([count, name, coins], index) => (
+              <div className="venue-row" key={name}>
+                <span className="venue-rank">0{index + 1}</span>
+                <span>
+                  <small>{count} FANS</small>
+                  {name}
+                </span>
+                <b>● {coins}</b>
               </div>
-              <button className="primary-button" type="button" onClick={startGame}>
-                <span>开始巡演</span>
-                <b>→</b>
-              </button>
-              <div className="key-hint">
-                <span>键盘 A D / ← →</span>
-                <i />
-                <span>手机按键或拖动</span>
-              </div>
-            </div>
-            <aside className="tour-pass" aria-label="本场演出信息">
-              <span>TONIGHT&apos;S ROUTE</span>
-              <strong>向北站</strong>
-              <b>1200M</b>
-              <small>目标：万人体育场</small>
-            </aside>
+            ))}
           </div>
-        )}
-
-        {phase === "paused" && (
-          <div className="overlay compact-overlay">
-            <div className="dialog">
-              <span className="dialog-icon">Ⅱ</span>
-              <p className="dialog-kicker">TOUR BREAK</p>
-              <h2>巡演暂停</h2>
-              <p>喘口气，星光之路会在这里等你。</p>
-              <button className="primary-button" type="button" onClick={togglePause}>
-                <span>继续上路</span><b>▶</b>
-              </button>
+          <div className="now-playing">
+            <span>NOW PLAYING</span>
+            <strong>NEON HIGHWAY</strong>
+            <div className="equalizer" aria-hidden="true">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((bar) => <i key={bar} />)}
             </div>
           </div>
-        )}
-
-        {phase === "bag" && (
-          <div className="overlay compact-overlay">
-            <div className="dialog bag-dialog">
-              <span className="dialog-icon">?</span>
-              <p className="dialog-kicker">MYSTERY DROP</p>
-              <h2>神秘锦囊上车</h2>
-              <p>拆开可能让粉丝翻倍，也可能遭遇舆情让粉丝减半。敢赌吗？</p>
-              <div className="odds">
-                <span><b>58%</b> 粉丝 ×2</span>
-                <span><b>42%</b> 粉丝 ×0.5</span>
-              </div>
-              <div className="dialog-actions">
-                <button className="secondary-button" type="button" onClick={skipBag}>稳住，不拆</button>
-                <button className="primary-button" type="button" onClick={useBag}>
-                  <span>现在拆开</span><b>?</b>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {phase === "revive" && (
-          <div className="overlay compact-overlay danger-overlay">
-            <div className="dialog">
-              <span className="dialog-icon">!</span>
-              <p className="dialog-kicker">FANS LOST</p>
-              <h2>粉丝已经清零</h2>
-              <p>巡演大巴暂时熄火。支付 30 金币，可带 8 位铁粉返场并获得 3 秒无敌。</p>
-              <div className="coin-balance">金币余额 <strong>{hud.coins}</strong></div>
-              <div className="dialog-actions">
-                <button className="secondary-button" type="button" onClick={() => setPhase("intro")}>
-                  结束本场
-                </button>
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={revive}
-                  disabled={hud.coins < 30}
-                >
-                  <span>{hud.coins >= 30 ? "30 金币复活" : "金币不足"}</span><b>↻</b>
-                </button>
-              </div>
-              <small className="demo-note">演示版本仅使用虚拟金币，不会产生真实支付。</small>
-            </div>
-          </div>
-        )}
-
-        {phase === "result" && (
-          <div className="overlay result-overlay">
-            <div className="result-panel">
-              <div className="result-copy">
-                <p className="dialog-kicker">TOUR COMPLETE</p>
-                <span className="result-kicker">{result.kicker}</span>
-                <h2>{result.venue}</h2>
-                <p>今夜的星光都到齐了。你的粉丝与应援声量，解锁了这座演出场馆。</p>
-              </div>
-              <div className="result-stats">
-                <div><span>最终粉丝</span><strong>{hud.fans}</strong></div>
-                <div><span>应援棒</span><strong>{hud.lightsticks}</strong></div>
-                <div><span>人气总分</span><strong>{result.score}</strong></div>
-                <div className="reward"><span>演出收入</span><strong>+{result.reward} 金币</strong></div>
-              </div>
-              <button className="primary-button" type="button" onClick={startGame}>
-                <span>再跑一场</span><b>↻</b>
-              </button>
-            </div>
-          </div>
-        )}
+        </aside>
       </section>
 
-      <footer className="game-footer">
-        <span><i className="legend fan" />接粉丝，挑战路障旁的高价值铁粉</span>
-        <span><i className="legend barrier" />碰撞路障会掉粉，粉丝清零则失败</span>
-        <span><i className="legend stick" />道路两侧藏有加成更高的应援棒</span>
-        <b>SPACE 暂停</b>
+      <footer>
+        <span>换道也要踩点</span>
+        <i />
+        <span>祝你一路涨粉</span>
       </footer>
     </main>
   );
