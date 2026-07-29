@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const origin = `${protocol}://${host}`;
   const title = "应援巴士 · Rhythm Rush";
   const description =
-    "导入本地《仁义茶楼》音频，跟着自动分析的节拍驾驶明星巴士换道并主动 HIT 应援棒，躲避障碍与行人，解锁更大的演唱会舞台。";
+    "上传本地歌曲，跟着自动分析的节拍驾驶明星巴士换道并主动 HIT 应援棒，躲避障碍与行人，解锁更大的演唱会舞台。";
 
   return {
     metadataBase: new URL(origin),

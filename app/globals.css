@@ -646,7 +646,8 @@ button:focus-visible {
   margin: 2px 0 12px;
 }
 
-.track-picker button {
+.track-picker button,
+.track-picker .uploaded-track-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) auto 56px;
   align-items: center;
@@ -662,7 +663,9 @@ button:focus-visible {
 }
 
 .track-picker button:hover,
-.track-picker button.is-selected {
+.track-picker button.is-selected,
+.track-picker .uploaded-track-row.is-selected {
+  border-color: var(--gold);
   background: rgba(72, 50, 130, 0.32);
   transform: translateX(3px);
 }
@@ -722,104 +725,6 @@ button:focus-visible {
   clip: rect(0 0 0 0) !important;
   clip-path: inset(50%) !important;
   white-space: nowrap !important;
-}
-
-.song-import-card {
-  display: grid;
-  width: min(86%, 372px);
-  grid-template-columns: 72px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  margin: 1px 0 10px;
-  border: 2px solid #514479;
-  background:
-    linear-gradient(135deg, rgba(255, 79, 163, 0.12), transparent 52%),
-    rgba(10, 8, 34, 0.94);
-  padding: 10px;
-  color: #b9b1d9;
-  text-align: left;
-  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.32);
-}
-
-.song-import-card.is-ready {
-  border-color: var(--gold);
-  box-shadow:
-    5px 5px 0 rgba(0, 0, 0, 0.32),
-    0 0 18px rgba(255, 230, 109, 0.2);
-}
-
-.record-art {
-  position: relative;
-  display: grid;
-  width: 62px;
-  height: 62px;
-  place-items: center;
-  overflow: hidden;
-  border: 3px solid #ff75bd;
-  border-radius: 50%;
-  background:
-    repeating-radial-gradient(circle, #181133 0 5px, #2d1d54 6px 8px);
-  color: var(--gold);
-  font-family: "Arial Black", sans-serif;
-  font-size: 11px;
-  box-shadow: 0 0 16px rgba(255, 79, 163, 0.35);
-  animation: record-spin 4s linear infinite;
-}
-
-.record-art i {
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  border: 4px solid var(--gold);
-  border-radius: 50%;
-  background: #ff4fa3;
-}
-
-.record-art span {
-  position: relative;
-  z-index: 1;
-  font-size: 7px;
-}
-
-@keyframes record-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.import-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-
-.import-copy small {
-  color: #746b9a;
-  font-size: 7px;
-  font-weight: 950;
-  letter-spacing: 0.14em;
-}
-
-.import-copy strong {
-  margin: 3px 0;
-  color: #fff;
-  font-size: 17px;
-}
-
-.import-copy span {
-  overflow: hidden;
-  color: #aaa1d1;
-  font-size: 8px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.analysis-badge {
-  border: 1px solid currentColor;
-  color: var(--gold);
-  padding: 4px;
-  font-size: 6px;
-  letter-spacing: 0.08em;
 }
 
 .upload-button {
@@ -1413,7 +1318,8 @@ footer i {
     width: 94%;
   }
 
-  .track-picker button {
+  .track-picker button,
+  .track-picker .uploaded-track-row {
     min-height: 43px;
   }
 

@@ -16,7 +16,7 @@ type GameStatus = "ready" | "playing" | "finished" | "failed";
 type EntityType = "fan" | "obstacle" | "lucky";
 type ObstacleType = "cone" | "speaker" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
-type TrackId = "renyi-teahouse";
+type TrackId = "custom-upload";
 
 type Entity = {
   id: number;
@@ -91,10 +91,10 @@ type Track = {
 
 const TRACKS: Track[] = [
   {
-    id: "renyi-teahouse",
-    name: "仁义茶楼",
-    english: "GAI · REN YI TEAHOUSE",
-    description: "导入本地歌曲，自动分析鼓点与节拍",
+    id: "custom-upload",
+    name: "自选歌曲",
+    english: "CUSTOM TRACK",
+    description: "上传本地歌曲，自动分析鼓点与节拍",
     tempoLabel: "AUTO BPM",
     difficulty: "RHYTHM",
     color: "#ffe66d",
@@ -364,6 +364,7 @@ export default function Home() {
   const [songReady, setSongReady] = useState(false);
   const [songLoading, setSongLoading] = useState(false);
   const [songFileName, setSongFileName] = useState("");
+  const [songTitle, setSongTitle] = useState("未选择歌曲");
   const [songError, setSongError] = useState("");
   const [detectedBpm, setDetectedBpm] = useState(96);
   const [songDuration, setSongDuration] = useState(0);
@@ -391,7 +392,7 @@ export default function Home() {
     tone: ToastTone;
     key: number;
   } | null>(null);
-  const selectedTrack = getTrack("renyi-teahouse");
+  const selectedTrack = getTrack("custom-upload");
 
   const showToast = useCallback((text: string, tone: ToastTone) => {
     if (toastTimerRef.current) {
@@ -482,8 +483,12 @@ export default function Home() {
       setSongReady(false);
       setSongError("");
       setSongFileName(file.name);
+      setSongTitle(file.name.replace(/\.[^.]+$/, ""));
 
       try {
+        if (/\.mgg$/i.test(file.name)) {
+          throw new Error("MGG 是音乐平台专有格式，请上传 MP3、M4A、WAV 或 AAC");
+        }
         const supportedExtension = /\.(mp3|m4a|wav|aac|ogg|flac)$/i.test(file.name);
         if (!file.type.startsWith("audio/") && !supportedExtension) {
           throw new Error("请选择 MP3、M4A、WAV 等音频文件");
@@ -540,6 +545,7 @@ export default function Home() {
           error instanceof Error ? error.message : "音频解析失败，请换一个文件";
         setSongError(message);
         setSongFileName("");
+        setSongTitle("未选择歌曲");
         songRef.current = null;
       } finally {
         setSongLoading(false);
@@ -1412,7 +1418,7 @@ export default function Home() {
     const song = songRef.current;
     const analysedBeats = detectedBeatTimesRef.current;
     if (!songReady || !song || analysedBeats.length < 12) {
-      showToast("请先导入本地《仁义茶楼》音频", "pink");
+      showToast("请先上传一首本地歌曲", "pink");
       return;
     }
     if (animationRef.current) {
@@ -1431,6 +1437,8 @@ export default function Home() {
     const totalBeats = analysedBeats.length - 1;
     const runtimeTrack: Track = {
       ...selectedTrack,
+      name: songTitle,
+      english: songTitle,
       totalBeats,
       grannyBeat: Math.max(8, Math.min(totalBeats - 6, Math.floor(totalBeats * 0.56))),
       tempoLabel: `${detectedBpmRef.current} BPM`,
@@ -1496,7 +1504,7 @@ export default function Home() {
     lastTimeRef.current = now;
     lastHudRef.current = 0;
     animationRef.current = window.requestAnimationFrame(gameLoop);
-  }, [gameLoop, selectedTrack, showToast, songReady]);
+  }, [gameLoop, selectedTrack, showToast, songReady, songTitle]);
 
   const move = useCallback(
     (direction: -1 | 1) => {
@@ -1654,7 +1662,7 @@ export default function Home() {
           <div className="cabinet-top">
             <div>
               <span className="live-dot" />
-              {status === "playing" ? selectedTrack.english : "LOAD LOCAL TRACK"}
+              {status === "playing" ? songTitle : "SELECT A TRACK"}
             </div>
             <div className="bpm-bars" aria-hidden="true">
               {[0, 1, 2, 3].map((bar) => (
@@ -1678,7 +1686,7 @@ export default function Home() {
             <div
               className={`music-state ${arrangement === "variation" ? "is-variation" : ""}`}
             >
-              <strong>{currentBpm} BPM</strong>
+              <strong>{songReady ? currentBpm : "--"} BPM</strong>
               <span>
                 {arrangement === "variation"
                   ? "伴奏变调中"
@@ -1721,44 +1729,47 @@ export default function Home() {
             {status === "ready" && (
               <div className="game-overlay intro-overlay">
                 <div className="song-select-title">
-                  <p className="overlay-kicker">SONG LOCKED</p>
-                  <h1>仁义茶楼</h1>
-                  <span>GAI · 本地音频节拍分析</span>
+                  <p className="overlay-kicker">SONG SELECT</p>
+                  <h1>选歌</h1>
+                  <span>上传歌曲后自动分析节拍</span>
                 </div>
-                <div
-                  className={`song-import-card ${songReady ? "is-ready" : ""}`}
-                  aria-label="导入仁义茶楼音频"
-                >
-                  <div className="record-art" aria-hidden="true">
-                    <i />
-                    <span>GAI</span>
-                  </div>
-                  <div className="import-copy">
-                    <small>SELECTED TRACK</small>
-                    <strong>《仁义茶楼》</strong>
-                    <span>
+                <div className="track-picker" aria-label="选择本地歌曲">
+                  <label
+                    className={`uploaded-track-row ${songReady ? "is-selected" : ""}`}
+                    htmlFor="custom-song-upload"
+                  >
+                    <span className="song-number">01</span>
+                    <span className="track-copy">
+                      <b>{songReady ? songTitle : "本地歌曲"}</b>
+                      <small>
+                        {songLoading
+                          ? "正在拆解节拍与鼓点…"
+                          : songReady
+                            ? "节拍分析完成，可以发车"
+                            : "支持 MP3 / M4A / WAV / AAC / OGG"}
+                      </small>
+                    </span>
+                    <em>
                       {songLoading
-                        ? "正在拆解节拍与鼓点…"
+                        ? "分析中"
                         : songReady
                           ? `${detectedBpm} BPM · ${Math.floor(songDuration / 60)}:${String(
                               Math.floor(songDuration % 60),
                             ).padStart(2, "0")}`
-                          : "等待导入你有权使用的歌曲文件"}
-                    </span>
-                  </div>
-                  <b className="analysis-badge">
-                    {songLoading ? "ANALYZING" : songReady ? "READY" : "LOCAL"}
-                  </b>
+                          : "AUTO BPM"}
+                    </em>
+                    <i>{songLoading ? "ANALYZING" : songReady ? "✓ 已选择" : "UPLOAD"}</i>
+                  </label>
                 </div>
                 <input
-                  id="renyi-song-upload"
+                  id="custom-song-upload"
                   className="visually-hidden"
                   type="file"
-                  accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg"
+                  accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.flac,.mgg"
                   onChange={handleSongUpload}
                 />
-                <label className="upload-button" htmlFor="renyi-song-upload">
-                  {songReady ? "↻ 重新导入音频" : "＋ 导入本地《仁义茶楼》音频"}
+                <label className="upload-button" htmlFor="custom-song-upload">
+                  {songReady ? "↻ 更换歌曲" : "＋ 上传本地歌曲"}
                 </label>
                 {songFileName && (
                   <p className="file-status" title={songFileName}>
@@ -1776,7 +1787,7 @@ export default function Home() {
                   disabled={!songReady || songLoading}
                 >
                   <span>▶</span>{" "}
-                  {songReady ? "用《仁义茶楼》发车" : "请先导入音频"}
+                  {songReady ? "用这首歌发车" : "请先上传歌曲"}
                 </button>
                 <p className="control-hint">← → / A D 换道 · SPACE 击打</p>
               </div>
@@ -1791,7 +1802,7 @@ export default function Home() {
                 <p className="result-label">今晚成功解锁</p>
                 <h2 style={{ color: resultTier.color }}>{resultTier.name}</h2>
                 <p className="result-place">
-                  {selectedTrack.name} · {resultTier.place}
+                  {songTitle} · {resultTier.place}
                 </p>
                 <div className="result-stats">
                   <div>
@@ -1901,7 +1912,7 @@ export default function Home() {
           </div>
           <div className="now-playing">
             <span>NOW PLAYING</span>
-            <strong>{selectedTrack.english}</strong>
+            <strong>{songReady ? songTitle : "WAITING FOR SONG"}</strong>
             <small>
               {songReady ? detectedBpm : "--"} BPM ·{" "}
               {selectedTrack.difficulty}
