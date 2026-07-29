@@ -37,6 +37,9 @@ test("server-renders the uploadable rhythm game", async () => {
   assert.match(html, /type="file"/);
   assert.match(html, /class="hit-button"/);
   assert.match(html, /SPACE 击打/);
+  assert.match(html, /BUS LV\./);
+  assert.match(html, /星芽小巴/);
+  assert.match(html, /载客上限/);
 });
 
 test("keeps beat analysis and active hit judgement in the client game", async () => {
@@ -49,7 +52,12 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /decodeAudioData/);
   assert.match(page, /const hitNote = useCallback/);
   assert.match(page, /"PERFECT" \| "GREAT" \| "GOOD" \| "MISS"/);
-  assert.match(page, /songRef\.current\.playbackRate/);
+  assert.match(page, /const VEHICLE_LEVELS/);
+  assert.match(page, /fan-bus-vehicle-level/);
+  assert.match(page, /createMediaElementSource/);
+  assert.match(page, /createBiquadFilter/);
+  assert.match(page, /songRef\.current\.playbackRate = 1/);
+  assert.doesNotMatch(page, /playbackRate\s*=\s*(?:0\.|1\.[1-9])/);
   assert.match(page, /音频只保留在当前浏览器/);
   assert.doesNotMatch(page, /仁义茶楼|GAI · REN YI TEAHOUSE/);
   assert.doesNotMatch(page, /https?:\/\/.*\.(mp3|m4a|wav|aac|ogg)/i);

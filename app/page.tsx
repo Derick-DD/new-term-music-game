@@ -17,6 +17,21 @@ type EntityType = "fan" | "obstacle" | "lucky";
 type ObstacleType = "cone" | "speaker" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
 type TrackId = "custom-upload";
+type ToneMode = "normal" | "thick" | "thin";
+
+type VehicleLevel = {
+  level: number;
+  name: string;
+  capacity: number;
+  primary: string;
+  secondary: string;
+  task: string;
+  requirement?: {
+    hits: number;
+    perfect?: number;
+    maxCombo?: number;
+  };
+};
 
 type Entity = {
   id: number;
@@ -88,6 +103,77 @@ type Track = {
   lanePattern: number[];
   bpmAt: (beat: number) => number;
 };
+
+const VEHICLE_LEVELS: VehicleLevel[] = [
+  {
+    level: 1,
+    name: "星芽小巴",
+    capacity: 30,
+    primary: "#ff4fa3",
+    secondary: "#ff78bf",
+    task: "本局 HIT 6 次 + PERFECT 2 次",
+    requirement: { hits: 6, perfect: 2 },
+  },
+  {
+    level: 2,
+    name: "应援大巴",
+    capacity: 55,
+    primary: "#6a5cff",
+    secondary: "#9c8cff",
+    task: "本局 HIT 18 次 + 最高连击 10",
+    requirement: { hits: 18, maxCombo: 10 },
+  },
+  {
+    level: 3,
+    name: "巡演豪华号",
+    capacity: 85,
+    primary: "#00b9c8",
+    secondary: "#72f1ff",
+    task: "本局 HIT 32 次 + PERFECT 12 次 + 最高连击 16",
+    requirement: { hits: 32, perfect: 12, maxCombo: 16 },
+  },
+  {
+    level: 4,
+    name: "银河应援号",
+    capacity: 120,
+    primary: "#e9a900",
+    secondary: "#ffe66d",
+    task: "已达最高等级",
+  },
+];
+
+function getVehicle(level: number) {
+  return VEHICLE_LEVELS[Math.max(0, Math.min(VEHICLE_LEVELS.length - 1, level - 1))];
+}
+
+function isVehicleTaskComplete(
+  vehicle: VehicleLevel,
+  hits: number,
+  perfect: number,
+  maxCombo: number,
+) {
+  const requirement = vehicle.requirement;
+  if (!requirement) return false;
+  return (
+    hits >= requirement.hits &&
+    perfect >= (requirement.perfect ?? 0) &&
+    maxCombo >= (requirement.maxCombo ?? 0)
+  );
+}
+
+function getVehicleTaskProgress(
+  vehicle: VehicleLevel,
+  hits: number,
+  perfect: number,
+  maxCombo: number,
+) {
+  const requirement = vehicle.requirement;
+  if (!requirement) return 100;
+  const progressParts = [hits / requirement.hits];
+  if (requirement.perfect) progressParts.push(perfect / requirement.perfect);
+  if (requirement.maxCombo) progressParts.push(maxCombo / requirement.maxCombo);
+  return Math.round(Math.min(1, Math.min(...progressParts)) * 100);
+}
 
 const TRACKS: Track[] = [
   {
@@ -339,6 +425,9 @@ export default function Home() {
   const floatTextRef = useRef<FloatText[]>([]);
   const pedestrianRef = useRef<Pedestrian | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
+  const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const lowShelfRef = useRef<BiquadFilterNode | null>(null);
+  const highShelfRef = useRef<BiquadFilterNode | null>(null);
   const songRef = useRef<HTMLAudioElement | null>(null);
   const songUrlRef = useRef<string | null>(null);
   const detectedBeatTimesRef = useRef<number[]>([]);
@@ -354,7 +443,9 @@ export default function Home() {
   const invulnerableUntilRef = useRef(0);
   const shieldRef = useRef(false);
   const perfectCountRef = useRef(0);
-  const arrangementShiftRef = useRef(0);
+  const successfulHitsRef = useRef(0);
+  const vehicleLevelRef = useRef(1);
+  const toneModeRef = useRef<ToneMode>("normal");
   const arrangementUntilRef = useRef(-1);
   const grannyWarnedRef = useRef(false);
   const toastTimerRef = useRef<number | null>(null);
@@ -371,12 +462,12 @@ export default function Home() {
   const [fans, setFans] = useState(STARTING_FANS);
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
+  const [successfulHits, setSuccessfulHits] = useState(0);
+  const [vehicleLevel, setVehicleLevel] = useState(1);
   const [progress, setProgress] = useState(0);
   const [beatIndex, setBeatIndex] = useState(0);
   const [currentBpm, setCurrentBpm] = useState(TRACKS[0].bpmAt(0));
-  const [arrangement, setArrangement] = useState<"normal" | "variation">(
-    "normal",
-  );
+  const [toneMode, setToneMode] = useState<ToneMode>("normal");
   const [muted, setMuted] = useState(false);
   const [shield, setShield] = useState(false);
   const [bestFans, setBestFans] = useState(0);
@@ -393,6 +484,13 @@ export default function Home() {
     key: number;
   } | null>(null);
   const selectedTrack = getTrack("custom-upload");
+  const currentVehicle = getVehicle(vehicleLevel);
+  const vehicleTaskProgress = getVehicleTaskProgress(
+    currentVehicle,
+    successfulHits,
+    perfectCountRef.current,
+    maxCombo,
+  );
 
   const showToast = useCallback((text: string, tone: ToastTone) => {
     if (toastTimerRef.current) {
@@ -449,6 +547,52 @@ export default function Home() {
     },
     [],
   );
+
+  const resetSongTone = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      const now = audio.currentTime;
+      lowShelfRef.current?.gain.setTargetAtTime(0, now, 0.08);
+      highShelfRef.current?.gain.setTargetAtTime(0, now, 0.08);
+    }
+    if (songRef.current) songRef.current.playbackRate = 1;
+    toneModeRef.current = "normal";
+    arrangementUntilRef.current = -1;
+    setToneMode("normal");
+  }, []);
+
+  const checkVehicleUpgrade = useCallback(() => {
+    const current = getVehicle(vehicleLevelRef.current);
+    if (
+      current.level >= VEHICLE_LEVELS.length ||
+      !isVehicleTaskComplete(
+        current,
+        successfulHitsRef.current,
+        perfectCountRef.current,
+        maxComboRef.current,
+      )
+    ) {
+      return false;
+    }
+
+    const next = getVehicle(current.level + 1);
+    vehicleLevelRef.current = next.level;
+    setVehicleLevel(next.level);
+    window.localStorage.setItem("fan-bus-vehicle-level", String(next.level));
+    screenPunchRef.current = 1.8;
+    collectFlashRef.current = 1.4;
+    busBounceRef.current = 1.35;
+    addBurst(busXRef.current, PLAYER_Y - 18, next.secondary, 46);
+    addFloatText(
+      busXRef.current,
+      PLAYER_Y - 96,
+      `BUS LV.${next.level}  容量 ${next.capacity}`,
+      next.secondary,
+    );
+    showToast(`车辆升级！${next.name} · 容量 ${next.capacity}`, "gold");
+    navigator.vibrate?.([35, 25, 45, 25, 65]);
+    return true;
+  }, [addBurst, addFloatText, showToast]);
 
   const playFanHit = useCallback((targetBeat: number) => {
     const audio = audioRef.current;
@@ -514,21 +658,20 @@ export default function Home() {
         const analysis = analyzeAudioBuffer(decoded);
         await analysisContext.close();
 
+        songRef.current?.pause();
+        if (audioRef.current) {
+          await audioRef.current.close();
+          audioRef.current = null;
+        }
+        mediaSourceRef.current = null;
+        lowShelfRef.current = null;
+        highShelfRef.current = null;
         if (songUrlRef.current) URL.revokeObjectURL(songUrlRef.current);
         const url = URL.createObjectURL(file);
         const song = new Audio(url);
         song.preload = "auto";
         song.muted = mutedRef.current;
-        (
-          song as HTMLAudioElement & {
-            webkitPreservesPitch?: boolean;
-          }
-        ).preservesPitch = false;
-        (
-          song as HTMLAudioElement & {
-            webkitPreservesPitch?: boolean;
-          }
-        ).webkitPreservesPitch = false;
+        song.playbackRate = 1;
 
         songUrlRef.current = url;
         songRef.current = song;
@@ -561,7 +704,12 @@ export default function Home() {
 
     const track = trackRef.current;
     const isVariation = beat < arrangementUntilRef.current;
-    const pitchRatio = 2 ** ((isVariation ? arrangementShiftRef.current : 0) / 12);
+    const pitchRatio =
+      toneModeRef.current === "thick"
+        ? 0.84
+        : toneModeRef.current === "thin"
+          ? 1.18
+          : 1;
     const beatSeconds = 60 / track.bpmAt(beat);
     const now = audio.currentTime;
     const kick = audio.createOscillator();
@@ -710,15 +858,38 @@ export default function Home() {
   }, []);
 
   const triggerDamageVariation = useCallback(() => {
-    arrangementShiftRef.current = beatRef.current % 2 === 0 ? -3 : 2;
+    const nextTone: ToneMode =
+      toneModeRef.current === "thick"
+        ? "thin"
+        : toneModeRef.current === "thin"
+          ? "thick"
+          : beatRef.current % 2 === 0
+            ? "thick"
+            : "thin";
+    toneModeRef.current = nextTone;
     arrangementUntilRef.current = beatRef.current + 8;
-    setArrangement("variation");
+    setToneMode(nextTone);
     if (songRef.current) {
-      songRef.current.playbackRate =
-        arrangementShiftRef.current < 0 ? 0.88 : 1.1;
+      // Tone filters change colour only; playbackRate stays fixed so the beat
+      // grid and the original song tempo never drift apart.
+      songRef.current.playbackRate = 1;
     }
 
     const audio = audioRef.current;
+    if (audio) {
+      const now = audio.currentTime;
+      lowShelfRef.current?.gain.setTargetAtTime(
+        nextTone === "thick" ? 11 : -8,
+        now,
+        0.055,
+      );
+      highShelfRef.current?.gain.setTargetAtTime(
+        nextTone === "thick" ? -9 : 11,
+        now,
+        0.055,
+      );
+    }
+
     if (!audio || mutedRef.current) return;
     const now = audio.currentTime;
     const bend = audio.createOscillator();
@@ -936,8 +1107,11 @@ export default function Home() {
       // Bus shadow and body.
       const busX = busXRef.current;
       const busY = PLAYER_Y - busBounceRef.current * 18;
+      const vehicle = getVehicle(vehicleLevelRef.current);
+      const busScale = 1 + (vehicle.level - 1) * 0.035;
       ctx.save();
       ctx.translate(Math.round(busX), Math.round(busY));
+      ctx.scale(busScale, busScale);
       ctx.fillStyle = "rgba(0,0,0,0.38)";
       ctx.fillRect(-31, 45, 62, 16);
       if (shieldRef.current) {
@@ -952,9 +1126,9 @@ export default function Home() {
       ctx.fillRect(28, -37, 9, 24);
       ctx.fillRect(-37, 21, 9, 24);
       ctx.fillRect(28, 21, 9, 24);
-      ctx.fillStyle = "#ff4fa3";
+      ctx.fillStyle = vehicle.primary;
       ctx.fillRect(-31, -52, 62, 105);
-      ctx.fillStyle = "#ff78bf";
+      ctx.fillStyle = vehicle.secondary;
       ctx.fillRect(-25, -46, 50, 92);
       ctx.fillStyle = "#2c225e";
       ctx.fillRect(-21, -38, 42, 29);
@@ -977,6 +1151,10 @@ export default function Home() {
       ctx.fillStyle = "#ff285f";
       ctx.fillRect(-20, -50, 12, 5);
       ctx.fillRect(8, -50, 12, 5);
+      for (let light = 0; light < vehicle.level; light += 1) {
+        ctx.fillStyle = light % 2 === 0 ? "#72f1ff" : "#ffe66d";
+        ctx.fillRect(-22 + light * 12, -59, 8, 6);
+      }
       ctx.restore();
 
       // Particles and score text.
@@ -1041,13 +1219,9 @@ export default function Home() {
     addBurst(GAME_WIDTH / 2, PLAYER_Y - 120, tier.color, 38);
     if (songRef.current) {
       songRef.current.pause();
-      songRef.current.playbackRate = 1;
     }
-    if (audioRef.current) {
-      void audioRef.current.close();
-      audioRef.current = null;
-    }
-  }, [addBurst]);
+    resetSongTone();
+  }, [addBurst, resetSongTone]);
 
   const failGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
@@ -1060,8 +1234,8 @@ export default function Home() {
     addBurst(busXRef.current, PLAYER_Y - 8, "#ffe66d", 34);
     if (songRef.current) {
       songRef.current.pause();
-      songRef.current.playbackRate = 1;
     }
+    resetSongTone();
 
     const audio = audioRef.current;
     if (audio && !mutedRef.current) {
@@ -1077,13 +1251,7 @@ export default function Home() {
       brake.start(now);
       brake.stop(now + 0.46);
     }
-    window.setTimeout(() => {
-      if (audioRef.current) {
-        void audioRef.current.close();
-        audioRef.current = null;
-      }
-    }, 500);
-  }, [addBurst]);
+  }, [addBurst, resetSongTone]);
 
   const gameLoop = useCallback(
     function gameLoopFrame(now: number) {
@@ -1133,11 +1301,8 @@ export default function Home() {
           arrangementUntilRef.current > 0 &&
           beat >= arrangementUntilRef.current
         ) {
-          arrangementUntilRef.current = -1;
-          arrangementShiftRef.current = 0;
-          setArrangement("normal");
-          if (songRef.current) songRef.current.playbackRate = 1;
-          showToast("伴奏恢复原调", "cyan");
+          resetSongTone();
+          showToast("伴奏音色恢复 · 节奏始终不变", "cyan");
         }
 
         nextBeatRef.current += 1;
@@ -1195,9 +1360,21 @@ export default function Home() {
           entity.handled = true;
           const doubled = Math.random() < 0.55;
           if (doubled) {
-            fansRef.current *= 2;
-            addFloatText(x, PLAYER_Y - 58, "粉丝 ×2!", "#ffe66d");
-            showToast("欧气爆棚！粉丝翻倍", "gold");
+            const capacity = getVehicle(vehicleLevelRef.current).capacity;
+            const doubledFans = fansRef.current * 2;
+            fansRef.current = Math.min(capacity, doubledFans);
+            addFloatText(
+              x,
+              PLAYER_Y - 58,
+              doubledFans > capacity ? `翻倍！上限 ${capacity}` : "粉丝 ×2!",
+              "#ffe66d",
+            );
+            showToast(
+              doubledFans > capacity
+                ? `欧气翻倍！车辆已满载 ${capacity}`
+                : "欧气爆棚！粉丝翻倍",
+              "gold",
+            );
             addBurst(x, PLAYER_Y - 10, "#ffe66d", 22);
           } else {
             fansRef.current = Math.max(1, Math.floor(fansRef.current / 2));
@@ -1234,7 +1411,10 @@ export default function Home() {
           triggerDamageVariation();
           addBurst(x, PLAYER_Y, "#ff375f", 17);
           addFloatText(x, PLAYER_Y - 58, `-${actualLoss} 粉丝`, "#ff526f");
-          showToast(`掉粉 -${actualLoss} · 伴奏变调 8 拍`, "danger");
+          showToast(
+            `掉粉 -${actualLoss} · 音色变${toneModeRef.current === "thick" ? "厚" : "细"} 8 拍`,
+            "danger",
+          );
         }
       }
 
@@ -1334,6 +1514,7 @@ export default function Home() {
       failGame,
       finishGame,
       playBeat,
+      resetSongTone,
       showJudgement,
       showToast,
       spawnBeat,
@@ -1378,14 +1559,24 @@ export default function Home() {
         : timingError <= 110
           ? "GREAT"
           : "GOOD";
-    fansRef.current += 1;
     comboRef.current += 1;
     maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
     if (quality === "PERFECT") perfectCountRef.current += 1;
+    successfulHitsRef.current += 1;
+    setSuccessfulHits(successfulHitsRef.current);
+    checkVehicleUpgrade();
+    const capacity = getVehicle(vehicleLevelRef.current).capacity;
+    const fanGained = fansRef.current < capacity;
+    fansRef.current = Math.min(capacity, fansRef.current + 1);
     setFans(fansRef.current);
     setCombo(comboRef.current);
     setMaxCombo(maxComboRef.current);
-    showJudgement(quality, `JUST HIT · +1 FAN · ×${comboRef.current}`);
+    showJudgement(
+      quality,
+      fanGained
+        ? `JUST HIT · +1 FAN · ×${comboRef.current}`
+        : `JUST HIT · BUS FULL ${capacity} · ×${comboRef.current}`,
+    );
     playFanHit(candidate.targetBeat);
 
     const x = laneCenter(candidate.lane);
@@ -1394,7 +1585,11 @@ export default function Home() {
     addFloatText(
       x,
       PLAYER_Y - 64,
-      quality === "PERFECT" ? "点上了! +1" : "+1 FAN",
+      fanGained
+        ? quality === "PERFECT"
+          ? "点上了! +1"
+          : "+1 FAN"
+        : `满载 ${capacity}`,
       quality === "PERFECT" ? "#ffe66d" : "#ffffff",
     );
     beatPulseRef.current = 1.65;
@@ -1412,7 +1607,14 @@ export default function Home() {
       setShield(true);
       showToast("8 次 PERFECT！获得应援护盾", "gold");
     }
-  }, [addBurst, addFloatText, playFanHit, showJudgement, showToast]);
+  }, [
+    addBurst,
+    addFloatText,
+    checkVehicleUpgrade,
+    playFanHit,
+    showJudgement,
+    showToast,
+  ]);
 
   const startGame = useCallback(async () => {
     const song = songRef.current;
@@ -1424,15 +1626,33 @@ export default function Home() {
     if (animationRef.current) {
       window.cancelAnimationFrame(animationRef.current);
     }
-    if (audioRef.current) {
-      void audioRef.current.close();
-    }
 
     const AudioContextClass =
       window.AudioContext ||
       (window as typeof window & { webkitAudioContext?: typeof AudioContext })
         .webkitAudioContext;
-    audioRef.current = AudioContextClass ? new AudioContextClass() : null;
+    if (!audioRef.current || audioRef.current.state === "closed") {
+      audioRef.current = AudioContextClass ? new AudioContextClass() : null;
+      mediaSourceRef.current = null;
+      lowShelfRef.current = null;
+      highShelfRef.current = null;
+    }
+    const audio = audioRef.current;
+    if (audio && !mediaSourceRef.current) {
+      const mediaSource = audio.createMediaElementSource(song);
+      const lowShelf = audio.createBiquadFilter();
+      const highShelf = audio.createBiquadFilter();
+      lowShelf.type = "lowshelf";
+      lowShelf.frequency.value = 320;
+      lowShelf.gain.value = 0;
+      highShelf.type = "highshelf";
+      highShelf.frequency.value = 1900;
+      highShelf.gain.value = 0;
+      mediaSource.connect(lowShelf).connect(highShelf).connect(audio.destination);
+      mediaSourceRef.current = mediaSource;
+      lowShelfRef.current = lowShelf;
+      highShelfRef.current = highShelf;
+    }
 
     const totalBeats = analysedBeats.length - 1;
     const runtimeTrack: Track = {
@@ -1464,7 +1684,8 @@ export default function Home() {
     pedestrianRef.current = null;
     shieldRef.current = false;
     perfectCountRef.current = 0;
-    arrangementShiftRef.current = 0;
+    successfulHitsRef.current = 0;
+    toneModeRef.current = "normal";
     arrangementUntilRef.current = -1;
     grannyWarnedRef.current = false;
     invulnerableUntilRef.current = 0;
@@ -1477,10 +1698,11 @@ export default function Home() {
     setFans(STARTING_FANS);
     setCombo(0);
     setMaxCombo(0);
+    setSuccessfulHits(0);
     setProgress(0);
     setShield(false);
     setCurrentBpm(detectedBpmRef.current);
-    setArrangement("normal");
+    setToneMode("normal");
     setToast(null);
     setNoteJudgement(null);
 
@@ -1489,8 +1711,8 @@ export default function Home() {
     song.playbackRate = 1;
     song.muted = mutedRef.current;
     try {
+      await audio?.resume();
       await song.play();
-      await audioRef.current?.resume();
     } catch {
       statusRef.current = "ready";
       setStatus("ready");
@@ -1522,15 +1744,11 @@ export default function Home() {
       window.cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
-    if (audioRef.current) {
-      void audioRef.current.close();
-      audioRef.current = null;
-    }
     if (songRef.current) {
       songRef.current.pause();
       songRef.current.currentTime = 0;
-      songRef.current.playbackRate = 1;
     }
+    resetSongTone();
     statusRef.current = "ready";
     setStatus("ready");
     setProgress(0);
@@ -1538,7 +1756,7 @@ export default function Home() {
     setNoteJudgement(null);
     entitiesRef.current = [];
     pedestrianRef.current = null;
-  }, []);
+  }, [resetSongTone]);
 
   const toggleMute = useCallback(() => {
     mutedRef.current = !mutedRef.current;
@@ -1549,9 +1767,18 @@ export default function Home() {
   useEffect(() => {
     const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
     const savedCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
+    const savedVehicleLevel = Math.max(
+      1,
+      Math.min(
+        VEHICLE_LEVELS.length,
+        Number(window.localStorage.getItem("fan-bus-vehicle-level") || 1),
+      ),
+    );
     const savedScoreTimer = window.setTimeout(() => {
       setBestFans(savedBest);
       setBankCoins(savedCoins);
+      vehicleLevelRef.current = savedVehicleLevel;
+      setVehicleLevel(savedVehicleLevel);
     }, 0);
 
     const keydown = (event: KeyboardEvent) => {
@@ -1594,6 +1821,9 @@ export default function Home() {
         void audioRef.current.close();
         audioRef.current = null;
       }
+      mediaSourceRef.current = null;
+      lowShelfRef.current = null;
+      highShelfRef.current = null;
       if (songRef.current) {
         songRef.current.pause();
         songRef.current = null;
@@ -1649,10 +1879,15 @@ export default function Home() {
           <div className="pixel-rule" />
           <ul>
             <li><i className="legend fan-stick" />对准应援棒：按 HIT 粉丝 +1</li>
-            <li><i className="legend warning" />障碍物：掉粉并触发变调</li>
-            <li><i className="legend lucky-bag">?</i>锦囊：×2 或 ÷2</li>
+            <li><i className="legend warning" />障碍物：掉粉并改变音色，节奏不变</li>
+            <li><i className="legend lucky-bag">?</i>锦囊：×2 或 ÷2，不突破载客上限</li>
             <li><i className="legend pedestrian-icon">♿</i>行人：按预警换到安全车道</li>
           </ul>
+          <div className="side-upgrade-card">
+            <small>BUS LV.{currentVehicle.level} · 容量 {currentVehicle.capacity}</small>
+            <strong>{currentVehicle.name}</strong>
+            <span>{currentVehicle.task}</span>
+          </div>
           <p className="tip-copy">
             ← → 负责换道，SPACE / HIT 负责击打；只有在正确车道踩中点子才会收集。
           </p>
@@ -1676,24 +1911,45 @@ export default function Home() {
 
           <div className="hud">
             <div className="hud-block">
-              <span>FANS</span>
-              <strong>{String(fans).padStart(3, "0")}</strong>
+              <span>FANS / CAP</span>
+              <strong className="fans-count">
+                {String(fans).padStart(3, "0")}
+                <small>/{currentVehicle.capacity}</small>
+              </strong>
             </div>
             <div className="hud-block combo-block">
               <span>BEAT COMBO</span>
               <strong>×{combo}</strong>
             </div>
             <div
-              className={`music-state ${arrangement === "variation" ? "is-variation" : ""}`}
+              className={`music-state ${toneMode !== "normal" ? `is-variation is-${toneMode}` : ""}`}
             >
               <strong>{songReady ? currentBpm : "--"} BPM</strong>
               <span>
-                {arrangement === "variation"
-                  ? "伴奏变调中"
+                {toneMode !== "normal"
+                  ? `${toneMode === "thick" ? "厚" : "细"}音色中 · TEMPO LOCK`
                   : shield
                     ? "护盾减伤 READY"
                     : "对准点子按 HIT"}
               </span>
+            </div>
+          </div>
+
+          <div className="vehicle-upgrade-strip" aria-label="车辆升级任务">
+            <div className="vehicle-level-badge">
+              <small>BUS</small>
+              <strong>LV.{currentVehicle.level}</strong>
+            </div>
+            <div className="vehicle-task-copy">
+              <strong>
+                {currentVehicle.name}
+                <span>载客上限 {currentVehicle.capacity}</span>
+              </strong>
+              <small>{currentVehicle.task}</small>
+            </div>
+            <div className="vehicle-task-meter" aria-label={`升级任务进度 ${vehicleTaskProgress}%`}>
+              <span style={{ width: `${vehicleTaskProgress}%` }} />
+              <b>{currentVehicle.requirement ? `${vehicleTaskProgress}%` : "MAX"}</b>
             </div>
           </div>
 
@@ -1779,6 +2035,7 @@ export default function Home() {
                 {songError && <p className="song-error">{songError}</p>}
                 <p className="intro-copy">
                   应援棒到达黄色判定线时按 <strong>SPACE / HIT</strong><br />
+                  当前 {currentVehicle.name} · 上限 {currentVehicle.capacity} 粉丝<br />
                   音频只保留在当前浏览器，不会上传服务器
                 </p>
                 <button
