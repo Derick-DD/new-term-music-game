@@ -258,6 +258,28 @@ button:focus-visible {
   box-shadow: 3px 3px 0 #3e267e;
 }
 
+.magnet-tool {
+  width: 20px;
+  height: 23px;
+  margin: 0 3px;
+  border: 5px solid var(--cyan);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  box-shadow:
+    -3px -3px 0 var(--gold),
+    3px -3px 0 var(--pink);
+}
+
+.invincible-tool {
+  border: 2px solid var(--pink);
+  background: #5a3cc4;
+  color: var(--gold);
+  font-size: 14px;
+  box-shadow:
+    3px 3px 0 #392367,
+    0 0 9px rgba(255, 230, 109, 0.32);
+}
+
 .pedestrian-icon {
   border: 2px solid var(--cream);
   background: #6f52c7;
@@ -609,6 +631,97 @@ button:focus-visible {
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
+}
+
+.powerup-hud {
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  left: 10px;
+  display: grid;
+  gap: 7px;
+  pointer-events: none;
+}
+
+.powerup-chip {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  align-items: center;
+  min-width: 116px;
+  min-height: 44px;
+  border: 2px solid currentColor;
+  background: rgba(9, 8, 35, 0.92);
+  color: var(--cyan);
+  padding: 5px 9px 8px 7px;
+  box-shadow:
+    4px 4px 0 rgba(0, 0, 0, 0.42),
+    0 0 13px color-mix(in srgb, currentColor 32%, transparent);
+}
+
+.powerup-chip > span {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.powerup-chip > span small {
+  color: #aaa1d1;
+  font-size: 6px;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+}
+
+.powerup-chip > span strong {
+  color: currentColor;
+  font-family: "Arial Black", sans-serif;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.powerup-chip > b {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  left: 4px;
+  height: 3px;
+  background: #27204e;
+}
+
+.powerup-chip > b > i {
+  display: block;
+  height: 100%;
+  background: currentColor;
+  box-shadow: 0 0 7px currentColor;
+  transition: width 100ms linear;
+}
+
+.powerup-chip .powerup-icon {
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 21px;
+  margin-left: 2px;
+  border: 5px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  font-style: normal;
+}
+
+.powerup-chip.is-invincible {
+  color: var(--gold);
+}
+
+.powerup-chip.is-invincible .powerup-icon {
+  width: 25px;
+  height: 25px;
+  margin-left: 0;
+  border: 2px solid var(--pink);
+  border-radius: 0;
+  background: #5a3cc4;
+  color: var(--gold);
+  font-size: 13px;
+  box-shadow: 0 0 9px rgba(255, 230, 109, 0.38);
 }
 
 .game-toast {
@@ -1824,6 +1937,23 @@ footer i {
     width: 48px;
     height: 56px;
     margin: 0 -4px;
+  }
+
+  .powerup-hud {
+    top: 6px;
+    left: 6px;
+    gap: 5px;
+  }
+
+  .powerup-chip {
+    min-width: 104px;
+    min-height: 39px;
+    grid-template-columns: 27px 1fr;
+    padding: 4px 7px 7px 5px;
+  }
+
+  .powerup-chip > span strong {
+    font-size: 11px;
   }
 
   .hud {

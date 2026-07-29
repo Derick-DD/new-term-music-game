@@ -41,6 +41,8 @@ test("server-renders the uploadable rhythm game", async () => {
   assert.match(html, /BUS LV\./);
   assert.match(html, /星芽小巴/);
   assert.match(html, /载客上限/);
+  assert.match(html, /磁铁：5 秒自动吸收附近应援棒/);
+  assert.match(html, /无敌：5 秒无视道路障碍/);
 });
 
 test("keeps beat analysis and active hit judgement in the client game", async () => {
@@ -63,6 +65,11 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /粉丝减半并中断连击/);
   assert.match(page, /确认并继续/);
   assert.match(page, /Math\.random\(\) < 0\.55/);
+  assert.match(page, /const POWERUP_DURATION_MS = 5_000/);
+  assert.match(page, /const MAGNET_RADIUS = 185/);
+  assert.match(page, /type: pickupType/);
+  assert.match(page, /MAGNET ACTIVE · AUTO COLLECT/);
+  assert.match(page, /elapsed < invincibleUntilRef\.current/);
   assert.match(page, /audioRef\.current\?\.suspend/);
   assert.match(page, /vehicleLevelRef\.current = 1/);
   assert.doesNotMatch(page, /localStorage\.setItem\("fan-bus-vehicle-level"/);

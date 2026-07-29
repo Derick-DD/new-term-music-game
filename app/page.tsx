@@ -11,6 +11,8 @@ const PLAYER_Y = 584;
 const STARTING_FANS = 12;
 const TRAVEL_BEATS = 4;
 const MISS_WINDOW = 190;
+const POWERUP_DURATION_MS = 5_000;
+const MAGNET_RADIUS = 185;
 
 type GameStatus =
   | "ready"
@@ -19,7 +21,12 @@ type GameStatus =
   | "lucky"
   | "finished"
   | "failed";
-type EntityType = "fan" | "obstacle" | "lucky";
+type EntityType =
+  | "fan"
+  | "obstacle"
+  | "lucky"
+  | "magnet"
+  | "invincible";
 type ObstacleType = "cone" | "speaker" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
 type TrackId = "custom-upload";
@@ -462,6 +469,8 @@ export default function Home() {
   const perfectCountRef = useRef(0);
   const successfulHitsRef = useRef(0);
   const vehicleLevelRef = useRef(1);
+  const magnetUntilRef = useRef(-1);
+  const invincibleUntilRef = useRef(-1);
   const toneModeRef = useRef<ToneMode>("normal");
   const arrangementUntilRef = useRef(-1);
   const grannyWarnedRef = useRef(false);
@@ -481,6 +490,8 @@ export default function Home() {
   const [maxCombo, setMaxCombo] = useState(0);
   const [successfulHits, setSuccessfulHits] = useState(0);
   const [vehicleLevel, setVehicleLevel] = useState(1);
+  const [magnetRemaining, setMagnetRemaining] = useState(0);
+  const [invincibleRemaining, setInvincibleRemaining] = useState(0);
   const [progress, setProgress] = useState(0);
   const [beatIndex, setBeatIndex] = useState(0);
   const [currentBpm, setCurrentBpm] = useState(TRACKS[0].bpmAt(0));
@@ -822,31 +833,25 @@ export default function Home() {
     const hitAt = beatTimesRef.current[beat + TRAVEL_BEATS];
 
     if (beat > 0) {
-      if (beat % 16 === 15) {
-        entitiesRef.current.push({
-          id: entityIdRef.current++,
-          type: "lucky",
-          lane: safeLane,
-          y: spawnY,
-          targetBeat: beat + TRAVEL_BEATS,
-          spawnAt,
-          hitAt,
-          handled: false,
-          wobble: Math.random() * Math.PI,
-        });
-      } else {
-        entitiesRef.current.push({
-          id: entityIdRef.current++,
-          type: "fan",
-          lane: safeLane,
-          y: spawnY,
-          targetBeat: beat + TRAVEL_BEATS,
-          spawnAt,
-          hitAt,
-          handled: false,
-          wobble: Math.random() * Math.PI,
-        });
-      }
+      const pickupType: EntityType =
+        beat % 24 === 8
+          ? "magnet"
+          : beat % 24 === 20
+            ? "invincible"
+            : beat % 16 === 15
+              ? "lucky"
+              : "fan";
+      entitiesRef.current.push({
+        id: entityIdRef.current++,
+        type: pickupType,
+        lane: safeLane,
+        y: spawnY,
+        targetBeat: beat + TRAVEL_BEATS,
+        spawnAt,
+        hitAt,
+        handled: false,
+        wobble: Math.random() * Math.PI,
+      });
     }
 
     if (beat < 2) return;
@@ -1075,6 +1080,56 @@ export default function Home() {
           ctx.strokeStyle = "#fff2a8";
           ctx.lineWidth = 3;
           ctx.strokeRect(-18, -17, 36, 34);
+        } else if (entity.type === "magnet") {
+          ctx.shadowColor = "#72f1ff";
+          ctx.shadowBlur = 18;
+          ctx.fillStyle = "#16123c";
+          ctx.fillRect(-23, -25, 46, 50);
+          ctx.strokeStyle = "#72f1ff";
+          ctx.lineWidth = 7;
+          ctx.lineCap = "square";
+          ctx.beginPath();
+          ctx.moveTo(-13, -11);
+          ctx.lineTo(-13, 5);
+          ctx.quadraticCurveTo(0, 20, 13, 5);
+          ctx.lineTo(13, -11);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = "#ffe66d";
+          ctx.fillRect(-18, -18, 10, 9);
+          ctx.fillStyle = "#ff4fa3";
+          ctx.fillRect(8, -18, 10, 9);
+          ctx.strokeStyle = "#bbaaff";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(-23, -25, 46, 50);
+        } else if (entity.type === "invincible") {
+          ctx.shadowColor = "#ffe66d";
+          ctx.shadowBlur = 19;
+          ctx.fillStyle = "#ff4fa3";
+          ctx.beginPath();
+          ctx.moveTo(0, -29);
+          ctx.lineTo(25, -15);
+          ctx.lineTo(20, 17);
+          ctx.lineTo(0, 29);
+          ctx.lineTo(-20, 17);
+          ctx.lineTo(-25, -15);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "#5a3cc4";
+          ctx.beginPath();
+          ctx.moveTo(0, -21);
+          ctx.lineTo(17, -10);
+          ctx.lineTo(13, 12);
+          ctx.lineTo(0, 21);
+          ctx.lineTo(-13, 12);
+          ctx.lineTo(-17, -10);
+          ctx.closePath();
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = "#ffe66d";
+          ctx.font = "bold 22px monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("★", 0, 8);
         } else if (entity.obstacle === "cone") {
           ctx.fillStyle = "rgba(255, 86, 94, 0.2)";
           ctx.fillRect(-23, -22, 46, 44);
@@ -1128,6 +1183,41 @@ export default function Home() {
       const busScale = 1 + (vehicle.level - 1) * 0.035;
       ctx.save();
       ctx.translate(Math.round(busX), Math.round(busY));
+      if (elapsed < magnetUntilRef.current) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(114, 241, 255, ${0.38 + pulse * 0.3})`;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([9, 7]);
+        ctx.beginPath();
+        ctx.arc(0, 0, MAGNET_RADIUS + pulse * 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = "rgba(255, 230, 109, 0.34)";
+        ctx.lineWidth = 2;
+        for (const fan of entitiesRef.current) {
+          if (fan.type !== "fan" || fan.handled) continue;
+          const fanX = laneCenter(fan.lane) - busX;
+          const fanY = fan.y - busY;
+          if (Math.hypot(fanX, fanY) > MAGNET_RADIUS) continue;
+          ctx.beginPath();
+          ctx.moveTo(0, -8);
+          ctx.lineTo(fanX, fanY);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      if (elapsed < invincibleUntilRef.current) {
+        ctx.save();
+        ctx.rotate((elapsed / 850) % (Math.PI * 2));
+        ["#72f1ff", "#ffe66d", "#ff4fa3"].forEach((color, index) => {
+          const radius = 54 + index * 8 + pulse * 3;
+          ctx.strokeStyle = color;
+          ctx.globalAlpha = 0.56 - index * 0.1;
+          ctx.lineWidth = 4;
+          ctx.strokeRect(-radius, -radius, radius * 2, radius * 2);
+        });
+        ctx.restore();
+      }
       ctx.scale(busScale, busScale);
       ctx.fillStyle = "rgba(0,0,0,0.38)";
       ctx.fillRect(-31, 45, 62, 16);
@@ -1237,6 +1327,10 @@ export default function Home() {
     if (songRef.current) {
       songRef.current.pause();
     }
+    magnetUntilRef.current = -1;
+    invincibleUntilRef.current = -1;
+    setMagnetRemaining(0);
+    setInvincibleRemaining(0);
     resetSongTone();
   }, [addBurst, resetSongTone]);
 
@@ -1252,6 +1346,10 @@ export default function Home() {
     if (songRef.current) {
       songRef.current.pause();
     }
+    magnetUntilRef.current = -1;
+    invincibleUntilRef.current = -1;
+    setMagnetRemaining(0);
+    setInvincibleRemaining(0);
     resetSongTone();
 
     const audio = audioRef.current;
@@ -1329,6 +1427,23 @@ export default function Home() {
       busXRef.current +=
         (laneCenter(laneRef.current) - busXRef.current) * Math.min(1, delta * 14);
 
+      if (
+        magnetUntilRef.current > 0 &&
+        elapsed >= magnetUntilRef.current
+      ) {
+        magnetUntilRef.current = -1;
+        setMagnetRemaining(0);
+        showToast("磁铁效果结束", "cyan");
+      }
+      if (
+        invincibleUntilRef.current > 0 &&
+        elapsed >= invincibleUntilRef.current
+      ) {
+        invincibleUntilRef.current = -1;
+        setInvincibleRemaining(0);
+        showToast("无敌模式结束", "gold");
+      }
+
       const nextEntities: Entity[] = [];
       for (const currentEntity of entitiesRef.current) {
         const travelProgress =
@@ -1340,6 +1455,37 @@ export default function Home() {
         };
 
         if (entity.type === "fan") {
+          const magnetDistance = Math.hypot(
+            laneCenter(entity.lane) - busXRef.current,
+            entity.y - PLAYER_Y,
+          );
+          if (
+            !entity.handled &&
+            elapsed < magnetUntilRef.current &&
+            magnetDistance <= MAGNET_RADIUS
+          ) {
+            entity.handled = true;
+            currentEntity.handled = true;
+            const capacity = getVehicle(vehicleLevelRef.current).capacity;
+            const fanGained = fansRef.current < capacity;
+            fansRef.current = Math.min(capacity, fansRef.current + 1);
+            setFans(fansRef.current);
+            addBurst(
+              laneCenter(entity.lane),
+              entity.y,
+              fanGained ? "#72f1ff" : "#ffe66d",
+              14,
+            );
+            addFloatText(
+              laneCenter(entity.lane),
+              entity.y - 18,
+              fanGained ? "MAGNET +1" : `满载 ${capacity}`,
+              fanGained ? "#72f1ff" : "#ffe66d",
+            );
+            playFanHit(entity.targetBeat);
+            collectFlashRef.current = 0.72;
+            continue;
+          }
           if (!entity.handled && elapsed > entity.hitAt + MISS_WINDOW) {
             entity.handled = true;
             comboRef.current = 0;
@@ -1387,8 +1533,37 @@ export default function Home() {
           void audioRef.current?.suspend();
           animationRef.current = null;
           return;
+        } else if (entity.type === "magnet") {
+          entity.handled = true;
+          currentEntity.handled = true;
+          magnetUntilRef.current = elapsed + POWERUP_DURATION_MS;
+          setMagnetRemaining(POWERUP_DURATION_MS);
+          collectFlashRef.current = 1.3;
+          busBounceRef.current = 1.15;
+          addBurst(x, PLAYER_Y - 10, "#72f1ff", 30);
+          addFloatText(x, PLAYER_Y - 66, "磁铁 5 秒", "#72f1ff");
+          showToast("获得磁铁！5 秒内自动吸收附近应援棒", "cyan");
+          navigator.vibrate?.([24, 15, 32]);
+        } else if (entity.type === "invincible") {
+          entity.handled = true;
+          currentEntity.handled = true;
+          invincibleUntilRef.current = elapsed + POWERUP_DURATION_MS;
+          setInvincibleRemaining(POWERUP_DURATION_MS);
+          collectFlashRef.current = 1.3;
+          screenPunchRef.current = 1.1;
+          addBurst(x, PLAYER_Y - 10, "#ffe66d", 34);
+          addFloatText(x, PLAYER_Y - 66, "无敌 5 秒", "#ffe66d");
+          showToast("进入无敌模式！5 秒内无视所有障碍", "gold");
+          navigator.vibrate?.([30, 16, 45]);
         } else {
           entity.handled = true;
+          if (elapsed < invincibleUntilRef.current) {
+            addBurst(x, PLAYER_Y, "#ffe66d", 18);
+            addFloatText(x, PLAYER_Y - 58, "无敌穿越!", "#ffe66d");
+            screenPunchRef.current = 0.45;
+            navigator.vibrate?.(16);
+            continue;
+          }
           if (now < invulnerableUntilRef.current) continue;
           invulnerableUntilRef.current = now + 720;
           const baseLoss =
@@ -1494,6 +1669,12 @@ export default function Home() {
 
       if (elapsed - lastHudRef.current > 100) {
         lastHudRef.current = elapsed;
+        setMagnetRemaining(
+          Math.max(0, magnetUntilRef.current - elapsed),
+        );
+        setInvincibleRemaining(
+          Math.max(0, invincibleUntilRef.current - elapsed),
+        );
         setProgress(
           Math.min(100, (elapsed / beatTimes[track.totalBeats]) * 100),
         );
@@ -1516,6 +1697,7 @@ export default function Home() {
       failGame,
       finishGame,
       playBeat,
+      playFanHit,
       resetSongTone,
       showJudgement,
       showToast,
@@ -1544,6 +1726,10 @@ export default function Home() {
       )[0];
 
     if (!candidate) {
+      if (elapsed < magnetUntilRef.current) {
+        showJudgement("GREAT", "MAGNET ACTIVE · AUTO COLLECT");
+        return;
+      }
       comboRef.current = 0;
       setCombo(0);
       showJudgement("MISS", "不在节拍点或车道错误");
@@ -1688,6 +1874,8 @@ export default function Home() {
     shieldRef.current = false;
     perfectCountRef.current = 0;
     successfulHitsRef.current = 0;
+    magnetUntilRef.current = -1;
+    invincibleUntilRef.current = -1;
     grannyWarnedRef.current = false;
     invulnerableUntilRef.current = 0;
     beatPulseRef.current = 0;
@@ -1701,6 +1889,8 @@ export default function Home() {
     setCombo(0);
     setMaxCombo(0);
     setSuccessfulHits(0);
+    setMagnetRemaining(0);
+    setInvincibleRemaining(0);
     setProgress(0);
     setShield(false);
     setCurrentBpm(detectedBpmRef.current);
@@ -1875,11 +2065,15 @@ export default function Home() {
     successfulHitsRef.current = 0;
     perfectCountRef.current = 0;
     shieldRef.current = false;
+    magnetUntilRef.current = -1;
+    invincibleUntilRef.current = -1;
     setVehicleLevel(1);
     setFans(STARTING_FANS);
     setCombo(0);
     setMaxCombo(0);
     setSuccessfulHits(0);
+    setMagnetRemaining(0);
+    setInvincibleRemaining(0);
     setShield(false);
     setProgress(0);
     setToast(null);
@@ -2044,6 +2238,8 @@ export default function Home() {
             <li><i className="legend fan-stick" />对准应援棒：按 HIT 粉丝 +1</li>
             <li><i className="legend warning" />障碍物：掉粉并改变音色，节奏不变</li>
             <li><i className="legend lucky-bag">?</i>锦囊：碰到后选择是否开启，再揭晓 ×2 或 ÷2</li>
+            <li><i className="legend magnet-tool" />磁铁：5 秒自动吸收附近应援棒</li>
+            <li><i className="legend invincible-tool">★</i>无敌：5 秒无视道路障碍</li>
             <li><i className="legend pedestrian-icon">♿</i>行人：按预警换到安全车道</li>
           </ul>
           <div className="side-upgrade-card">
@@ -2152,6 +2348,51 @@ export default function Home() {
               height={GAME_HEIGHT}
               aria-label="五车道节奏躲避游戏画面"
             />
+
+            {(magnetRemaining > 0 || invincibleRemaining > 0) && (
+              <div className="powerup-hud" aria-live="polite">
+                {magnetRemaining > 0 && (
+                  <div className="powerup-chip is-magnet">
+                    <i className="powerup-icon" aria-hidden="true" />
+                    <span>
+                      <small>MAGNET</small>
+                      <strong>{(magnetRemaining / 1000).toFixed(1)}s</strong>
+                    </span>
+                    <b>
+                      <i
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (magnetRemaining / POWERUP_DURATION_MS) * 100,
+                          )}%`,
+                        }}
+                      />
+                    </b>
+                  </div>
+                )}
+                {invincibleRemaining > 0 && (
+                  <div className="powerup-chip is-invincible">
+                    <i className="powerup-icon" aria-hidden="true">
+                      ★
+                    </i>
+                    <span>
+                      <small>INVINCIBLE</small>
+                      <strong>{(invincibleRemaining / 1000).toFixed(1)}s</strong>
+                    </span>
+                    <b>
+                      <i
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (invincibleRemaining / POWERUP_DURATION_MS) * 100,
+                          )}%`,
+                        }}
+                      />
+                    </b>
+                  </div>
+                )}
+              </div>
+            )}
 
             {toast && (
               <div key={toast.key} className={`game-toast tone-${toast.tone}`}>
