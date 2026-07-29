@@ -11,6 +11,7 @@ const PLAYER_Y = 584;
 const STARTING_FANS = 12;
 const TRAVEL_BEATS = 4;
 const MISS_WINDOW = 190;
+const HIT_INPUT_GUARD_MS = 90;
 const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
 
@@ -691,6 +692,7 @@ export default function Home() {
   const grannyWarnedRef = useRef(false);
   const toastTimerRef = useRef<number | null>(null);
   const judgementTimerRef = useRef<number | null>(null);
+  const lastHitInputAtRef = useRef(-Infinity);
 
   const [status, setStatus] = useState<GameStatus>("ready");
   const [songReady, setSongReady] = useState(false);
@@ -2112,6 +2114,9 @@ export default function Home() {
 
   const hitNote = useCallback(() => {
     if (statusRef.current !== "playing") return;
+    const inputAt = performance.now();
+    if (inputAt - lastHitInputAtRef.current < HIT_INPUT_GUARD_MS) return;
+    lastHitInputAtRef.current = inputAt;
     const elapsed =
       songRef.current && !songRef.current.paused
         ? songRef.current.currentTime * 1000
@@ -2131,7 +2136,8 @@ export default function Home() {
 
     if (!candidate) {
       if (elapsed < magnetUntilRef.current) {
-        showJudgement("PERFECT", "MAGNET ACTIVE · AUTO PERFECT");
+        // The magnet already judges a fan when that entity is actually
+        // absorbed. Empty HIT presses must not create extra PERFECT feedback.
         return;
       }
       comboRef.current = 0;
@@ -2284,6 +2290,7 @@ export default function Home() {
     invincibleUntilRef.current = -1;
     grannyWarnedRef.current = false;
     invulnerableUntilRef.current = 0;
+    lastHitInputAtRef.current = -Infinity;
     beatPulseRef.current = 0;
     shakeRef.current = 0;
     hitFlashRef.current = 0;
@@ -2470,6 +2477,7 @@ export default function Home() {
     maxComboRef.current = 0;
     successfulHitsRef.current = 0;
     perfectCountRef.current = 0;
+    lastHitInputAtRef.current = -Infinity;
     shieldRef.current = false;
     magnetUntilRef.current = -1;
     invincibleUntilRef.current = -1;

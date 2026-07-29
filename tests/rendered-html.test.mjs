@@ -77,10 +77,12 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /确认并继续/);
   assert.match(page, /Math\.random\(\) < 0\.55/);
   assert.match(page, /const POWERUP_DURATION_MS = 5_000/);
+  assert.match(page, /const HIT_INPUT_GUARD_MS = 90/);
   assert.match(page, /const MAGNET_RADIUS = 185/);
   assert.match(page, /type: pickupType/);
   assert.match(page, /MAGNET PERFECT · \+1 FAN/);
-  assert.match(page, /MAGNET ACTIVE · AUTO PERFECT/);
+  assert.doesNotMatch(page, /MAGNET ACTIVE · AUTO PERFECT/);
+  assert.match(page, /lastHitInputAtRef\.current < HIT_INPUT_GUARD_MS/);
   assert.match(page, /附近应援棒自动 PERFECT/);
   assert.match(page, /5 秒内无视所有障碍/);
   assert.match(page, /elapsed < invincibleUntilRef\.current/);
