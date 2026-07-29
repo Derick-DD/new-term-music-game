@@ -2312,9 +2312,28 @@ export default function Home() {
                       不开启则不会改变当前粉丝数。
                     </p>
                     <div className="lucky-risk-row" aria-label="锦囊可能结果">
-                      <span>好运：粉丝 ×2</span>
-                      <i>VS</i>
-                      <span>反转：粉丝 ÷2</span>
+                      <div className="lucky-risk-card is-good">
+                        <small>GOOD LUCK</small>
+                        <strong>
+                          <i>↑</i>
+                          <span>粉丝</span>
+                          <b>×2</b>
+                        </strong>
+                        <em>最高到车辆载客上限</em>
+                      </div>
+                      <div className="lucky-risk-random" aria-hidden="true">
+                        <b>?</b>
+                        <small>随机</small>
+                      </div>
+                      <div className="lucky-risk-card is-risk">
+                        <small>RISK</small>
+                        <strong>
+                          <i>↓</i>
+                          <span>粉丝</span>
+                          <b>÷2</b>
+                        </strong>
+                        <em>粉丝减半并中断连击</em>
+                      </div>
                     </div>
                     <div className="result-actions lucky-actions">
                       <button className="primary-button" onClick={openLuckyBag}>

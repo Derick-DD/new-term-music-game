@@ -861,32 +861,146 @@ button:focus-visible {
 
 .lucky-risk-row {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
   align-items: center;
-  width: min(94%, 390px);
+  width: min(94%, 420px);
   margin-bottom: 23px;
-  border: 1px solid #51458b;
-  background: rgba(13, 11, 41, 0.86);
 }
 
-.lucky-risk-row span {
-  padding: 10px 7px;
+.lucky-risk-card {
+  position: relative;
+  display: grid;
+  min-height: 92px;
+  gap: 6px;
+  border: 2px solid currentColor;
+  padding: 10px 13px;
+  overflow: hidden;
+  text-align: left;
+}
+
+.lucky-risk-card::after {
+  position: absolute;
+  content: "";
+  right: -9px;
+  bottom: -12px;
+  width: 46px;
+  height: 46px;
+  border: 8px solid currentColor;
+  opacity: 0.09;
+  transform: rotate(45deg);
+}
+
+.lucky-risk-card.is-good {
   color: var(--gold);
-  font-size: 8px;
-  font-weight: 950;
+  background:
+    linear-gradient(135deg, rgba(255, 230, 109, 0.16), transparent 62%),
+    #15122f;
+  box-shadow:
+    inset 4px 0 0 rgba(255, 230, 109, 0.18),
+    4px 5px 0 rgba(91, 69, 27, 0.42);
 }
 
-.lucky-risk-row span:last-child {
+.lucky-risk-card.is-risk {
+  color: var(--pink);
+  background:
+    linear-gradient(225deg, rgba(255, 79, 163, 0.16), transparent 62%),
+    #15122f;
+  box-shadow:
+    inset -4px 0 0 rgba(255, 79, 163, 0.18),
+    4px 5px 0 rgba(74, 31, 72, 0.44);
+}
+
+.lucky-risk-card > small {
+  color: currentColor;
+  font-size: 7px;
+  font-weight: 950;
+  letter-spacing: 0.15em;
+}
+
+.lucky-risk-card strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: white;
+  line-height: 1;
+}
+
+.lucky-risk-card strong i {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  color: #15122f;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.lucky-risk-card strong span {
+  color: #eee9ff;
+  font-size: 9px;
+}
+
+.lucky-risk-card strong b {
+  margin-left: auto;
+  font-family: "Arial Black", sans-serif;
+  font-size: 21px;
+  font-style: italic;
+}
+
+.lucky-risk-card.is-good strong i {
+  background: var(--gold);
+}
+
+.lucky-risk-card.is-good strong b {
+  color: var(--gold);
+}
+
+.lucky-risk-card.is-risk strong i {
+  background: var(--pink);
+}
+
+.lucky-risk-card.is-risk strong b {
   color: var(--pink);
 }
 
-.lucky-risk-row i {
-  border-right: 1px solid #51458b;
-  border-left: 1px solid #51458b;
-  color: #8d84b8;
-  padding: 11px 8px;
+.lucky-risk-card em {
+  position: relative;
+  z-index: 1;
+  color: #8f87b7;
   font-size: 7px;
   font-style: normal;
+  line-height: 1.35;
+}
+
+.lucky-risk-random {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 62px;
+  margin: 0 -4px;
+  border: 3px solid #6b5aa8;
+  background: #211948;
+  color: var(--cyan);
+  box-shadow:
+    4px 5px 0 #0a081e,
+    0 0 14px rgba(114, 241, 255, 0.24);
+  clip-path: polygon(22% 0, 78% 0, 100% 22%, 100% 78%, 78% 100%, 22% 100%, 0 78%, 0 22%);
+}
+
+.lucky-risk-random b {
+  margin: 3px 0 -7px;
+  font-family: "Arial Black", sans-serif;
+  font-size: 23px;
+  line-height: 1;
+}
+
+.lucky-risk-random small {
+  color: #9188bc;
+  font-size: 6px;
+  font-weight: 950;
 }
 
 .lucky-actions {
@@ -1682,6 +1796,34 @@ footer i {
 
   .bpm-bars i {
     width: 10px;
+  }
+
+  .lucky-risk-row {
+    grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+  }
+
+  .lucky-risk-card {
+    min-height: 86px;
+    gap: 5px;
+    padding: 9px 8px;
+  }
+
+  .lucky-risk-card strong {
+    gap: 4px;
+  }
+
+  .lucky-risk-card strong span {
+    font-size: 8px;
+  }
+
+  .lucky-risk-card strong b {
+    font-size: 18px;
+  }
+
+  .lucky-risk-random {
+    width: 48px;
+    height: 56px;
+    margin: 0 -4px;
   }
 
   .hud {

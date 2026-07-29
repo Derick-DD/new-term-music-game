@@ -59,6 +59,8 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /const openLuckyBag = useCallback/);
   assert.match(page, /const continueLuckyGame = useCallback/);
   assert.match(page, /是否开启锦囊？/);
+  assert.match(page, /GOOD LUCK/);
+  assert.match(page, /粉丝减半并中断连击/);
   assert.match(page, /确认并继续/);
   assert.match(page, /Math\.random\(\) < 0\.55/);
   assert.match(page, /audioRef\.current\?\.suspend/);
