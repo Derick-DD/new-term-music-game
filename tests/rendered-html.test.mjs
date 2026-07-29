@@ -54,6 +54,9 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /"PERFECT" \| "GREAT" \| "GOOD" \| "MISS"/);
   assert.match(page, /const VEHICLE_LEVELS/);
   assert.match(page, /fan-bus-vehicle-level/);
+  assert.match(page, /requirement: \{ hits: 4, perfect: 1 \}/);
+  assert.match(page, /requirement: \{ hits: 12, maxCombo: 6 \}/);
+  assert.match(page, /requirement: \{ hits: 22, perfect: 7, maxCombo: 10 \}/);
   assert.match(page, /createMediaElementSource/);
   assert.match(page, /createBiquadFilter/);
   assert.match(page, /songRef\.current\.playbackRate = 1/);

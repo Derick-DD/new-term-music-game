@@ -111,8 +111,8 @@ const VEHICLE_LEVELS: VehicleLevel[] = [
     capacity: 30,
     primary: "#ff4fa3",
     secondary: "#ff78bf",
-    task: "本局 HIT 6 次 + PERFECT 2 次",
-    requirement: { hits: 6, perfect: 2 },
+    task: "本局 HIT 4 次 + PERFECT 1 次",
+    requirement: { hits: 4, perfect: 1 },
   },
   {
     level: 2,
@@ -120,8 +120,8 @@ const VEHICLE_LEVELS: VehicleLevel[] = [
     capacity: 55,
     primary: "#6a5cff",
     secondary: "#9c8cff",
-    task: "本局 HIT 18 次 + 最高连击 10",
-    requirement: { hits: 18, maxCombo: 10 },
+    task: "本局 HIT 12 次 + 最高连击 6",
+    requirement: { hits: 12, maxCombo: 6 },
   },
   {
     level: 3,
@@ -129,8 +129,8 @@ const VEHICLE_LEVELS: VehicleLevel[] = [
     capacity: 85,
     primary: "#00b9c8",
     secondary: "#72f1ff",
-    task: "本局 HIT 32 次 + PERFECT 12 次 + 最高连击 16",
-    requirement: { hits: 32, perfect: 12, maxCombo: 16 },
+    task: "本局 HIT 22 次 + PERFECT 7 次 + 最高连击 10",
+    requirement: { hits: 22, perfect: 7, maxCombo: 10 },
   },
   {
     level: 4,
