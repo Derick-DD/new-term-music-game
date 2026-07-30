@@ -26,7 +26,11 @@ body {
   margin: 0;
   color: var(--cream);
   background:
-    radial-gradient(circle at 50% 18%, rgba(124, 76, 255, 0.24), transparent 33rem),
+    radial-gradient(
+      circle at 50% 18%,
+      rgba(124, 76, 255, 0.24),
+      transparent 33rem
+    ),
     linear-gradient(180deg, #100d37 0%, #080719 74%);
   font-family: "Courier New", "PingFang SC", "Microsoft YaHei", monospace;
   overflow-x: hidden;
@@ -355,8 +359,12 @@ button:focus-visible {
 }
 
 .warning {
-  background:
-    linear-gradient(135deg, transparent 0 30%, #ff6b4a 31% 69%, transparent 70%);
+  background: linear-gradient(
+    135deg,
+    transparent 0 30%,
+    #ff6b4a 31% 69%,
+    transparent 70%
+  );
   border-bottom: 7px solid #ff9d4d;
 }
 
@@ -513,9 +521,9 @@ button:focus-visible {
 
 .hud {
   display: grid;
-  grid-template-columns: 0.7fr 0.9fr 1.4fr;
+  grid-template-columns: 19% 19% 44% 18%;
   align-items: center;
-  min-height: 56px;
+  min-height: 48px;
   border-top: 1px solid #342b70;
   border-bottom: 1px solid #342b70;
   background: #0d0b29;
@@ -525,9 +533,9 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 42px;
+  min-height: 38px;
   border-right: 1px solid #342b70;
-  padding: 5px 12px;
+  padding: 4px 10px;
 }
 
 .hud-block span {
@@ -539,7 +547,7 @@ button:focus-visible {
 
 .hud-block strong {
   color: var(--cyan);
-  font-size: 23px;
+  font-size: 20px;
   line-height: 1;
 }
 
@@ -551,6 +559,102 @@ button:focus-visible {
 
 .combo-block strong {
   color: var(--gold);
+}
+
+.hud-info-panel {
+  display: contents;
+}
+
+.road-legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 3px 5px;
+}
+
+.road-legend-item {
+  min-height: 34px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 3px;
+  padding: 2px 3px;
+}
+
+.road-legend-item > span {
+  display: grid;
+  min-width: 0;
+}
+
+.road-legend-item strong,
+.road-legend-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.road-legend-item strong {
+  color: #fff;
+  font-size: 7px;
+}
+
+.road-legend-item small {
+  color: #8178b3;
+  font-size: 5px;
+}
+
+.road-icon {
+  display: grid;
+  width: 21px;
+  height: 25px;
+  place-items: center;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.road-icon:not(.is-earth-tour):not(.is-lueluelue)::after {
+  color: var(--cyan);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.road-icon.is-light-stick:not(.is-earth-tour):not(.is-lueluelue)::after {
+  content: "▮";
+}
+
+.road-icon.is-dish:not(.is-earth-tour):not(.is-lueluelue)::after {
+  content: "▲";
+  color: #ff6b4a;
+}
+
+.road-icon.is-crystal:not(.is-earth-tour):not(.is-lueluelue)::after {
+  content: "◆";
+  color: var(--pink);
+}
+
+.road-icon.is-light-stick.is-earth-tour {
+  background-image: url("/assets/earth-tour/support-light-stick.png");
+}
+
+.road-icon.is-dish.is-earth-tour {
+  background-image: url("/assets/earth-tour/broken-dish.png");
+}
+
+.road-icon.is-crystal.is-earth-tour {
+  background-image: url("/assets/earth-tour/crystal-obstacle.png");
+}
+
+.road-icon.is-light-stick.is-lueluelue {
+  background-image: url("/assets/lueluelue/support-light-stick.png");
+}
+
+.road-icon.is-dish.is-lueluelue {
+  background-image: url("/assets/lueluelue/electric-barrier.png");
+}
+
+.road-icon.is-crystal.is-lueluelue {
+  background-image: url("/assets/lueluelue/broken-speakers.png");
 }
 
 .shield-chip {
@@ -575,16 +679,17 @@ button:focus-visible {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  justify-self: center;
-  min-width: 100px;
+  justify-self: stretch;
+  min-width: 0;
   border: 1px solid #393171;
-  padding: 5px 8px;
+  margin: 3px 6px 3px 0;
+  padding: 4px 5px;
   color: var(--cyan);
   background: rgba(114, 241, 255, 0.05);
 }
 
 .music-state strong {
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.1;
 }
 
@@ -627,20 +732,20 @@ button:focus-visible {
 
 .vehicle-upgrade-strip {
   display: grid;
-  grid-template-columns: auto 1fr 100px;
+  grid-template-columns: 19% 19% 44% 18%;
   align-items: center;
-  gap: 9px;
+  gap: 0;
   min-height: 52px;
   border-bottom: 1px solid #342b70;
-  padding: 6px 9px;
+  padding: 6px 0;
   background:
-    linear-gradient(90deg, rgba(255, 230, 109, 0.09), transparent 58%),
-    #0b0922;
+    linear-gradient(90deg, rgba(255, 230, 109, 0.09), transparent 58%), #0b0922;
 }
 
 .vehicle-level-badge {
   display: grid;
   min-width: 45px;
+  margin-left: 9px;
   border: 1px solid var(--gold);
   padding: 4px 6px;
   color: var(--gold);
@@ -662,6 +767,7 @@ button:focus-visible {
   display: grid;
   gap: 2px;
   min-width: 0;
+  padding: 0 9px;
 }
 
 .vehicle-task-copy strong {
@@ -686,8 +792,110 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+.powerup-legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 0;
+  padding: 3px 5px;
+}
+
+.powerup-legend-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid rgba(188, 167, 255, 0.24);
+  background: rgba(25, 20, 62, 0.72);
+  padding: 3px 5px;
+}
+
+.powerup-legend-item > span {
+  display: grid;
+  min-width: 0;
+}
+
+.powerup-legend-item strong {
+  overflow: hidden;
+  color: #fff;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.powerup-legend-item small {
+  overflow: hidden;
+  color: #8f87ba;
+  font-size: 5px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend-icon {
+  display: grid;
+  width: 25px;
+  height: 27px;
+  place-items: center;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  color: var(--gold);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.legend-icon.is-lucky:not(.is-earth-tour):not(.is-lueluelue) {
+  border: 2px solid #fff2a8;
+  background: #8c5bff;
+  box-shadow: inset 0 5px #c9a9ff;
+}
+
+.legend-icon.is-lucky.is-earth-tour {
+  background-image: url("/assets/earth-tour/lucky-bag.png");
+}
+
+.legend-icon.is-magnet:not(.is-earth-tour):not(.is-lueluelue) {
+  border: 5px solid var(--cyan);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+}
+
+.legend-icon.is-invincible:not(.is-earth-tour):not(.is-lueluelue) {
+  border: 2px solid var(--pink);
+  background: #5a3cc4;
+}
+
+.legend-icon.is-magnet.is-earth-tour {
+  background-image: url("/assets/earth-tour/romance-magnet.png");
+}
+
+.legend-icon.is-invincible.is-earth-tour {
+  background-image: url("/assets/earth-tour/hundred-thousand-volts.png");
+  filter: drop-shadow(0 0 4px rgba(255, 230, 109, 0.6));
+}
+
+.legend-icon.is-lucky.is-lueluelue {
+  background-image: url("/assets/lueluelue/lucky-bag.png");
+}
+
+.legend-icon.is-magnet.is-lueluelue {
+  background-image: url("/assets/lueluelue/magnet.png");
+}
+
+.legend-icon.is-invincible.is-lueluelue {
+  background-image: url("/assets/lueluelue/invincible.png");
+  filter: drop-shadow(0 0 4px rgba(255, 230, 109, 0.6));
+}
+
 .vehicle-task-meter {
   position: relative;
+  justify-self: stretch;
+  width: auto;
+  margin: 3px 6px 3px 0;
   height: 17px;
   border: 1px solid #3d3473;
   background: #08071d;
@@ -740,6 +948,10 @@ button:focus-visible {
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
+}
+
+.game-screen canvas.is-handdrawn-theme {
+  image-rendering: auto;
 }
 
 .powerup-hud {
@@ -831,6 +1043,39 @@ button:focus-visible {
   color: var(--gold);
   font-size: 13px;
   box-shadow: 0 0 9px rgba(255, 230, 109, 0.38);
+}
+
+.powerup-chip .earth-crystal-icon,
+.powerup-chip .lueluelue-magnet-icon,
+.powerup-chip.is-invincible .hundred-volts-icon,
+.powerup-chip.is-invincible .lueluelue-invincible-icon {
+  width: 32px;
+  height: 32px;
+  margin-left: 0;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.powerup-chip .earth-crystal-icon {
+  background-image: url("/assets/earth-tour/romance-magnet.png");
+}
+
+.powerup-chip .lueluelue-magnet-icon {
+  background-image: url("/assets/lueluelue/magnet.png");
+}
+
+.powerup-chip.is-invincible .hundred-volts-icon {
+  background-image: url("/assets/earth-tour/hundred-thousand-volts.png");
+  filter: drop-shadow(0 0 5px #ffe66d);
+}
+
+.powerup-chip.is-invincible .lueluelue-invincible-icon {
+  background-image: url("/assets/lueluelue/invincible.png");
+  filter: drop-shadow(0 0 5px #ffe66d);
 }
 
 .game-toast {
@@ -975,7 +1220,11 @@ button:focus-visible {
   justify-content: center;
   padding: 28px 22px 22px;
   background:
-    radial-gradient(circle at 50% 16%, rgba(255, 79, 163, 0.25), transparent 27%),
+    radial-gradient(
+      circle at 50% 16%,
+      rgba(255, 79, 163, 0.25),
+      transparent 27%
+    ),
     repeating-linear-gradient(
       90deg,
       rgba(114, 241, 255, 0.035) 0 2px,
@@ -1106,8 +1355,7 @@ button:focus-visible {
   margin: 10px 0;
   border: 1px solid #6758aa;
   background:
-    linear-gradient(135deg, rgba(255, 230, 109, 0.12), transparent 65%),
-    #17133c;
+    linear-gradient(135deg, rgba(255, 230, 109, 0.12), transparent 65%), #17133c;
   padding: 9px 12px;
   text-align: left;
 }
@@ -1313,7 +1561,11 @@ button:focus-visible {
   z-index: 8;
   padding: 24px;
   background:
-    radial-gradient(circle at 50% 38%, rgba(255, 230, 109, 0.2), transparent 30%),
+    radial-gradient(
+      circle at 50% 38%,
+      rgba(255, 230, 109, 0.2),
+      transparent 30%
+    ),
     repeating-linear-gradient(
       -45deg,
       rgba(118, 80, 222, 0.11) 0 10px,
@@ -1338,7 +1590,16 @@ button:focus-visible {
   box-shadow:
     7px 7px 0 #38256d,
     0 0 24px rgba(255, 230, 109, 0.32);
-  clip-path: polygon(15% 10%, 38% 10%, 45% 0, 55% 0, 62% 10%, 85% 10%, 100% 100%, 0 100%);
+  clip-path: polygon(
+    15% 10%,
+    38% 10%,
+    45% 0,
+    55% 0,
+    62% 10%,
+    85% 10%,
+    100% 100%,
+    0 100%
+  );
 }
 
 .lucky-overlay h2 {
@@ -1394,8 +1655,7 @@ button:focus-visible {
 .lucky-risk-card.is-good {
   color: var(--gold);
   background:
-    linear-gradient(135deg, rgba(255, 230, 109, 0.16), transparent 62%),
-    #15122f;
+    linear-gradient(135deg, rgba(255, 230, 109, 0.16), transparent 62%), #15122f;
   box-shadow:
     inset 4px 0 0 rgba(255, 230, 109, 0.18),
     4px 5px 0 rgba(91, 69, 27, 0.42);
@@ -1404,8 +1664,7 @@ button:focus-visible {
 .lucky-risk-card.is-risk {
   color: var(--pink);
   background:
-    linear-gradient(225deg, rgba(255, 79, 163, 0.16), transparent 62%),
-    #15122f;
+    linear-gradient(225deg, rgba(255, 79, 163, 0.16), transparent 62%), #15122f;
   box-shadow:
     inset -4px 0 0 rgba(255, 79, 163, 0.18),
     4px 5px 0 rgba(74, 31, 72, 0.44);
@@ -1488,7 +1747,16 @@ button:focus-visible {
   box-shadow:
     4px 5px 0 #0a081e,
     0 0 14px rgba(114, 241, 255, 0.24);
-  clip-path: polygon(22% 0, 78% 0, 100% 22%, 100% 78%, 78% 100%, 22% 100%, 0 78%, 0 22%);
+  clip-path: polygon(
+    22% 0,
+    78% 0,
+    100% 22%,
+    100% 78%,
+    78% 100%,
+    22% 100%,
+    0 78%,
+    0 22%
+  );
 }
 
 .lucky-risk-random b {
@@ -1782,8 +2050,7 @@ button:focus-visible {
   margin: 2px 0 14px;
   border: 2px solid var(--cyan);
   background:
-    linear-gradient(90deg, rgba(114, 241, 255, 0.1), transparent 62%),
-    #0c0a2a;
+    linear-gradient(90deg, rgba(114, 241, 255, 0.1), transparent 62%), #0c0a2a;
   padding: 8px;
   box-shadow:
     5px 5px 0 #263d68,
@@ -1863,7 +2130,9 @@ button:focus-visible {
     6px 6px 0 #6b2462,
     inset -4px -4px 0 rgba(0, 0, 0, 0.12),
     inset 3px 3px 0 rgba(255, 255, 255, 0.25);
-  transition: transform 100ms ease, box-shadow 100ms ease;
+  transition:
+    transform 100ms ease,
+    box-shadow 100ms ease;
 }
 
 .primary-button:hover {
@@ -2130,8 +2399,7 @@ button:focus-visible {
   margin: -3px 0 14px;
   border: 2px solid var(--gold);
   background:
-    linear-gradient(90deg, rgba(255, 230, 109, 0.15), transparent 62%),
-    #19113c;
+    linear-gradient(90deg, rgba(255, 230, 109, 0.15), transparent 62%), #19113c;
   color: white;
   padding: 8px 12px;
   text-align: left;
@@ -2161,8 +2429,7 @@ button:focus-visible {
 
 .share-result-button:hover {
   background:
-    linear-gradient(90deg, rgba(255, 230, 109, 0.24), transparent 70%),
-    #211649;
+    linear-gradient(90deg, rgba(255, 230, 109, 0.24), transparent 70%), #211649;
 }
 
 .share-card-backdrop {
@@ -2173,7 +2440,11 @@ button:focus-visible {
   place-items: center;
   overflow-y: auto;
   background:
-    radial-gradient(circle at 50% 25%, rgba(255, 79, 163, 0.28), transparent 42%),
+    radial-gradient(
+      circle at 50% 25%,
+      rgba(255, 79, 163, 0.28),
+      transparent 42%
+    ),
     rgba(5, 4, 20, 0.94);
   padding: 13px;
   backdrop-filter: blur(4px);
@@ -2209,7 +2480,11 @@ button:focus-visible {
   overflow: hidden;
   border: 3px solid #5b4da1;
   background:
-    radial-gradient(circle at 60% 10%, rgba(255, 79, 163, 0.28), transparent 34%),
+    radial-gradient(
+      circle at 60% 10%,
+      rgba(255, 79, 163, 0.28),
+      transparent 34%
+    ),
     repeating-linear-gradient(
       90deg,
       rgba(114, 241, 255, 0.035) 0 2px,
@@ -2637,8 +2912,11 @@ button:focus-visible {
   height: 62px;
   border: 3px solid var(--cyan);
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 35% 28%, #473b89 0 17%, #28215e 18% 100%);
+  background: radial-gradient(
+    circle at 35% 28%,
+    #473b89 0 17%,
+    #28215e 18% 100%
+  );
   color: var(--cyan);
   box-shadow:
     0 5px 0 #176b8d,
@@ -2724,8 +3002,7 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   border-color: var(--gold) !important;
-  background:
-    linear-gradient(#ff6cb4, #db2f85) !important;
+  background: linear-gradient(#ff6cb4, #db2f85) !important;
   color: white !important;
   font-size: 7px !important;
   font-weight: 900;
@@ -2905,6 +3182,50 @@ footer i {
   }
 }
 
+@media (min-width: 781px) and (max-height: 1050px) {
+  .arcade-page {
+    padding: 8px;
+  }
+
+  .topbar {
+    display: none;
+  }
+
+  .game-screen {
+    width: min(100%, calc((100dvh - 300px) * 0.6667));
+    margin-inline: auto;
+  }
+
+  .rules-overlay {
+    padding: 14px 16px;
+  }
+
+  .rules-logo {
+    width: 52px;
+    height: 40px;
+    margin: 5px 0;
+    font-size: 21px;
+  }
+
+  .rules-overlay h1 {
+    font-size: clamp(28px, 5vw, 38px);
+  }
+
+  .story-route {
+    gap: 5px;
+  }
+
+  .story-route > div {
+    min-height: 52px;
+    padding: 6px 8px;
+  }
+
+  .story-mission {
+    margin: 7px 0;
+    padding: 7px 9px;
+  }
+}
+
 @media (max-width: 780px) {
   html,
   body {
@@ -3053,6 +3374,32 @@ footer i {
     font-size: 20px;
   }
 
+  .hud-info-panel {
+    display: contents;
+  }
+
+  .road-legend {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+    padding: 3px 4px;
+  }
+
+  .road-legend-item {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 3px;
+    min-height: 34px;
+    padding: 2px 3px;
+  }
+
+  .road-legend-item small {
+    display: none;
+  }
+
+  .road-icon {
+    width: 20px;
+    height: 25px;
+  }
+
   .shield-chip,
   .music-state {
     min-width: 84px;
@@ -3061,15 +3408,45 @@ footer i {
   }
 
   .vehicle-upgrade-strip {
-    grid-template-columns: auto minmax(0, 1fr) 66px;
-    gap: 6px;
+    grid-template-columns: 19% 19% 44% 18%;
+    gap: 0;
     min-height: 48px;
-    padding: 5px 6px;
+    padding: 5px 0;
+  }
+
+  .vehicle-level-badge {
+    margin-left: 8px;
+  }
+
+  .vehicle-task-copy {
+    padding-inline: 8px;
   }
 
   .vehicle-task-copy strong span {
     display: block;
     margin: 1px 0 0;
+  }
+
+  .powerup-legend {
+    gap: 3px;
+    padding: 3px 4px;
+  }
+
+  .powerup-legend-item {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 3px;
+    min-height: 34px;
+    padding: 2px 3px;
+  }
+
+  .powerup-legend-item small {
+    display: none;
+  }
+
+  .legend-icon {
+    width: 21px;
+    height: 23px;
+    font-size: 10px;
   }
 
   .track-picker {

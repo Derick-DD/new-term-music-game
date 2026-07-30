@@ -42,25 +42,11 @@ function triggerHaptic(pattern: number | number[]) {
 }
 
 type GameStatus =
-  | "ready"
-  | "playing"
-  | "paused"
-  | "lucky"
-  | "finished"
-  | "failed";
-type EntityType =
-  | "fan"
-  | "obstacle"
-  | "lucky"
-  | "magnet"
-  | "invincible";
+  "ready" | "playing" | "paused" | "lucky" | "finished" | "failed";
+type EntityType = "fan" | "obstacle" | "lucky" | "magnet" | "invincible";
 type ObstacleType = "cone" | "speaker" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
-type TrackId =
-  | "guaihuo"
-  | "lueluelue"
-  | "earth-tour"
-  | "custom-upload";
+type TrackId = "guaihuo" | "lueluelue" | "earth-tour" | "custom-upload";
 type ToneMode = "normal" | "thick" | "thin";
 type MapTheme = "illusion-city" | "candy-blocks" | "earth-orbit" | "custom";
 type ReadyPage = "rules" | "songs";
@@ -230,7 +216,9 @@ const VEHICLE_LEVELS: VehicleLevel[] = [
 ];
 
 function getVehicle(level: number) {
-  return VEHICLE_LEVELS[Math.max(0, Math.min(VEHICLE_LEVELS.length - 1, level - 1))];
+  return VEHICLE_LEVELS[
+    Math.max(0, Math.min(VEHICLE_LEVELS.length - 1, level - 1))
+  ];
 }
 
 function isVehicleTaskComplete(
@@ -338,8 +326,8 @@ const TRACKS: Track[] = [
     grannyBeats: [36, 70],
     melody: [220, 277.18, 329.63, 440, 415.3, 329.63, 277.18, 246.94],
     lanePattern: [
-      2, 3, 2, 1, 0, 1, 3, 4, 3, 1, 2, 4, 3, 2, 0, 1,
-      2, 4, 3, 2, 1, 0, 2, 3, 4, 2, 0, 1, 3, 4, 2, 1,
+      2, 3, 2, 1, 0, 1, 3, 4, 3, 1, 2, 4, 3, 2, 0, 1, 2, 4, 3, 2, 1, 0, 2, 3, 4,
+      2, 0, 1, 3, 4, 2, 1,
     ],
     notePattern: [1],
     intensityPattern: [0.65],
@@ -389,14 +377,14 @@ const MAP_PALETTES: Record<
     windowB: "#72f1ff",
   },
   "earth-orbit": {
-    sky: "#050f2b",
-    sidewalk: "#0c2450",
-    building: "#163466",
-    road: "#071a33",
-    edgeLeft: "#72f1ff",
-    edgeRight: "#4f7cff",
-    windowA: "#72f1ff",
-    windowB: "#bca7ff",
+    sky: "#f4a19f",
+    sidewalk: "#e95496",
+    building: "#d73786",
+    road: "#69324f",
+    edgeLeft: "#ffdc69",
+    edgeRight: "#ff72bb",
+    windowA: "#ffdc69",
+    windowB: "#ff9cc8",
   },
   custom: {
     sky: "#090823",
@@ -409,6 +397,60 @@ const MAP_PALETTES: Record<
     windowB: "#5ff6ff",
   },
 };
+
+const EARTH_TOUR_ASSETS = {
+  city: "/assets/earth-tour/romance-city.png",
+  buggy: "/assets/earth-tour/electric-buggy.png",
+  monsterCar: "/assets/earth-tour/monster-car.png",
+  dragon: "/assets/earth-tour/pink-dragon.png",
+  hundredThousandVolts: "/assets/earth-tour/hundred-thousand-volts.png",
+  magnetCrystal: "/assets/earth-tour/romance-magnet.png",
+  luckyBag: "/assets/earth-tour/lucky-bag.png",
+  dish: "/assets/earth-tour/broken-dish.png",
+  crystalObstacle: "/assets/earth-tour/crystal-obstacle.png",
+  lightStick: "/assets/earth-tour/support-light-stick.png",
+} as const;
+
+type EarthTourAsset = keyof typeof EARTH_TOUR_ASSETS;
+
+const LUELUELUE_ASSETS = {
+  concertRoad: "/assets/lueluelue/concert-road.png",
+  lightStick: "/assets/lueluelue/support-light-stick.png",
+  electricBarrier: "/assets/lueluelue/electric-barrier.png",
+  brokenSpeakers: "/assets/lueluelue/broken-speakers.png",
+  chainedMine: "/assets/lueluelue/chained-mine.png",
+  levelTwoScooter: "/assets/lueluelue/level-2-scooter.png",
+  levelThreeCar: "/assets/lueluelue/level-3-car.png",
+  levelFourStageTruck: "/assets/lueluelue/level-4-stage-truck.png",
+  magnet: "/assets/lueluelue/magnet.png",
+  luckyBag: "/assets/lueluelue/lucky-bag.png",
+  invincible: "/assets/lueluelue/invincible.png",
+} as const;
+
+type LueLueLueAsset = keyof typeof LUELUELUE_ASSETS;
+
+function drawContainedImage(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const scale = Math.min(
+    width / image.naturalWidth,
+    height / image.naturalHeight,
+  );
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  context.drawImage(
+    image,
+    x + (width - drawWidth) / 2,
+    y + (height - drawHeight) / 2,
+    drawWidth,
+    drawHeight,
+  );
+}
 
 function getTrack(id: TrackId) {
   return TRACKS.find((track) => track.id === id) ?? DEFAULT_TRACK;
@@ -619,13 +661,22 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
   const rollingRadius = Math.max(4, Math.round(0.45 / secondsPerFrame));
   const minGapFrames = Math.max(1, Math.round(0.16 / secondsPerFrame));
 
-  for (let frame = rollingRadius; frame < frameCount - rollingRadius; frame += 1) {
+  for (
+    let frame = rollingRadius;
+    frame < frameCount - rollingRadius;
+    frame += 1
+  ) {
     let localAverage = 0;
-    for (let index = frame - rollingRadius; index <= frame + rollingRadius; index += 1) {
+    for (
+      let index = frame - rollingRadius;
+      index <= frame + rollingRadius;
+      index += 1
+    ) {
       localAverage += flux[index];
     }
     localAverage /= rollingRadius * 2 + 1;
-    const isPeak = flux[frame] > flux[frame - 1] && flux[frame] >= flux[frame + 1];
+    const isPeak =
+      flux[frame] > flux[frame - 1] && flux[frame] >= flux[frame + 1];
     if (
       isPeak &&
       flux[frame] > Math.max(0.002, localAverage * 1.45) &&
@@ -643,14 +694,20 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
     .sort((a, b) => a.time - b.time);
 
   for (let first = 0; first < strongest.length; first += 1) {
-    for (let second = first + 1; second < Math.min(strongest.length, first + 9); second += 1) {
+    for (
+      let second = first + 1;
+      second < Math.min(strongest.length, first + 9);
+      second += 1
+    ) {
       const gap = strongest[second].time - strongest[first].time;
       if (gap < 0.28 || gap > 1.35) continue;
       let candidate = 60 / gap;
       while (candidate < 78) candidate *= 2;
       while (candidate > 168) candidate /= 2;
       const rounded = Math.round(candidate);
-      const weight = Math.sqrt(strongest[first].strength * strongest[second].strength);
+      const weight = Math.sqrt(
+        strongest[first].strength * strongest[second].strength,
+      );
       bpmScores.set(rounded, (bpmScores.get(rounded) ?? 0) + weight);
     }
   }
@@ -669,14 +726,20 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
   }
 
   const beatInterval = 60 / bpm;
-  const phaseCandidates = strongest.filter((onset) => onset.time < Math.min(20, buffer.duration));
+  const phaseCandidates = strongest.filter(
+    (onset) => onset.time < Math.min(20, buffer.duration),
+  );
   let phase = phaseCandidates[0]?.time ?? 0;
   let phaseScore = -1;
   for (const candidate of phaseCandidates.slice(0, 80)) {
     let score = 0;
     for (const onset of strongest) {
-      const distanceInBeats = Math.abs((onset.time - candidate.time) / beatInterval);
-      const distanceToGrid = Math.abs(distanceInBeats - Math.round(distanceInBeats));
+      const distanceInBeats = Math.abs(
+        (onset.time - candidate.time) / beatInterval,
+      );
+      const distanceToGrid = Math.abs(
+        distanceInBeats - Math.round(distanceInBeats),
+      );
       if (distanceToGrid < 0.16) {
         score += onset.strength * (1 - distanceToGrid / 0.16);
       }
@@ -721,7 +784,10 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
   });
   const percentile = (values: number[], ratio: number) => {
     const sorted = [...values].sort((a, b) => a - b);
-    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))] ?? 0;
+    return (
+      sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))] ??
+      0
+    );
   };
   const onsetReference = Math.max(
     0.0001,
@@ -785,11 +851,7 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
   // make the road feel as though the song itself suddenly sped up.
   const lastPlayableBeat = notePattern.length - 2;
   let previousStrongBeat = -Infinity;
-  for (
-    let beat = TRAVEL_BEATS;
-    beat <= lastPlayableBeat;
-    beat += 1
-  ) {
+  for (let beat = TRAVEL_BEATS; beat <= lastPlayableBeat; beat += 1) {
     if (notePattern[beat] !== 2) continue;
     if (beat - previousStrongBeat >= MIN_STRONG_BEAT_GAP) {
       previousStrongBeat = beat;
@@ -809,8 +871,7 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
   const targetStrongBeats = Math.min(
     MIN_PLAYABLE_STRONG_BEATS,
     Math.ceil(
-      Math.max(0, lastPlayableBeat - TRAVEL_BEATS + 1) /
-        MIN_STRONG_BEAT_GAP,
+      Math.max(0, lastPlayableBeat - TRAVEL_BEATS + 1) / MIN_STRONG_BEAT_GAP,
     ),
   );
   if (playableStrongBeats() < targetStrongBeats) {
@@ -832,8 +893,7 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
             beatFeatures[beat].energy > Math.max(0.002, energyFloor * 0.72),
         )
         .sort(
-          (first, second) =>
-            intensityPattern[second] - intensityPattern[first],
+          (first, second) => intensityPattern[second] - intensityPattern[first],
         )[0];
       if (strongestBeat !== undefined) strongestEmptyBars.push(strongestBeat);
     }
@@ -848,13 +908,11 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
           beatFeatures[beat].energy > Math.max(0.002, energyFloor * 0.72),
       )
       .sort(
-        (first, second) =>
-          intensityPattern[second] - intensityPattern[first],
+        (first, second) => intensityPattern[second] - intensityPattern[first],
       );
     const promotionOrder = [
       ...strongestEmptyBars.sort(
-        (first, second) =>
-          intensityPattern[second] - intensityPattern[first],
+        (first, second) => intensityPattern[second] - intensityPattern[first],
       ),
       ...remainingAccents,
     ];
@@ -866,8 +924,7 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
         { length: MIN_STRONG_BEAT_GAP * 2 - 1 },
         (_, index) => beat - MIN_STRONG_BEAT_GAP + 1 + index,
       ).some(
-        (nearbyBeat) =>
-          nearbyBeat !== beat && notePattern[nearbyBeat] === 2,
+        (nearbyBeat) => nearbyBeat !== beat && notePattern[nearbyBeat] === 2,
       );
       if (hasNearbyStrongBeat) continue;
       notePattern[beat] = 2;
@@ -903,11 +960,7 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
         parityOptions[1].energy > parityOptions[0].energy
           ? parityOptions[1]
           : parityOptions[0];
-      for (
-        let beat = TRAVEL_BEATS;
-        beat <= lastPlayableBeat;
-        beat += 1
-      ) {
+      for (let beat = TRAVEL_BEATS; beat <= lastPlayableBeat; beat += 1) {
         if (notePattern[beat] === 2) notePattern[beat] = 1;
       }
       for (const beat of fallback.beats) notePattern[beat] = 2;
@@ -918,11 +971,7 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
   // Quiet passages still use the strongest analysed beat in that window, so
   // inserted fan sticks stay attached to a real musical accent.
   let lastStrongBeat = TRAVEL_BEATS - 1;
-  for (
-    let beat = TRAVEL_BEATS;
-    beat <= lastPlayableBeat;
-    beat += 1
-  ) {
+  for (let beat = TRAVEL_BEATS; beat <= lastPlayableBeat; beat += 1) {
     if (notePattern[beat] === 2) {
       lastStrongBeat = beat;
       continue;
@@ -945,8 +994,7 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
         ),
       )
       .sort(
-        (first, second) =>
-          intensityPattern[second] - intensityPattern[first],
+        (first, second) => intensityPattern[second] - intensityPattern[first],
       );
     const promotedBeat = candidates[0] ?? beat;
     notePattern[promotedBeat] = 2;
@@ -962,7 +1010,9 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
       (notePattern[beat] === 2 || beat % 4 === 0)
     ) {
       const audioSeed = Math.round(
-        time + beatFeatures[beat].onset * 100_000 + beatFeatures[beat].energy * 10_000,
+        time +
+          beatFeatures[beat].onset * 100_000 +
+          beatFeatures[beat].energy * 10_000,
       );
       if (audioSeed % 3 === 0) {
         laneDirection = laneDirection === 1 ? -1 : 1;
@@ -1038,6 +1088,12 @@ function getConcertTier(fans: number, maxCombo = 0): ConcertTier {
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const earthTourImagesRef = useRef<
+    Partial<Record<EarthTourAsset, HTMLImageElement>>
+  >({});
+  const lueLueLueImagesRef = useRef<
+    Partial<Record<LueLueLueAsset, HTMLImageElement>>
+  >({});
   const animationRef = useRef<number | null>(null);
   const statusRef = useRef<GameStatus>("ready");
   const laneRef = useRef(2);
@@ -1112,8 +1168,7 @@ export default function Home() {
   const [songError, setSongError] = useState("");
   const [detectedBpm, setDetectedBpm] = useState(96);
   const [songDuration, setSongDuration] = useState(0);
-  const [selectedTrackId, setSelectedTrackId] =
-    useState<TrackId>("earth-tour");
+  const [selectedTrackId, setSelectedTrackId] = useState<TrackId>("earth-tour");
   const [fans, setFans] = useState(STARTING_FANS);
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
@@ -1138,8 +1193,9 @@ export default function Home() {
   const [shareCardOpen, setShareCardOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [joystickOffset, setJoystickOffset] = useState(0);
-  const [noteJudgement, setNoteJudgement] =
-    useState<NoteJudgement | null>(null);
+  const [noteJudgement, setNoteJudgement] = useState<NoteJudgement | null>(
+    null,
+  );
   const [resultTier, setResultTier] = useState<ConcertTier>(
     getConcertTier(STARTING_FANS),
   );
@@ -1155,6 +1211,22 @@ export default function Home() {
     selectedTrackId === "custom-upload" ? songTitle : selectedTrack.name,
   );
   const currentVehicle = getVehicle(vehicleLevel);
+  const currentVehicleName =
+    selectedTrackId === "earth-tour"
+      ? ["应援大巴", "电能巡游车", "怪兽闪电车", "浪漫飞龙"][
+          currentVehicle.level - 1
+        ]
+      : selectedTrackId === "lueluelue"
+        ? ["星芽小巴", "蝶光音浪机车", "蝴蝶巡演车", "TOP 舞台车"][
+            currentVehicle.level - 1
+          ]
+        : currentVehicle.name;
+  const selectedAssetThemeClass =
+    selectedTrackId === "earth-tour"
+      ? "is-earth-tour"
+      : selectedTrackId === "lueluelue"
+        ? "is-lueluelue"
+        : "";
   const currentLeaderboardEntry = currentRankEntryId
     ? leaderboard.find((entry) => entry.playerId === currentRankEntryId)
     : undefined;
@@ -1381,20 +1453,18 @@ export default function Home() {
     if (!audio || mutedRef.current) return;
     const now = audio.currentTime;
     const base =
-      trackRef.current.melody[
-        targetBeat % trackRef.current.melody.length
-      ];
+      trackRef.current.melody[targetBeat % trackRef.current.melody.length];
 
     [base, base * 2].forEach((frequency, index) => {
       const sparkle = audio.createOscillator();
       const gain = audio.createGain();
       sparkle.type = index === 0 ? "square" : "sine";
       sparkle.frequency.setValueAtTime(frequency, now + index * 0.045);
-      gain.gain.setValueAtTime(index === 0 ? 0.085 : 0.055, now + index * 0.045);
-      gain.gain.exponentialRampToValueAtTime(
-        0.001,
-        now + 0.2 + index * 0.045,
+      gain.gain.setValueAtTime(
+        index === 0 ? 0.085 : 0.055,
+        now + index * 0.045,
       );
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2 + index * 0.045);
       sparkle.connect(gain).connect(audio.destination);
       sparkle.start(now + index * 0.045);
       sparkle.stop(now + 0.22 + index * 0.045);
@@ -1450,10 +1520,7 @@ export default function Home() {
         );
         sparkleGain.gain.setValueAtTime(0.0001, startAt);
         sparkleGain.gain.linearRampToValueAtTime(peak, startAt + 0.008);
-        sparkleGain.gain.exponentialRampToValueAtTime(
-          0.0001,
-          startAt + 0.17,
-        );
+        sparkleGain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.17);
         sparkle.connect(sparkleGain).connect(sparkleBus);
         sparkle.start(startAt);
         sparkle.stop(startAt + 0.18);
@@ -1461,7 +1528,10 @@ export default function Home() {
     };
 
     if (audio.state !== "running") {
-      void audio.resume().then(play).catch(() => undefined);
+      void audio
+        .resume()
+        .then(play)
+        .catch(() => undefined);
       return;
     }
     play();
@@ -1487,10 +1557,7 @@ export default function Home() {
     impactGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
     impactFilter.type = "lowpass";
     impactFilter.frequency.setValueAtTime(460, now);
-    impact
-      .connect(impactGain)
-      .connect(impactFilter)
-      .connect(audio.destination);
+    impact.connect(impactGain).connect(impactFilter).connect(audio.destination);
     impact.start(now);
     impact.stop(now + 0.16);
   }, []);
@@ -1544,10 +1611,7 @@ export default function Home() {
       setSongDuration(duration);
       setCurrentBpm(analysis.bpm);
       setSongReady(true);
-      showToast(
-        `${track.mapLabel}谱面完成 · ${analysis.bpm} BPM`,
-        "gold",
-      );
+      showToast(`${track.mapLabel}谱面完成 · ${analysis.bpm} BPM`, "gold");
     },
     [showToast],
   );
@@ -1615,9 +1679,7 @@ export default function Home() {
       } catch (error) {
         if (requestId !== songLoadRequestRef.current) return;
         setSongError(
-          error instanceof Error
-            ? error.message
-            : "歌曲解析失败，请换一首歌曲",
+          error instanceof Error ? error.message : "歌曲解析失败，请换一首歌曲",
         );
         setSongReady(false);
       } finally {
@@ -1643,9 +1705,13 @@ export default function Home() {
 
       try {
         if (/\.mgg$/i.test(file.name)) {
-          throw new Error("MGG 是音乐平台专有格式，请上传 MP3、M4A、WAV 或 AAC");
+          throw new Error(
+            "MGG 是音乐平台专有格式，请上传 MP3、M4A、WAV 或 AAC",
+          );
         }
-        const supportedExtension = /\.(mp3|m4a|wav|aac|ogg|flac)$/i.test(file.name);
+        const supportedExtension = /\.(mp3|m4a|wav|aac|ogg|flac)$/i.test(
+          file.name,
+        );
         if (!file.type.startsWith("audio/") && !supportedExtension) {
           throw new Error("请选择 MP3、M4A、WAV 等音频文件");
         }
@@ -1717,7 +1783,10 @@ export default function Home() {
     const kickGain = audio.createGain();
     kick.type = "sine";
     kick.frequency.setValueAtTime(isVariation ? 92 : 120, now);
-    kick.frequency.exponentialRampToValueAtTime(isVariation ? 38 : 48, now + 0.13);
+    kick.frequency.exponentialRampToValueAtTime(
+      isVariation ? 38 : 48,
+      now + 0.13,
+    );
     kickGain.gain.setValueAtTime(isVariation ? 0.42 : 0.34, now);
     kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
     kick.connect(kickGain).connect(audio.destination);
@@ -1730,7 +1799,11 @@ export default function Home() {
 
     const note = audio.createOscillator();
     const noteGain = audio.createGain();
-    note.type = isVariation ? "sawtooth" : beat % 4 === 0 ? "square" : "triangle";
+    note.type = isVariation
+      ? "sawtooth"
+      : beat % 4 === 0
+        ? "square"
+        : "triangle";
     note.frequency.setValueAtTime(
       track.melody[beat % track.melody.length] * pitchRatio,
       now,
@@ -1754,7 +1827,10 @@ export default function Home() {
         now,
       );
       bassGain.gain.setValueAtTime(0.07, now);
-      bassGain.gain.exponentialRampToValueAtTime(0.001, now + beatSeconds * 0.72);
+      bassGain.gain.exponentialRampToValueAtTime(
+        0.001,
+        now + beatSeconds * 0.72,
+      );
       bass.connect(bassGain).connect(audio.destination);
       bass.start(now);
       bass.stop(now + beatSeconds * 0.75);
@@ -1801,8 +1877,7 @@ export default function Home() {
     if (beat >= track.totalBeats - TRAVEL_BEATS) return;
 
     const targetBeat = beat + TRAVEL_BEATS;
-    const safeLane =
-      track.lanePattern[targetBeat % track.lanePattern.length];
+    const safeLane = track.lanePattern[targetBeat % track.lanePattern.length];
     const noteLevel =
       track.notePattern[targetBeat % track.notePattern.length] ?? 0;
     const intensity =
@@ -1856,7 +1931,8 @@ export default function Home() {
       return;
     }
     lastObstacleTargetBeatRef.current = targetBeat;
-    const obstacleCount = beat > 12 && noteLevel === 2 && intensity > 0.68 ? 2 : 1;
+    const obstacleCount =
+      beat > 12 && noteLevel === 2 && intensity > 0.68 ? 2 : 1;
     const used = new Set<number>([safeLane]);
     for (let i = 0; i < obstacleCount; i += 1) {
       let obstacleLane = (beat * 2 + i * 3) % 5;
@@ -1948,49 +2024,190 @@ export default function Home() {
       ctx.clearRect(-16, -16, GAME_WIDTH + 32, GAME_HEIGHT + 32);
       ctx.fillStyle = palette.sky;
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      const earthTourImages = earthTourImagesRef.current;
+      const lueLueLueImages = lueLueLueImagesRef.current;
+      const isEarthTour = activeTrack.id === "earth-tour";
+      const isLueLueLue = activeTrack.id === "lueluelue";
+      const cityImage = earthTourImages.city;
+      if (isEarthTour && cityImage?.complete && cityImage.naturalWidth) {
+        const coverScale = Math.max(
+          GAME_WIDTH / cityImage.naturalWidth,
+          GAME_HEIGHT / cityImage.naturalHeight,
+        );
+        const cityWidth = cityImage.naturalWidth * coverScale;
+        const cityHeight = cityImage.naturalHeight * coverScale;
+        ctx.globalAlpha = 0.96;
+        ctx.drawImage(
+          cityImage,
+          (GAME_WIDTH - cityWidth) / 2,
+          (GAME_HEIGHT - cityHeight) / 2,
+          cityWidth,
+          cityHeight,
+        );
+        ctx.globalAlpha = 1;
+      } else if (
+        isLueLueLue &&
+        lueLueLueImages.concertRoad?.complete &&
+        lueLueLueImages.concertRoad.naturalWidth
+      ) {
+        const concertRoadImage = lueLueLueImages.concertRoad;
+        const coverScale = Math.max(
+          GAME_WIDTH / concertRoadImage.naturalWidth,
+          GAME_HEIGHT / concertRoadImage.naturalHeight,
+        );
+        const imageWidth = concertRoadImage.naturalWidth * coverScale;
+        const imageHeight = concertRoadImage.naturalHeight * coverScale;
+        ctx.drawImage(
+          concertRoadImage,
+          (GAME_WIDTH - imageWidth) / 2,
+          (GAME_HEIGHT - imageHeight) / 2,
+          imageWidth,
+          imageHeight,
+        );
+      }
 
       // Pixel city and sidewalks.
-      ctx.fillStyle = palette.sidewalk;
+      ctx.fillStyle = isEarthTour
+        ? "rgba(217, 55, 134, 0.58)"
+        : isLueLueLue
+          ? "rgba(132, 104, 177, 0.28)"
+          : palette.sidewalk;
       ctx.fillRect(0, 0, ROAD_LEFT, GAME_HEIGHT);
-      ctx.fillRect(ROAD_LEFT + ROAD_WIDTH, 0, GAME_WIDTH - ROAD_LEFT - ROAD_WIDTH, GAME_HEIGHT);
-      for (let y = -92 + roadOffset; y < GAME_HEIGHT + 92; y += 92) {
-        ctx.fillStyle = palette.building;
-        ctx.fillRect(5, y, 31, 78);
-        ctx.fillRect(444, y, 31, 78);
-        ctx.fillStyle = y % 184 < 10 ? palette.windowA : palette.windowB;
-        ctx.fillRect(10, y + 12, 10, 15);
-        ctx.fillRect(459, y + 36, 10, 15);
-        ctx.fillStyle = "#ffe66d";
-        ctx.fillRect(24, y + 45, 6, 12);
-        ctx.fillRect(447, y + 9, 6, 12);
-        if (activeTrack.mapTheme === "illusion-city") {
-          ctx.fillStyle = "#ff623f";
-          ctx.fillRect(15, y + 61, 16, 8 + pulse * 5);
-          ctx.fillStyle = "#ffb23f";
-          ctx.fillRect(20, y + 55, 6, 9 + pulse * 4);
-        } else if (activeTrack.mapTheme === "candy-blocks") {
-          ctx.fillStyle = "#ff73bd";
-          ctx.fillRect(7, y + 55, 12, 12);
-          ctx.fillStyle = "#72f1ff";
-          ctx.fillRect(22, y + 55, 12, 12);
-        } else if (activeTrack.mapTheme === "earth-orbit") {
-          ctx.fillStyle = "rgba(114, 241, 255, 0.7)";
-          ctx.fillRect(15, y + 61, 3, 3);
-          ctx.fillRect(28, y + 30, 3, 3);
-          ctx.strokeStyle = "rgba(188, 167, 255, 0.5)";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(458, y + 63, 10, 0, Math.PI * 2);
-          ctx.stroke();
+      ctx.fillRect(
+        ROAD_LEFT + ROAD_WIDTH,
+        0,
+        GAME_WIDTH - ROAD_LEFT - ROAD_WIDTH,
+        GAME_HEIGHT,
+      );
+      if (!isEarthTour && !isLueLueLue)
+        for (let y = -92 + roadOffset; y < GAME_HEIGHT + 92; y += 92) {
+          ctx.fillStyle = palette.building;
+          ctx.fillRect(5, y, 31, 78);
+          ctx.fillRect(444, y, 31, 78);
+          ctx.fillStyle = y % 184 < 10 ? palette.windowA : palette.windowB;
+          ctx.fillRect(10, y + 12, 10, 15);
+          ctx.fillRect(459, y + 36, 10, 15);
+          ctx.fillStyle = "#ffe66d";
+          ctx.fillRect(24, y + 45, 6, 12);
+          ctx.fillRect(447, y + 9, 6, 12);
+          if (activeTrack.mapTheme === "illusion-city") {
+            ctx.fillStyle = "#ff623f";
+            ctx.fillRect(15, y + 61, 16, 8 + pulse * 5);
+            ctx.fillStyle = "#ffb23f";
+            ctx.fillRect(20, y + 55, 6, 9 + pulse * 4);
+          } else if (activeTrack.mapTheme === "candy-blocks") {
+            ctx.fillStyle = "#ff73bd";
+            ctx.fillRect(7, y + 55, 12, 12);
+            ctx.fillStyle = "#72f1ff";
+            ctx.fillRect(22, y + 55, 12, 12);
+          } else if (activeTrack.mapTheme === "earth-orbit") {
+            ctx.fillStyle = "rgba(114, 241, 255, 0.7)";
+            ctx.fillRect(15, y + 61, 3, 3);
+            ctx.fillRect(28, y + 30, 3, 3);
+            ctx.strokeStyle = "rgba(188, 167, 255, 0.5)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(458, y + 63, 10, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+      if (isEarthTour) {
+        for (
+          let y = -120 + roadOffset * 1.35;
+          y < GAME_HEIGHT + 120;
+          y += 150
+        ) {
+          ctx.save();
+          ctx.globalAlpha = 0.74;
+          if (earthTourImages.magnetCrystal) {
+            drawContainedImage(
+              ctx,
+              earthTourImages.magnetCrystal,
+              5,
+              y,
+              32,
+              42,
+            );
+          }
+          if (earthTourImages.dish) {
+            ctx.translate(GAME_WIDTH, 0);
+            ctx.scale(-1, 1);
+            drawContainedImage(ctx, earthTourImages.dish, 5, y + 62, 34, 34);
+          }
+          ctx.restore();
+          ctx.strokeStyle = "rgba(255, 220, 105, 0.82)";
+          ctx.lineWidth = 3;
+          for (const [x, offset] of [
+            [14, 63],
+            [466, 15],
+          ]) {
+            const direction = x < GAME_WIDTH / 2 ? 1 : -1;
+            ctx.beginPath();
+            ctx.moveTo(x, y + offset);
+            ctx.lineTo(x + 9 * direction, y + offset - 8);
+            ctx.lineTo(x + 6 * direction, y + offset + 7);
+            ctx.lineTo(x + 17 * direction, y + offset - 1);
+            ctx.stroke();
+          }
+        }
+      }
+      if (isLueLueLue) {
+        for (let y = -96 + roadOffset * 1.18; y < GAME_HEIGHT + 96; y += 112) {
+          ctx.save();
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.lineWidth = 3;
+          for (const [x, mirror] of [
+            [10, 1],
+            [470, -1],
+          ] as const) {
+            ctx.strokeStyle =
+              Math.floor((y + 96) / 112) % 2 === 0
+                ? "rgba(113, 244, 205, 0.84)"
+                : "rgba(255, 230, 109, 0.82)";
+            ctx.beginPath();
+            ctx.moveTo(x, y + 4);
+            ctx.lineTo(x + 12 * mirror, y - 9);
+            ctx.lineTo(x + 8 * mirror, y + 7);
+            ctx.lineTo(x + 25 * mirror, y - 4);
+            ctx.stroke();
+
+            ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+            ctx.font = '900 17px "Arial Black", sans-serif';
+            ctx.textAlign = "center";
+            ctx.fillText(
+              Math.floor((y + 96) / 112) % 2 === 0 ? "♪" : "★",
+              x + 17 * mirror,
+              y + 36,
+            );
+          }
+          ctx.restore();
         }
       }
 
       // Neon road.
-      ctx.fillStyle = palette.road;
+      ctx.fillStyle = isEarthTour
+        ? "rgba(67, 33, 52, 0.9)"
+        : isLueLueLue
+          ? "rgba(139, 139, 147, 0.94)"
+          : palette.road;
       ctx.fillRect(ROAD_LEFT, 0, ROAD_WIDTH, GAME_HEIGHT);
-      ctx.fillStyle = "#2a245b";
+      ctx.fillStyle = isLueLueLue ? "#15131c" : "#2a245b";
       ctx.fillRect(ROAD_LEFT, 0, 5, GAME_HEIGHT);
       ctx.fillRect(ROAD_LEFT + ROAD_WIDTH - 5, 0, 5, GAME_HEIGHT);
+      if (isLueLueLue) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.fillRect(ROAD_LEFT + 5, 0, 4, GAME_HEIGHT);
+        ctx.fillRect(ROAD_LEFT + ROAD_WIDTH - 9, 0, 4, GAME_HEIGHT);
+        ctx.strokeStyle = "rgba(83, 78, 94, 0.34)";
+        ctx.lineWidth = 1;
+        for (let y = -28 + roadOffset * 0.7; y < GAME_HEIGHT + 28; y += 34) {
+          ctx.beginPath();
+          ctx.moveTo(ROAD_LEFT + 12, y);
+          ctx.lineTo(ROAD_LEFT + ROAD_WIDTH - 12, y + 4);
+          ctx.stroke();
+        }
+      }
       ctx.globalAlpha = 0.34 + pulse * 0.5;
       ctx.fillStyle = palette.edgeLeft;
       ctx.fillRect(ROAD_LEFT + 5, 0, 2, GAME_HEIGHT);
@@ -2001,8 +2218,15 @@ export default function Home() {
       for (let lane = 1; lane < 5; lane += 1) {
         const x = ROAD_LEFT + lane * LANE_WIDTH;
         for (let y = -60 + roadOffset; y < GAME_HEIGHT; y += 92) {
-          ctx.fillStyle = `rgba(225, 231, 255, ${0.18 + pulse * 0.14})`;
-          ctx.fillRect(Math.round(x - 2), Math.round(y), 4, 45);
+          ctx.fillStyle = isLueLueLue
+            ? `rgba(255, 255, 255, ${0.5 + pulse * 0.18})`
+            : `rgba(225, 231, 255, ${0.18 + pulse * 0.14})`;
+          ctx.fillRect(
+            Math.round(x - (isLueLueLue ? 1.5 : 2)),
+            Math.round(y),
+            isLueLueLue ? 3 : 4,
+            45,
+          );
         }
       }
 
@@ -2017,7 +2241,10 @@ export default function Home() {
       // Speed lines.
       ctx.fillStyle = "rgba(114, 241, 255, 0.22)";
       for (let i = 0; i < 8; i += 1) {
-        const x = ROAD_LEFT + 18 + ((i * 83 + beatRef.current * 17) % (ROAD_WIDTH - 36));
+        const x =
+          ROAD_LEFT +
+          18 +
+          ((i * 83 + beatRef.current * 17) % (ROAD_WIDTH - 36));
         const y = (roadOffset * 2 + i * 113) % GAME_HEIGHT;
         ctx.fillRect(x, y, 2, 18 + (i % 3) * 8);
       }
@@ -2078,19 +2305,63 @@ export default function Home() {
             ctx.textAlign = "center";
             ctx.fillText(timingDistance < 110 ? "HIT!" : "SPACE", 0, -38);
           }
-          ctx.shadowColor = "#72f1ff";
-          ctx.shadowBlur = 13;
-          ctx.fillStyle = "#72f1ff";
-          ctx.fillRect(-6, -21, 12, 26);
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(-3, -18, 6, 18);
+          if (isLueLueLue && lueLueLueImages.lightStick) {
+            ctx.shadowColor = "#c987ff";
+            ctx.shadowBlur = 14;
+            drawContainedImage(
+              ctx,
+              lueLueLueImages.lightStick,
+              -19,
+              -34,
+              38,
+              58,
+            );
+            ctx.shadowBlur = 0;
+          } else if (isEarthTour && earthTourImages.lightStick) {
+            ctx.shadowColor = "#ff4fa3";
+            ctx.shadowBlur = 11;
+            drawContainedImage(
+              ctx,
+              earthTourImages.lightStick,
+              -20,
+              -31,
+              40,
+              52,
+            );
+            ctx.shadowBlur = 0;
+          } else {
+            ctx.shadowColor = "#72f1ff";
+            ctx.shadowBlur = 13;
+            ctx.fillStyle = "#72f1ff";
+            ctx.fillRect(-6, -21, 12, 26);
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(-3, -18, 6, 18);
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = "#ff4fa3";
+            ctx.fillRect(-8, 5, 16, 9);
+            ctx.fillStyle = "#ffe66d";
+            ctx.fillRect(-4, 8, 8, 3);
+            ctx.fillStyle = "rgba(114, 241, 255, 0.25)";
+            ctx.fillRect(-13, -26, 26, 35);
+          }
+        } else if (
+          isLueLueLue &&
+          entity.type === "lucky" &&
+          lueLueLueImages.luckyBag
+        ) {
+          ctx.shadowColor = "#c987ff";
+          ctx.shadowBlur = 16 + pulse * 8;
+          drawContainedImage(ctx, lueLueLueImages.luckyBag, -34, -38, 68, 76);
           ctx.shadowBlur = 0;
-          ctx.fillStyle = "#ff4fa3";
-          ctx.fillRect(-8, 5, 16, 9);
-          ctx.fillStyle = "#ffe66d";
-          ctx.fillRect(-4, 8, 8, 3);
-          ctx.fillStyle = "rgba(114, 241, 255, 0.25)";
-          ctx.fillRect(-13, -26, 26, 35);
+        } else if (
+          isEarthTour &&
+          entity.type === "lucky" &&
+          earthTourImages.luckyBag
+        ) {
+          ctx.shadowColor = "#ff4fa3";
+          ctx.shadowBlur = 16 + pulse * 8;
+          drawContainedImage(ctx, earthTourImages.luckyBag, -34, -38, 68, 76);
+          ctx.shadowBlur = 0;
         } else if (entity.type === "lucky") {
           ctx.shadowColor = "#ffe66d";
           ctx.shadowBlur = 15;
@@ -2105,6 +2376,31 @@ export default function Home() {
           ctx.strokeStyle = "#fff2a8";
           ctx.lineWidth = 3;
           ctx.strokeRect(-18, -17, 36, 34);
+        } else if (
+          isLueLueLue &&
+          entity.type === "magnet" &&
+          lueLueLueImages.magnet
+        ) {
+          ctx.shadowColor = "#72f1cf";
+          ctx.shadowBlur = 17 + pulse * 9;
+          drawContainedImage(ctx, lueLueLueImages.magnet, -35, -35, 70, 70);
+          ctx.shadowBlur = 0;
+        } else if (
+          isEarthTour &&
+          entity.type === "magnet" &&
+          earthTourImages.magnetCrystal
+        ) {
+          ctx.shadowColor = "#ff4fa3";
+          ctx.shadowBlur = 16 + pulse * 10;
+          drawContainedImage(
+            ctx,
+            earthTourImages.magnetCrystal,
+            -35,
+            -35,
+            70,
+            70,
+          );
+          ctx.shadowBlur = 0;
         } else if (entity.type === "magnet") {
           ctx.shadowColor = "#72f1ff";
           ctx.shadowBlur = 18;
@@ -2127,6 +2423,33 @@ export default function Home() {
           ctx.strokeStyle = "#bbaaff";
           ctx.lineWidth = 2;
           ctx.strokeRect(-23, -25, 46, 50);
+        } else if (
+          isLueLueLue &&
+          entity.type === "invincible" &&
+          lueLueLueImages.invincible
+        ) {
+          ctx.rotate(-0.12);
+          ctx.shadowColor = "#ffe66d";
+          ctx.shadowBlur = 18 + pulse * 9;
+          drawContainedImage(ctx, lueLueLueImages.invincible, -31, -38, 62, 76);
+          ctx.shadowBlur = 0;
+        } else if (
+          isEarthTour &&
+          entity.type === "invincible" &&
+          earthTourImages.hundredThousandVolts
+        ) {
+          ctx.rotate(-0.22);
+          ctx.shadowColor = "#ffe66d";
+          ctx.shadowBlur = 18 + pulse * 8;
+          drawContainedImage(
+            ctx,
+            earthTourImages.hundredThousandVolts,
+            -29,
+            -38,
+            58,
+            76,
+          );
+          ctx.shadowBlur = 0;
         } else if (entity.type === "invincible") {
           ctx.shadowColor = "#ffe66d";
           ctx.shadowBlur = 19;
@@ -2155,6 +2478,80 @@ export default function Home() {
           ctx.font = "bold 22px monospace";
           ctx.textAlign = "center";
           ctx.fillText("★", 0, 8);
+        } else if (
+          isLueLueLue &&
+          entity.obstacle === "cone" &&
+          lueLueLueImages.chainedMine
+        ) {
+          ctx.shadowColor = "#6dffc9";
+          ctx.shadowBlur = 8 + pulse * 5;
+          drawContainedImage(
+            ctx,
+            lueLueLueImages.chainedMine,
+            -34,
+            -34,
+            68,
+            68,
+          );
+          ctx.shadowBlur = 0;
+        } else if (
+          isLueLueLue &&
+          entity.obstacle === "speaker" &&
+          lueLueLueImages.brokenSpeakers
+        ) {
+          ctx.shadowColor = "#c987ff";
+          ctx.shadowBlur = 10 + pulse * 6;
+          drawContainedImage(
+            ctx,
+            lueLueLueImages.brokenSpeakers,
+            -37,
+            -37,
+            74,
+            74,
+          );
+          ctx.shadowBlur = 0;
+        } else if (
+          isLueLueLue &&
+          entity.obstacle === "barrier" &&
+          lueLueLueImages.electricBarrier
+        ) {
+          drawContainedImage(
+            ctx,
+            lueLueLueImages.electricBarrier,
+            -40,
+            -33,
+            80,
+            66,
+          );
+        } else if (
+          isEarthTour &&
+          entity.obstacle === "cone" &&
+          earthTourImages.dish
+        ) {
+          drawContainedImage(ctx, earthTourImages.dish, -35, -33, 70, 66);
+        } else if (
+          isEarthTour &&
+          entity.obstacle === "speaker" &&
+          earthTourImages.crystalObstacle
+        ) {
+          ctx.shadowColor = "#ff4fa3";
+          ctx.shadowBlur = 12 + pulse * 7;
+          drawContainedImage(
+            ctx,
+            earthTourImages.crystalObstacle,
+            -39,
+            -38,
+            78,
+            76,
+          );
+          ctx.shadowBlur = 0;
+        } else if (
+          isEarthTour &&
+          entity.obstacle === "barrier" &&
+          earthTourImages.dish
+        ) {
+          ctx.rotate(-0.18);
+          drawContainedImage(ctx, earthTourImages.dish, -38, -38, 76, 76);
         } else if (entity.obstacle === "cone") {
           ctx.fillStyle = "rgba(255, 86, 94, 0.2)";
           ctx.fillRect(-23, -22, 46, 44);
@@ -2233,13 +2630,25 @@ export default function Home() {
       }
       if (elapsed < invincibleUntilRef.current) {
         ctx.save();
-        ctx.rotate((elapsed / 850) % (Math.PI * 2));
-        ["#72f1ff", "#ffe66d", "#ff4fa3"].forEach((color, index) => {
-          const radius = 54 + index * 8 + pulse * 3;
+        ctx.lineJoin = "round";
+        ["#fff7bd", "#ffe66d", "#ff4fa3"].forEach((color, index) => {
+          const radius = 49 + index * 9 + pulse * 5;
+          const rotation = elapsed / 2400 + index * 0.45;
           ctx.strokeStyle = color;
-          ctx.globalAlpha = 0.56 - index * 0.1;
-          ctx.lineWidth = 4;
-          ctx.strokeRect(-radius, -radius, radius * 2, radius * 2);
+          ctx.globalAlpha = 0.92 - index * 0.16;
+          ctx.lineWidth = 5 - index;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 13;
+          ctx.beginPath();
+          for (let point = 0; point <= 12; point += 1) {
+            const angle = (point / 12) * Math.PI * 2 + rotation;
+            const jaggedRadius = point % 2 === 0 ? radius : radius - 12;
+            const x = Math.cos(angle) * jaggedRadius;
+            const y = Math.sin(angle) * jaggedRadius;
+            if (point === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
         });
         ctx.restore();
       }
@@ -2253,39 +2662,69 @@ export default function Home() {
         ctx.arc(0, 4, 48 + pulse * 4, 0, Math.PI * 2);
         ctx.stroke();
       }
-      ctx.fillStyle = "#121225";
-      ctx.fillRect(-30, -37, 7, 24);
-      ctx.fillRect(23, -37, 7, 24);
-      ctx.fillRect(-30, 21, 7, 24);
-      ctx.fillRect(23, 21, 7, 24);
-      ctx.fillStyle = vehicle.primary;
-      ctx.fillRect(-26, -52, 52, 105);
-      ctx.fillStyle = vehicle.secondary;
-      ctx.fillRect(-21, -46, 42, 92);
-      ctx.fillStyle = "#2c225e";
-      ctx.fillRect(-21, -38, 42, 29);
-      ctx.fillStyle = "#72f1ff";
-      ctx.fillRect(-17, -34, 14, 18);
-      ctx.fillRect(3, -34, 14, 18);
-      ctx.fillStyle = "#ffd5aa";
-      ctx.fillRect(-13, -29, 6, 7);
-      ctx.fillRect(7, -29, 6, 7);
-      ctx.fillStyle = "#201740";
-      ctx.fillRect(-12, -27, 2, 2);
-      ctx.fillRect(8, -27, 2, 2);
-      ctx.fillStyle = "#ffe66d";
-      ctx.font = "bold 23px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("★", 0, 24);
-      ctx.fillStyle = "#fff7bd";
-      ctx.fillRect(-22, 40, 14, 7);
-      ctx.fillRect(8, 40, 14, 7);
-      ctx.fillStyle = "#ff285f";
-      ctx.fillRect(-20, -50, 12, 5);
-      ctx.fillRect(8, -50, 12, 5);
-      for (let light = 0; light < vehicle.level; light += 1) {
-        ctx.fillStyle = light % 2 === 0 ? "#72f1ff" : "#ffe66d";
-        ctx.fillRect(-22 + light * 12, -59, 8, 6);
+      const evolvedVehicleImage =
+        isLueLueLue && vehicle.level === 2
+          ? lueLueLueImages.levelTwoScooter
+          : isLueLueLue && vehicle.level === 3
+            ? lueLueLueImages.levelThreeCar
+            : isLueLueLue && vehicle.level >= 4
+              ? lueLueLueImages.levelFourStageTruck
+              : isEarthTour && vehicle.level === 2
+                ? earthTourImages.buggy
+                : isEarthTour && vehicle.level === 3
+                  ? earthTourImages.monsterCar
+                  : isEarthTour && vehicle.level >= 4
+                    ? earthTourImages.dragon
+                    : undefined;
+      if (evolvedVehicleImage) {
+        const bounds = isLueLueLue
+          ? { x: -40, y: -65, width: 80, height: 126 }
+          : vehicle.level >= 4
+            ? { x: -43, y: -60, width: 86, height: 116 }
+            : { x: -47, y: -54, width: 94, height: 108 };
+        drawContainedImage(
+          ctx,
+          evolvedVehicleImage,
+          bounds.x,
+          bounds.y,
+          bounds.width,
+          bounds.height,
+        );
+      } else {
+        ctx.fillStyle = "#121225";
+        ctx.fillRect(-30, -37, 7, 24);
+        ctx.fillRect(23, -37, 7, 24);
+        ctx.fillRect(-30, 21, 7, 24);
+        ctx.fillRect(23, 21, 7, 24);
+        ctx.fillStyle = vehicle.primary;
+        ctx.fillRect(-26, -52, 52, 105);
+        ctx.fillStyle = vehicle.secondary;
+        ctx.fillRect(-21, -46, 42, 92);
+        ctx.fillStyle = "#2c225e";
+        ctx.fillRect(-21, -38, 42, 29);
+        ctx.fillStyle = "#72f1ff";
+        ctx.fillRect(-17, -34, 14, 18);
+        ctx.fillRect(3, -34, 14, 18);
+        ctx.fillStyle = "#ffd5aa";
+        ctx.fillRect(-13, -29, 6, 7);
+        ctx.fillRect(7, -29, 6, 7);
+        ctx.fillStyle = "#201740";
+        ctx.fillRect(-12, -27, 2, 2);
+        ctx.fillRect(8, -27, 2, 2);
+        ctx.fillStyle = "#ffe66d";
+        ctx.font = "bold 23px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("★", 0, 24);
+        ctx.fillStyle = "#fff7bd";
+        ctx.fillRect(-22, 40, 14, 7);
+        ctx.fillRect(8, 40, 14, 7);
+        ctx.fillStyle = "#ff285f";
+        ctx.fillRect(-20, -50, 12, 5);
+        ctx.fillRect(8, -50, 12, 5);
+        for (let light = 0; light < vehicle.level; light += 1) {
+          ctx.fillStyle = light % 2 === 0 ? "#72f1ff" : "#ffe66d";
+          ctx.fillRect(-22 + light * 12, -59, 8, 6);
+        }
       }
       ctx.restore();
 
@@ -2340,8 +2779,12 @@ export default function Home() {
     setCombo(comboRef.current);
     setMaxCombo(maxComboRef.current);
 
-    const previousCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
-    const previousBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
+    const previousCoins = Number(
+      window.localStorage.getItem("fan-bus-coins") || 0,
+    );
+    const previousBest = Number(
+      window.localStorage.getItem("fan-bus-best") || 0,
+    );
     const nextCoins = previousCoins + coins;
     const nextBest = Math.max(previousBest, fansRef.current);
     window.localStorage.setItem("fan-bus-coins", String(nextCoins));
@@ -2442,7 +2885,10 @@ export default function Home() {
   const gameLoop = useCallback(
     function gameLoopFrame(now: number) {
       if (statusRef.current !== "playing") return;
-      const delta = Math.min(0.035, Math.max(0, (now - lastTimeRef.current) / 1000));
+      const delta = Math.min(
+        0.035,
+        Math.max(0, (now - lastTimeRef.current) / 1000),
+      );
       lastTimeRef.current = now;
       const elapsed =
         songRef.current && !songRef.current.paused
@@ -2475,14 +2921,9 @@ export default function Home() {
             startAt: beatTimes[beat],
             hitAt: beatTimes[pedestrianBeat],
             endAt:
-              beatTimes[
-                Math.min(pedestrianBeat + 4, beatTimes.length - 1)
-              ],
+              beatTimes[Math.min(pedestrianBeat + 4, beatTimes.length - 1)],
             direction,
-            x:
-              direction === 1
-                ? ROAD_LEFT - 24
-                : ROAD_LEFT + ROAD_WIDTH + 24,
+            x: direction === 1 ? ROAD_LEFT - 24 : ROAD_LEFT + ROAD_WIDTH + 24,
             y: -70,
           };
           showToast(
@@ -2514,12 +2955,10 @@ export default function Home() {
       }
 
       busXRef.current +=
-        (laneCenter(laneRef.current) - busXRef.current) * Math.min(1, delta * 14);
+        (laneCenter(laneRef.current) - busXRef.current) *
+        Math.min(1, delta * 14);
 
-      if (
-        magnetUntilRef.current > 0 &&
-        elapsed >= magnetUntilRef.current
-      ) {
+      if (magnetUntilRef.current > 0 && elapsed >= magnetUntilRef.current) {
         magnetUntilRef.current = -1;
         setMagnetRemaining(0);
         showToast("磁铁效果结束", "cyan");
@@ -2578,12 +3017,7 @@ export default function Home() {
                   : `MAGNET PERFECT · BUS FULL ${capacity} · ×${comboRef.current}`,
               );
             }
-            addBurst(
-              laneCenter(entity.lane),
-              entity.y,
-              "#ffe66d",
-              24,
-            );
+            addBurst(laneCenter(entity.lane), entity.y, "#ffe66d", 24);
             addFloatText(
               laneCenter(entity.lane),
               entity.y - 18,
@@ -2596,10 +3030,7 @@ export default function Home() {
             busBounceRef.current = 0.8;
             screenPunchRef.current = 0.75;
             triggerHaptic([14, 10, 20]);
-            if (
-              perfectCountRef.current % 8 === 0 &&
-              !shieldRef.current
-            ) {
+            if (perfectCountRef.current % 8 === 0 && !shieldRef.current) {
               shieldRef.current = true;
               setShield(true);
               showToast("8 次 PERFECT！获得应援护盾", "gold");
@@ -2673,7 +3104,7 @@ export default function Home() {
           screenPunchRef.current = 1.1;
           addBurst(x, PLAYER_Y - 10, "#ffe66d", 34);
           addFloatText(x, PLAYER_Y - 66, "无敌 5 秒", "#ffe66d");
-          showToast("进入无敌模式！5 秒内无视所有障碍", "gold");
+          showToast("十万伏特！5 秒内电光无敌", "gold");
           navigator.vibrate?.([30, 16, 45]);
         } else {
           entity.handled = true;
@@ -2734,9 +3165,13 @@ export default function Home() {
           (elapsed - pedestrian.startAt) /
           Math.max(1, pedestrian.hitAt - pedestrian.startAt);
         const fromX =
-          pedestrian.direction === 1 ? ROAD_LEFT - 24 : ROAD_LEFT + ROAD_WIDTH + 24;
+          pedestrian.direction === 1
+            ? ROAD_LEFT - 24
+            : ROAD_LEFT + ROAD_WIDTH + 24;
         const toX =
-          pedestrian.direction === 1 ? ROAD_LEFT + ROAD_WIDTH + 24 : ROAD_LEFT - 24;
+          pedestrian.direction === 1
+            ? ROAD_LEFT + ROAD_WIDTH + 24
+            : ROAD_LEFT - 24;
         const pedestrianX = fromX + (toX - fromX) * crossingProgress;
         const pedestrianY = -70 + (PLAYER_Y + 70) * approachProgress;
         pedestrianRef.current = {
@@ -2786,10 +3221,7 @@ export default function Home() {
         collectFlashRef.current - delta * 5.8,
       );
       busBounceRef.current = Math.max(0, busBounceRef.current - delta * 5.2);
-      screenPunchRef.current = Math.max(
-        0,
-        screenPunchRef.current - delta * 7,
-      );
+      screenPunchRef.current = Math.max(0, screenPunchRef.current - delta * 7);
 
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext("2d");
@@ -2797,9 +3229,7 @@ export default function Home() {
 
       if (elapsed - lastHudRef.current > 100) {
         lastHudRef.current = elapsed;
-        setMagnetRemaining(
-          Math.max(0, magnetUntilRef.current - elapsed),
-        );
+        setMagnetRemaining(Math.max(0, magnetUntilRef.current - elapsed));
         setInvincibleRemaining(
           Math.max(0, invincibleUntilRef.current - elapsed),
         );
@@ -2876,11 +3306,7 @@ export default function Home() {
     candidate.handled = true;
     const timingError = Math.abs(elapsed - candidate.hitAt);
     const quality: NoteJudgement["quality"] =
-      timingError <= 55
-        ? "PERFECT"
-        : timingError <= 110
-          ? "GREAT"
-          : "GOOD";
+      timingError <= 55 ? "PERFECT" : timingError <= 110 ? "GREAT" : "GOOD";
     comboRef.current += 1;
     maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
     if (quality === "PERFECT") perfectCountRef.current += 1;
@@ -2982,7 +3408,10 @@ export default function Home() {
       highShelf.type = "highshelf";
       highShelf.frequency.value = 1900;
       highShelf.gain.value = 0;
-      mediaSource.connect(lowShelf).connect(highShelf).connect(audio.destination);
+      mediaSource
+        .connect(lowShelf)
+        .connect(highShelf)
+        .connect(audio.destination);
       mediaSourceRef.current = mediaSource;
       lowShelfRef.current = lowShelf;
       highShelfRef.current = highShelf;
@@ -3073,14 +3502,7 @@ export default function Home() {
     lastTimeRef.current = now;
     lastHudRef.current = 0;
     animationRef.current = window.requestAnimationFrame(gameLoop);
-  }, [
-    gameLoop,
-    resetSongTone,
-    selectedTrack,
-    showToast,
-    songReady,
-    songTitle,
-  ]);
+  }, [gameLoop, resetSongTone, selectedTrack, showToast, songReady, songTitle]);
 
   const pauseGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
@@ -3148,12 +3570,7 @@ export default function Home() {
       fansRef.current = Math.max(1, Math.floor(before / 2));
       comboRef.current = 0;
       setCombo(0);
-      addFloatText(
-        busXRef.current,
-        PLAYER_Y - 64,
-        "粉丝 ÷2",
-        "#ff7ac8",
-      );
+      addFloatText(busXRef.current, PLAYER_Y - 64, "粉丝 ÷2", "#ff7ac8");
       addBurst(busXRef.current, PLAYER_Y - 10, "#ff7ac8", 22);
       hitFlashRef.current = 0.7;
       shakeRef.current = 0.22;
@@ -3239,10 +3656,7 @@ export default function Home() {
       const rawOffset = clientX - (bounds.left + bounds.width / 2);
       const maxTravel = Math.max(36, (bounds.width - 64) / 2 - 7);
       const deadZone = Math.max(20, maxTravel * 0.38);
-      const nextOffset = Math.max(
-        -maxTravel,
-        Math.min(maxTravel, rawOffset),
-      );
+      const nextOffset = Math.max(-maxTravel, Math.min(maxTravel, rawOffset));
       setJoystickOffset(nextOffset);
       steerWithJoystick(
         nextOffset < -deadZone ? -1 : nextOffset > deadZone ? 1 : 0,
@@ -3340,7 +3754,9 @@ export default function Home() {
 
   useEffect(() => {
     const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
-    const savedCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
+    const savedCoins = Number(
+      window.localStorage.getItem("fan-bus-coins") || 0,
+    );
     const storedPlayerName =
       window.localStorage.getItem("fan-bus-player-name") || "";
     const savedPlayerName =
@@ -3420,15 +3836,32 @@ export default function Home() {
       window.clearTimeout(savedScoreTimer);
       window.removeEventListener("keydown", keydown);
     };
-  }, [
-    hitNote,
-    move,
-    pauseGame,
-    readyPage,
-    resumeGame,
-    startGame,
-    toggleMute,
-  ]);
+  }, [hitNote, move, pauseGame, readyPage, resumeGame, startGame, toggleMute]);
+
+  useEffect(() => {
+    (
+      Object.entries(EARTH_TOUR_ASSETS) as Array<[EarthTourAsset, string]>
+    ).forEach(([key, src]) => {
+      const image = new Image();
+      image.src = src;
+      image.onload = () => {
+        earthTourImagesRef.current[key] = image;
+        const context = canvasRef.current?.getContext("2d");
+        if (context && statusRef.current !== "playing") drawGame(context, 0);
+      };
+    });
+    (
+      Object.entries(LUELUELUE_ASSETS) as Array<[LueLueLueAsset, string]>
+    ).forEach(([key, src]) => {
+      const image = new Image();
+      image.src = src;
+      image.onload = () => {
+        lueLueLueImagesRef.current[key] = image;
+        const context = canvasRef.current?.getContext("2d");
+        if (context && statusRef.current !== "playing") drawGame(context, 0);
+      };
+    });
+  }, [drawGame]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -3512,11 +3945,11 @@ export default function Home() {
           <div className="cabinet-top">
             <div>
               <span className="live-dot" />
-              {status === "playing" ||
-              status === "paused" ||
-              status === "lucky"
+              {status === "playing" || status === "paused" || status === "lucky"
                 ? songTitle
-                : "SELECT A TRACK"}
+                : readyPage === "rules"
+                  ? `默认巡演 · ${selectedTrack.name}`
+                  : "SELECT A TRACK"}
             </div>
             <div className="cabinet-tools">
               <button
@@ -3557,22 +3990,60 @@ export default function Home() {
               <span>BEAT COMBO</span>
               <strong>×{combo}</strong>
             </div>
-            <div
-              className={`music-state ${toneMode !== "normal" ? `is-variation is-${toneMode}` : ""}`}
-            >
-              <strong>{songReady ? currentBpm : "--"} BPM</strong>
-              <span>
-                {status === "lucky"
-                  ? "锦囊抉择中 · TEMPO HOLD"
-                  : status === "paused"
-                  ? "已暂停 · P / ESC 继续"
-                  : toneMode !== "normal"
-                  ? `${toneMode === "thick" ? "厚" : "细"}音色中 · TEMPO LOCK`
-                  : shield
-                    ? "护盾减伤 READY"
-                    : "对准点子按 HIT"}
-              </span>
-            </div>
+            <>
+              <div className="road-legend" aria-label="道路元素说明">
+                <div className="powerup-legend-item road-legend-item">
+                  <i
+                    className={`road-icon is-light-stick ${selectedAssetThemeClass}`}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    <strong>应援棒</strong>
+                    <small>命中后粉丝 +1</small>
+                  </span>
+                </div>
+                <div className="powerup-legend-item road-legend-item">
+                  <i
+                    className={`road-icon is-dish ${selectedAssetThemeClass}`}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    <strong>
+                      {selectedTrackId === "lueluelue" ? "电流路障" : "障碍物"}
+                    </strong>
+                    <small>障碍 · 注意换道</small>
+                  </span>
+                </div>
+                <div className="powerup-legend-item road-legend-item">
+                  <i
+                    className={`road-icon is-crystal ${selectedAssetThemeClass}`}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    <strong>
+                      {selectedTrackId === "lueluelue" ? "故障音箱" : "障碍物"}
+                    </strong>
+                    <small>障碍 · 及时避让</small>
+                  </span>
+                </div>
+              </div>
+              <div
+                className={`music-state ${toneMode !== "normal" ? `is-variation is-${toneMode}` : ""}`}
+              >
+                <strong>{songReady ? currentBpm : "--"} BPM</strong>
+                <span>
+                  {status === "lucky"
+                    ? "锦囊抉择中 · TEMPO HOLD"
+                    : status === "paused"
+                      ? "已暂停 · P / ESC 继续"
+                      : toneMode !== "normal"
+                        ? `${toneMode === "thick" ? "厚" : "细"}音色中 · TEMPO LOCK`
+                        : shield
+                          ? "护盾减伤 READY"
+                          : "对准点子按 HIT"}
+                </span>
+              </div>
+            </>
           </div>
 
           <div className="vehicle-upgrade-strip" aria-label="车辆升级任务">
@@ -3582,24 +4053,77 @@ export default function Home() {
             </div>
             <div className="vehicle-task-copy">
               <strong>
-                {currentVehicle.name}
+                {currentVehicleName}
                 <span>载客上限 {currentVehicle.capacity}</span>
               </strong>
               <small>{currentVehicle.task}</small>
             </div>
-            <div className="vehicle-task-meter" aria-label={`升级任务进度 ${vehicleTaskProgress}%`}>
+            <div className="powerup-legend" aria-label="道具图标说明">
+              <div className="powerup-legend-item">
+                <i
+                  className={`legend-icon is-lucky ${selectedAssetThemeClass}`}
+                  aria-hidden="true"
+                >
+                  {selectedAssetThemeClass ? "" : "?"}
+                </i>
+                <span>
+                  <strong>锦囊</strong>
+                  <small>粉丝随机翻倍或减半</small>
+                </span>
+              </div>
+              <div className="powerup-legend-item">
+                <i
+                  className={`legend-icon is-magnet ${selectedAssetThemeClass}`}
+                  aria-hidden="true"
+                />
+                <span>
+                  <strong>吸铁石</strong>
+                  <small>自动吸取附近应援棒</small>
+                </span>
+              </div>
+              <div className="powerup-legend-item">
+                <i
+                  className={`legend-icon is-invincible ${selectedAssetThemeClass}`}
+                  aria-hidden="true"
+                >
+                  {selectedAssetThemeClass ? "" : "★"}
+                </i>
+                <span>
+                  <strong>
+                    {selectedTrackId === "earth-tour"
+                      ? "十万伏特"
+                      : selectedTrackId === "lueluelue"
+                        ? "无敌闪电"
+                        : "无敌"}
+                  </strong>
+                  <small>5 秒内无视所有障碍</small>
+                </span>
+              </div>
+            </div>
+            <div
+              className="vehicle-task-meter"
+              aria-label={`升级任务进度 ${vehicleTaskProgress}%`}
+            >
               <span style={{ width: `${vehicleTaskProgress}%` }} />
-              <b>{currentVehicle.requirement ? `${vehicleTaskProgress}%` : "MAX"}</b>
+              <b>
+                {currentVehicle.requirement ? `${vehicleTaskProgress}%` : "MAX"}
+              </b>
             </div>
           </div>
 
-          <div className="progress-track" aria-label={`巡演进度 ${Math.round(progress)}%`}>
+          <div
+            className="progress-track"
+            aria-label={`巡演进度 ${Math.round(progress)}%`}
+          >
             <span style={{ width: `${progress}%` }} />
           </div>
 
           <div className="game-screen">
             <canvas
               ref={canvasRef}
+              className={
+                selectedAssetThemeClass ? "is-handdrawn-theme" : undefined
+              }
               width={GAME_WIDTH}
               height={GAME_HEIGHT}
               aria-label="五车道节奏躲避游戏画面"
@@ -3609,9 +4133,24 @@ export default function Home() {
               <div className="powerup-hud" aria-live="polite">
                 {magnetRemaining > 0 && (
                   <div className="powerup-chip is-magnet">
-                    <i className="powerup-icon" aria-hidden="true" />
+                    <i
+                      className={`powerup-icon ${
+                        selectedTrackId === "earth-tour"
+                          ? "earth-crystal-icon"
+                          : selectedTrackId === "lueluelue"
+                            ? "lueluelue-magnet-icon"
+                            : ""
+                      }`}
+                      aria-hidden="true"
+                    />
                     <span>
-                      <small>MAGNET</small>
+                      <small>
+                        {selectedTrackId === "earth-tour"
+                          ? "水晶吸铁石"
+                          : selectedTrackId === "lueluelue"
+                            ? "蝶光吸铁石"
+                            : "吸铁石"}
+                      </small>
                       <strong>{(magnetRemaining / 1000).toFixed(1)}s</strong>
                     </span>
                     <b>
@@ -3628,12 +4167,27 @@ export default function Home() {
                 )}
                 {invincibleRemaining > 0 && (
                   <div className="powerup-chip is-invincible">
-                    <i className="powerup-icon" aria-hidden="true">
-                      ★
-                    </i>
+                    <i
+                      className={`powerup-icon ${
+                        selectedTrackId === "earth-tour"
+                          ? "hundred-volts-icon"
+                          : selectedTrackId === "lueluelue"
+                            ? "lueluelue-invincible-icon"
+                            : ""
+                      }`}
+                      aria-hidden="true"
+                    />
                     <span>
-                      <small>INVINCIBLE</small>
-                      <strong>{(invincibleRemaining / 1000).toFixed(1)}s</strong>
+                      <small>
+                        {selectedTrackId === "earth-tour"
+                          ? "十万伏特"
+                          : selectedTrackId === "lueluelue"
+                            ? "无敌闪电"
+                            : "无敌模式"}
+                      </small>
+                      <strong>
+                        {(invincibleRemaining / 1000).toFixed(1)}s
+                      </strong>
                     </span>
                     <b>
                       <i
@@ -3651,14 +4205,17 @@ export default function Home() {
             )}
 
             {toast && (
-              <div key={toast.key} className={`game-toast tone-${toast.tone}`}>
+              <div
+                key={`toast-${toast.key}`}
+                className={`game-toast tone-${toast.tone}`}
+              >
                 {toast.text}
               </div>
             )}
 
             {noteJudgement && (
               <div
-                key={noteJudgement.key}
+                key={`judgement-${noteJudgement.key}`}
                 className={`note-judgement quality-${noteJudgement.quality.toLowerCase()}`}
                 aria-live="polite"
               >
@@ -3669,7 +4226,9 @@ export default function Home() {
 
             {status === "ready" && readyPage === "rules" && (
               <div className="game-overlay rules-overlay">
-                <p className="overlay-kicker">TONIGHT&apos;S STORY / TOUR CALL</p>
+                <p className="overlay-kicker">
+                  TONIGHT&apos;S STORY / TOUR CALL
+                </p>
                 <div className="rules-logo" aria-hidden="true">
                   ★
                 </div>
@@ -3849,21 +4408,16 @@ export default function Home() {
                   <button
                     className="primary-button"
                     onClick={() => void startGame()}
-                    disabled={
-                      !songReady || songLoading || !playerName.trim()
-                    }
+                    disabled={!songReady || songLoading || !playerName.trim()}
                   >
-                    <span>
-                      ▶
-                    </span>
-                    {" "}
+                    <span>▶</span>{" "}
                     {!playerName.trim()
                       ? "请填写排行榜昵称"
                       : songLoading
-                      ? "正在生成卡点地图…"
-                      : songReady
-                        ? `用《${songTitle}》发车`
-                        : "请选择歌曲"}
+                        ? "正在生成卡点地图…"
+                        : songReady
+                          ? `用《${songTitle}》发车`
+                          : "请选择歌曲"}
                   </button>
                   <button
                     className="secondary-button"
@@ -3886,7 +4440,8 @@ export default function Home() {
                 </div>
                 <h2>巡演暂停</h2>
                 <p>
-                  歌曲、节拍和道路已经冻结。<br />
+                  歌曲、节拍和道路已经冻结。
+                  <br />
                   继续后从当前拍点重新出发。
                 </p>
                 <div className="result-actions pause-actions">
@@ -3946,7 +4501,8 @@ export default function Home() {
                   <>
                     <h2>是否开启锦囊？</h2>
                     <p className="lucky-dialog-copy">
-                      开启后可能让粉丝翻倍，也可能直接减少一半。<br />
+                      开启后可能让粉丝翻倍，也可能直接减少一半。
+                      <br />
                       不开启则不会改变当前粉丝数。
                     </p>
                     <div className="lucky-risk-row" aria-label="锦囊可能结果">
@@ -4042,8 +4598,7 @@ export default function Home() {
                 </div>
                 <p className="concert-score">
                   演唱会积分 <strong>{fans}</strong> 粉丝 ×{" "}
-                  <strong>{maxCombo}</strong> 连击 ={" "}
-                  <b>{fans * maxCombo}</b>
+                  <strong>{maxCombo}</strong> 连击 = <b>{fans * maxCombo}</b>
                 </p>
                 <p className="coin-formula">
                   场馆奖励 {resultTier.coins} + 合拍奖励 {maxCombo * 3}
@@ -4062,10 +4617,16 @@ export default function Home() {
                   </small>
                 </button>
                 <div className="result-actions">
-                  <button className="primary-button" onClick={() => void startGame()}>
+                  <button
+                    className="primary-button"
+                    onClick={() => void startGame()}
+                  >
                     再跑一场
                   </button>
-                  <button className="secondary-button" onClick={returnToSongSelect}>
+                  <button
+                    className="secondary-button"
+                    onClick={returnToSongSelect}
+                  >
                     返回选歌
                   </button>
                 </div>
@@ -4172,7 +4733,8 @@ export default function Home() {
                 <p className="result-label">检测到行人</p>
                 <h2>演出取消</h2>
                 <p className="failure-copy">
-                  大巴紧急刹车保护过马路的老奶奶。<br />
+                  大巴紧急刹车保护过马路的老奶奶。
+                  <br />
                   本次不获得演出金币，请重新挑战。
                 </p>
                 <div className="failure-ticket">
@@ -4182,10 +4744,16 @@ export default function Home() {
                 </div>
                 {leaderboardPanel}
                 <div className="result-actions">
-                  <button className="primary-button" onClick={() => void startGame()}>
+                  <button
+                    className="primary-button"
+                    onClick={() => void startGame()}
+                  >
                     重新发车
                   </button>
-                  <button className="secondary-button" onClick={returnToSongSelect}>
+                  <button
+                    className="secondary-button"
+                    onClick={returnToSongSelect}
+                  >
                     返回选歌
                   </button>
                 </div>
