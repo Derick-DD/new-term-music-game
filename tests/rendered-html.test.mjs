@@ -70,6 +70,7 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /const STARTING_FANS = 0/);
   assert.match(page, /const MIN_PLAYABLE_STRONG_BEATS = 90/);
   assert.match(page, /const MIN_STRONG_BEAT_GAP = 2/);
+  assert.match(page, /const MAX_STRONG_BEAT_GAP = 4/);
   assert.match(page, /const MIN_OBSTACLE_BEAT_GAP = 3/);
   assert.match(page, /const POWERUP_TRAIL_DELAY_MS = 220/);
   assert.match(page, /const OBSTACLE_COLLISION_BEFORE = 36/);
@@ -95,12 +96,15 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /requirement: \{ hits: 22, perfect: 7, maxCombo: 10 \}/);
   assert.match(page, /const stopJoystick = useCallback/);
   assert.match(page, /const steerWithJoystick = useCallback/);
-  assert.match(page, /window\.setInterval\(\(\) => \{/);
-  assert.match(page, /\}, 135\)/);
+  assert.match(page, /const JOYSTICK_FIRST_REPEAT_MS = 280/);
+  assert.match(page, /const JOYSTICK_REPEAT_MS = 220/);
+  assert.match(page, /const deadZone = Math\.max\(20, maxTravel \* 0\.38\)/);
   assert.match(page, /演唱会积分/);
   assert.match(page, /fans \* maxCombo/);
   assert.match(page, /fetch\("\/api\/leaderboard"/);
-  assert.match(page, /GLOBAL TOP 5/);
+  assert.match(page, /SONG TOP 8/);
+  assert.match(page, /getLeaderboardSongKey/);
+  assert.match(page, /songKey: getLeaderboardSongKey/);
   assert.match(page, /if \(!upgraded\)/);
   assert.doesNotMatch(page, /map-balance-note|intro-copy/);
   assert.match(page, /createMediaElementSource/);
@@ -111,13 +115,14 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.doesNotMatch(page, /https?:\/\/.*\.(mp3|m4a|wav|aac|ogg)/i);
 });
 
-test("keeps global leaderboard persistence and server-side score rules", async () => {
-  const [route, schema, hosting] = await Promise.all([
+test("keeps per-song leaderboard persistence and server-side score rules", async () => {
+  const [route, schema, database, hosting] = await Promise.all([
     readFile(
       new URL("../app/api/leaderboard/route.ts", import.meta.url),
       "utf8",
     ),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
   ]);
 
@@ -125,8 +130,13 @@ test("keeps global leaderboard persistence and server-side score rules", async (
   assert.match(route, /export async function POST/);
   assert.match(route, /const score = fans \* maxCombo/);
   assert.match(route, /if \(score >= 6_500\)/);
-  assert.match(route, /\.limit\(TOP_LIMIT\)/);
+  assert.match(route, /const TOP_LIMIT = 8/);
+  assert.match(route, /ROW_NUMBER\(\) OVER/);
+  assert.match(route, /leaderboardScores\.songKey/);
   assert.match(route, /leaderboardScores\.playerId/);
+  assert.match(route, /submittedScore: score/);
   assert.match(schema, /leaderboard_scores/);
+  assert.match(schema, /leaderboard_scores_player_song_unique/);
+  assert.match(database, /ALTER TABLE leaderboard_scores ADD COLUMN song_key/);
   assert.equal(JSON.parse(hosting).d1, "DB");
 });

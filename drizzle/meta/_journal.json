@@ -15,6 +15,13 @@
       "when": 1785376766318,
       "tag": "0001_smooth_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785381666545,
+      "tag": "0002_colorful_psylocke",
+      "breakpoints": true
     }
   ]
 }

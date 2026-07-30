@@ -1663,9 +1663,11 @@ button:focus-visible {
 
 .song-player-name-field {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 112px minmax(0, 1fr);
   align-items: center;
   width: min(92%, 430px);
+  min-height: 70px;
+  box-sizing: border-box;
   margin: 2px 0 14px;
   border: 2px solid var(--cyan);
   background:
@@ -1698,7 +1700,10 @@ button:focus-visible {
 }
 
 .song-player-name-field input {
+  display: block;
+  width: 100%;
   min-width: 0;
+  box-sizing: border-box;
   border: 2px solid #50458e;
   outline: 0;
   background: #17133c;
@@ -1939,7 +1944,7 @@ button:focus-visible {
 
 .leaderboard-list > div {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  grid-template-columns: 30px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 7px;
   min-height: 33px;
@@ -2094,7 +2099,8 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 11px;
+  gap: 6px;
+  padding: 4px 6px;
   min-width: 0;
   border: 2px solid #4a3c89;
   background:
@@ -2124,8 +2130,8 @@ button:focus-visible {
   position: relative;
   display: grid;
   place-items: center;
-  width: min(72%, 154px);
-  height: 65px;
+  width: min(88%, 210px);
+  height: 72px;
   overflow: hidden;
   border: 2px solid #514594;
   border-radius: 999px;
@@ -2176,8 +2182,8 @@ button:focus-visible {
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 53px;
-  height: 53px;
+  width: 62px;
+  height: 62px;
   border: 3px solid var(--cyan);
   border-radius: 50%;
   background:
@@ -2688,6 +2694,8 @@ footer i {
 
   .song-player-name-field {
     grid-template-columns: 82px minmax(0, 1fr);
+    width: min(94%, 430px);
+    min-height: 68px;
     margin-bottom: 10px;
     padding: 6px;
   }
@@ -2699,11 +2707,13 @@ footer i {
 
   .song-player-name-field input {
     padding: 8px;
-    font-size: 9px;
+    font-size: 16px;
+    line-height: 1.15;
+    transform: translateZ(0);
   }
 
   .mobile-controls {
-    grid-template-columns: minmax(0, 1fr) minmax(112px, 0.54fr);
+    grid-template-columns: minmax(0, 1.3fr) minmax(108px, 0.48fr);
   }
 
   footer {
@@ -2725,12 +2735,13 @@ footer i {
   }
 
   .joystick-base {
-    height: 57px;
+    width: min(92%, 210px);
+    height: 63px;
   }
 
   .joystick-knob {
-    width: 47px;
-    height: 47px;
+    width: 54px;
+    height: 54px;
   }
 
   .hit-button {

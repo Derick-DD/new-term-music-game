@@ -16,7 +16,10 @@ const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
 const MIN_PLAYABLE_STRONG_BEATS = 90;
 const MIN_STRONG_BEAT_GAP = 2;
+const MAX_STRONG_BEAT_GAP = 4;
 const MIN_OBSTACLE_BEAT_GAP = 3;
+const JOYSTICK_FIRST_REPEAT_MS = 280;
+const JOYSTICK_REPEAT_MS = 220;
 const POWERUP_TRAIL_DELAY_MS = 220;
 const STADIUM_SCORE_THRESHOLD = 6_500;
 const OBSTACLE_COLLISION_BEFORE = 36;
@@ -131,12 +134,14 @@ type LeaderboardEntry = {
   id: number;
   playerId: string;
   name: string;
+  songKey: string;
   fans: number;
   maxCombo: number;
   score: number;
   concert: string;
   song: string;
   createdAt: number;
+  rank: number;
 };
 
 type Track = {
@@ -373,6 +378,12 @@ const MAP_PALETTES: Record<
 
 function getTrack(id: TrackId) {
   return TRACKS.find((track) => track.id === id) ?? TRACKS[0];
+}
+
+function getLeaderboardSongKey(trackId: TrackId, songName: string) {
+  if (trackId !== "custom-upload") return `track:${trackId}`;
+  const normalizedName = songName.trim().toLocaleLowerCase().slice(0, 80);
+  return `custom:${normalizedName || "uploaded-song"}`;
 }
 
 function getBeatTimes(track: Track) {
@@ -708,6 +719,45 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
     }
   }
 
+  // Never leave the player staring at an empty road for more than one bar.
+  // Quiet passages still use the strongest analysed beat in that window, so
+  // inserted fan sticks stay attached to a real musical accent.
+  let lastStrongBeat = TRAVEL_BEATS - 1;
+  for (
+    let beat = TRAVEL_BEATS;
+    beat <= lastPlayableBeat;
+    beat += 1
+  ) {
+    if (notePattern[beat] === 2) {
+      lastStrongBeat = beat;
+      continue;
+    }
+    if (beat - lastStrongBeat < MAX_STRONG_BEAT_GAP) continue;
+
+    const windowStart = Math.max(
+      TRAVEL_BEATS,
+      lastStrongBeat + MIN_STRONG_BEAT_GAP,
+    );
+    const candidates = Array.from(
+      { length: Math.max(0, beat - windowStart + 1) },
+      (_, index) => windowStart + index,
+    )
+      .filter((candidate) =>
+        notePattern.every(
+          (level, otherBeat) =>
+            level !== 2 ||
+            Math.abs(otherBeat - candidate) >= MIN_STRONG_BEAT_GAP,
+        ),
+      )
+      .sort(
+        (first, second) =>
+          intensityPattern[second] - intensityPattern[first],
+      );
+    const promotedBeat = candidates[0] ?? beat;
+    notePattern[promotedBeat] = 2;
+    lastStrongBeat = promotedBeat;
+  }
+
   let lane = 2;
   let laneDirection: -1 | 1 = 1;
   const lanePattern = beatTimes.map((time, beat) => {
@@ -901,6 +951,10 @@ export default function Home() {
   } | null>(null);
   const [luckyDialog, setLuckyDialog] = useState<LuckyDialog | null>(null);
   const selectedTrack = getTrack(selectedTrackId);
+  const leaderboardSongKey = getLeaderboardSongKey(
+    selectedTrackId,
+    selectedTrackId === "custom-upload" ? songTitle : selectedTrack.name,
+  );
   const currentVehicle = getVehicle(vehicleLevel);
   const vehicleTaskProgress = getVehicleTaskProgress(
     currentVehicle,
@@ -911,8 +965,8 @@ export default function Home() {
   const leaderboardPanel = (
     <section className="leaderboard-panel" aria-label="玩家排行榜">
       <div className="leaderboard-heading">
-        <span>PLAYER RANKING</span>
-        <small>GLOBAL TOP 5</small>
+        <span>《{songTitle}》排行榜</span>
+        <small>SONG TOP 8</small>
       </div>
       {leaderboard.length > 0 ? (
         <div className="leaderboard-list">
@@ -923,21 +977,21 @@ export default function Home() {
               }
               key={entry.id}
             >
-              <b>{String(index + 1).padStart(2, "0")}</b>
+              <b>{String(entry.rank || index + 1).padStart(2, "0")}</b>
               <span>
                 <strong>{entry.name}</strong>
                 <small>
-                  {entry.song} · {entry.concert}
+                  {entry.concert} · {entry.fans} 粉丝
                 </small>
               </span>
               <em>{entry.score} PTS</em>
-              <i>{entry.fans}F · ×{entry.maxCombo}</i>
+              <i>×{entry.maxCombo}</i>
             </div>
           ))}
         </div>
       ) : (
         <p className="leaderboard-empty">
-          还没有全局成绩，完成第一场演唱会吧。
+          这首歌还没有成绩，完成第一场演唱会吧。
         </p>
       )}
     </section>
@@ -1934,6 +1988,10 @@ export default function Home() {
           fans: fansRef.current,
           maxCombo: maxComboRef.current,
           song: trackRef.current.name,
+          songKey: getLeaderboardSongKey(
+            trackRef.current.id,
+            trackRef.current.name,
+          ),
         }),
       })
         .then(async (response) => {
@@ -1944,10 +2002,14 @@ export default function Home() {
           if (payload.leaderboard) {
             setLeaderboard(payload.leaderboard);
             setCurrentRankEntryId(playerId);
+            showToast(
+              `已计入《${trackRef.current.name}》榜 · ${fansRef.current * maxComboRef.current} 分`,
+              "gold",
+            );
           }
         })
         .catch(() => {
-          showToast("全局排行榜同步失败，请稍后重试", "danger");
+          showToast("歌曲排行榜同步失败，请稍后重试", "danger");
         });
     }
 
@@ -2745,9 +2807,12 @@ export default function Home() {
       joystickDirectionRef.current = direction;
       if (direction === 0) return;
       move(direction);
-      joystickRepeatRef.current = window.setInterval(() => {
+      joystickRepeatRef.current = window.setTimeout(() => {
         move(direction);
-      }, 135);
+        joystickRepeatRef.current = window.setInterval(() => {
+          move(direction);
+        }, JOYSTICK_REPEAT_MS);
+      }, JOYSTICK_FIRST_REPEAT_MS);
     },
     [move],
   );
@@ -2756,10 +2821,15 @@ export default function Home() {
     (clientX: number, target: HTMLElement) => {
       const bounds = target.getBoundingClientRect();
       const rawOffset = clientX - (bounds.left + bounds.width / 2);
-      const nextOffset = Math.max(-34, Math.min(34, rawOffset));
+      const maxTravel = Math.max(36, (bounds.width - 64) / 2 - 7);
+      const deadZone = Math.max(20, maxTravel * 0.38);
+      const nextOffset = Math.max(
+        -maxTravel,
+        Math.min(maxTravel, rawOffset),
+      );
       setJoystickOffset(nextOffset);
       steerWithJoystick(
-        nextOffset < -12 ? -1 : nextOffset > 12 ? 1 : 0,
+        nextOffset < -deadZone ? -1 : nextOffset > deadZone ? 1 : 0,
       );
     },
     [steerWithJoystick],
@@ -2820,6 +2890,36 @@ export default function Home() {
   }, [loadBuiltInTrack]);
 
   useEffect(() => {
+    if (selectedTrackId === "custom-upload" && !songReady) {
+      setLeaderboard([]);
+      setCurrentRankEntryId(null);
+      return;
+    }
+
+    let cancelled = false;
+    setCurrentRankEntryId(null);
+    void fetch(
+      `/api/leaderboard?songKey=${encodeURIComponent(leaderboardSongKey)}`,
+    )
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Leaderboard load failed");
+        const payload = (await response.json()) as {
+          leaderboard?: LeaderboardEntry[];
+        };
+        if (!cancelled && payload.leaderboard) {
+          setLeaderboard(payload.leaderboard);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLeaderboard([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [leaderboardSongKey, selectedTrackId, songReady]);
+
+  useEffect(() => {
     const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
     const savedCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
     const storedPlayerName =
@@ -2835,20 +2935,6 @@ export default function Home() {
       window.localStorage.setItem("fan-bus-player-id", savedPlayerId);
     }
     playerIdRef.current = savedPlayerId;
-    let cancelled = false;
-    void fetch("/api/leaderboard")
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Leaderboard load failed");
-        const payload = (await response.json()) as {
-          leaderboard?: LeaderboardEntry[];
-        };
-        if (!cancelled && payload.leaderboard) {
-          setLeaderboard(payload.leaderboard);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLeaderboard([]);
-      });
     window.localStorage.removeItem("fan-bus-vehicle-level");
     const savedScoreTimer = window.setTimeout(() => {
       setBestFans(savedBest);
@@ -2912,7 +2998,6 @@ export default function Home() {
     };
     window.addEventListener("keydown", keydown);
     return () => {
-      cancelled = true;
       window.clearTimeout(savedScoreTimer);
       window.removeEventListener("keydown", keydown);
     };
