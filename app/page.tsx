@@ -16,8 +16,11 @@ const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
 const MIN_PLAYABLE_STRONG_BEATS = 90;
 const MIN_STRONG_BEAT_GAP = 2;
+const MIN_OBSTACLE_BEAT_GAP = 3;
 const POWERUP_TRAIL_DELAY_MS = 220;
 const STADIUM_SCORE_THRESHOLD = 6_500;
+const OBSTACLE_COLLISION_BEFORE = 36;
+const OBSTACLE_COLLISION_AFTER = 40;
 
 type GameStatus =
   | "ready"
@@ -805,6 +808,7 @@ export default function Home() {
   const lastTimeRef = useRef(0);
   const lastHudRef = useRef(0);
   const entityIdRef = useRef(0);
+  const lastObstacleTargetBeatRef = useRef(-Infinity);
   const entitiesRef = useRef<Entity[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const floatTextRef = useRef<FloatText[]>([]);
@@ -1426,6 +1430,13 @@ export default function Home() {
     }
 
     if (beat < 2) return;
+    if (
+      targetBeat - lastObstacleTargetBeatRef.current <
+      MIN_OBSTACLE_BEAT_GAP
+    ) {
+      return;
+    }
+    lastObstacleTargetBeatRef.current = targetBeat;
     const obstacleCount = beat > 12 && noteLevel === 2 && intensity > 0.68 ? 2 : 1;
     const used = new Set<number>([safeLane]);
     for (let i = 0; i < obstacleCount; i += 1) {
@@ -1775,7 +1786,7 @@ export default function Home() {
       const busX = busXRef.current;
       const busY = PLAYER_Y - busBounceRef.current * 18;
       const vehicle = getVehicle(vehicleLevelRef.current);
-      const busScale = 1 + (vehicle.level - 1) * 0.035;
+      const busScale = 1 + (vehicle.level - 1) * 0.015;
       ctx.save();
       ctx.translate(Math.round(busX), Math.round(busY));
       if (elapsed < magnetUntilRef.current) {
@@ -1815,7 +1826,7 @@ export default function Home() {
       }
       ctx.scale(busScale, busScale);
       ctx.fillStyle = "rgba(0,0,0,0.38)";
-      ctx.fillRect(-31, 45, 62, 16);
+      ctx.fillRect(-27, 45, 54, 14);
       if (shieldRef.current) {
         ctx.strokeStyle = `rgba(114, 241, 255, ${0.55 + pulse * 0.35})`;
         ctx.lineWidth = 5;
@@ -1824,14 +1835,14 @@ export default function Home() {
         ctx.stroke();
       }
       ctx.fillStyle = "#121225";
-      ctx.fillRect(-37, -37, 9, 24);
-      ctx.fillRect(28, -37, 9, 24);
-      ctx.fillRect(-37, 21, 9, 24);
-      ctx.fillRect(28, 21, 9, 24);
+      ctx.fillRect(-30, -37, 7, 24);
+      ctx.fillRect(23, -37, 7, 24);
+      ctx.fillRect(-30, 21, 7, 24);
+      ctx.fillRect(23, 21, 7, 24);
       ctx.fillStyle = vehicle.primary;
-      ctx.fillRect(-31, -52, 62, 105);
+      ctx.fillRect(-26, -52, 52, 105);
       ctx.fillStyle = vehicle.secondary;
-      ctx.fillRect(-25, -46, 50, 92);
+      ctx.fillRect(-21, -46, 42, 92);
       ctx.fillStyle = "#2c225e";
       ctx.fillRect(-21, -38, 42, 29);
       ctx.fillStyle = "#72f1ff";
@@ -2163,8 +2174,8 @@ export default function Home() {
         const colliding =
           !entity.handled &&
           entity.lane === laneRef.current &&
-          entity.y > PLAYER_Y - 48 &&
-          entity.y < PLAYER_Y + 52;
+          entity.y > PLAYER_Y - OBSTACLE_COLLISION_BEFORE &&
+          entity.y < PLAYER_Y + OBSTACLE_COLLISION_AFTER;
 
         if (!colliding) {
           if (!entity.handled && entity.y < GAME_HEIGHT + 90) {
@@ -2531,6 +2542,7 @@ export default function Home() {
     beatRef.current = 0;
     nextBeatRef.current = 0;
     entityIdRef.current = 0;
+    lastObstacleTargetBeatRef.current = -Infinity;
     entitiesRef.current = [];
     particlesRef.current = [];
     floatTextRef.current = [];
@@ -2794,6 +2806,7 @@ export default function Home() {
     setLuckyDialog(null);
     setCurrentRankEntryId(null);
     entitiesRef.current = [];
+    lastObstacleTargetBeatRef.current = -Infinity;
     pedestrianRef.current = null;
     stopJoystick();
   }, [resetSongTone, stopJoystick]);
