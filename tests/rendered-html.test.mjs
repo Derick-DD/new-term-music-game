@@ -8,13 +8,15 @@ test("keeps the rules-first rhythm game interface", async () => {
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(layout, /应援巴士 · Rhythm Rush/);
+  assert.match(layout, /应援大巴冲冲冲！/);
   assert.match(page, /TONIGHT&apos;S STORY/);
-  assert.match(page, /带粉丝去演唱会/);
+  assert.match(page, /应援大巴/);
+  assert.match(page, /冲冲冲！/);
   assert.match(page, /巡演故事/);
   assert.match(page, /把一路加入的粉丝/);
-  assert.match(page, /从小巴启程/);
-  assert.match(page, /召集应援队/);
+  assert.match(page, /空车出发/);
+  assert.match(page, /收集应援棒/);
+  assert.match(page, /收集 1 个应援棒，粉丝 \+1/);
   assert.match(page, /点亮更大舞台/);
   assert.match(page, /让每一位粉丝准时抵达现场/);
   assert.match(page, /PLAYER NAME/);
@@ -59,6 +61,7 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /Math\.random\(\) < 0\.55/);
   assert.match(page, /const POWERUP_DURATION_MS = 5_000/);
   assert.match(page, /const HIT_INPUT_GUARD_MS = 70/);
+  assert.match(page, /const STARTING_FANS = 0/);
   assert.match(page, /const MAGNET_RADIUS = 185/);
   assert.match(page, /type: pickupType/);
   assert.match(page, /MAGNET PERFECT · \+1 FAN/);
@@ -77,7 +80,8 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /const steerWithJoystick = useCallback/);
   assert.match(page, /window\.setInterval\(\(\) => \{/);
   assert.match(page, /\}, 135\)/);
-  assert.match(page, /到场粉丝 × 最高连击决定演出规模/);
+  assert.match(page, /演唱会积分/);
+  assert.match(page, /fans \* maxCombo/);
   assert.match(page, /fetch\("\/api\/leaderboard"/);
   assert.match(page, /GLOBAL TOP 5/);
   assert.match(page, /if \(!upgraded\)/);

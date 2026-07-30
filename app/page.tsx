@@ -8,7 +8,7 @@ const ROAD_LEFT = 42;
 const ROAD_WIDTH = 396;
 const LANE_WIDTH = ROAD_WIDTH / 5;
 const PLAYER_Y = 584;
-const STARTING_FANS = 12;
+const STARTING_FANS = 0;
 const TRAVEL_BEATS = 4;
 const MISS_WINDOW = 190;
 const HIT_INPUT_GUARD_MS = 70;
@@ -2806,7 +2806,7 @@ export default function Home() {
                 : "--"}{" "}
             BPM
           </span>
-          <span className="brand-title">应援巴士</span>
+          <span className="brand-title">应援大巴冲冲冲！</span>
         </div>
         <div className="meta-strip" aria-label="游戏记录">
           <span>
@@ -2993,31 +2993,35 @@ export default function Home() {
                 <div className="rules-logo" aria-hidden="true">
                   ★
                 </div>
-                <h1>带粉丝去演唱会</h1>
+                <h1 className="story-title">
+                  <span>应援大巴</span>
+                  <em>冲冲冲！</em>
+                </h1>
                 <p className="rules-lead">
-                  今晚，明星已经登上应援巴士。你要穿过霓虹城市，
-                  把一路加入的粉丝<strong>安全送到演唱会</strong>。
+                  今晚，明星已经登上大巴，但车上的粉丝还是 0。
+                  穿过霓虹城市，把一路加入的粉丝
+                  <strong>安全送到演唱会</strong>！
                 </p>
                 <div className="rules-grid story-route" aria-label="巡演故事">
                   <div>
                     <b>01</b>
                     <span>
-                      <strong>从小巴启程</strong>
-                      载着最初的应援团出发，每一位新粉丝都让巡演更有声势。
+                      <strong>空车出发</strong>
+                      粉丝数从 0 开始，等待你沿途召集今晚的应援队。
                     </span>
                   </div>
                   <div>
                     <b>02</b>
                     <span>
-                      <strong>召集应援队</strong>
-                      跟随歌曲强拍接上应援棒，升级车辆，容纳更多同行粉丝。
+                      <strong>收集应援棒</strong>
+                      收集 1 个应援棒，粉丝 +1；踩中强拍还能延续连击。
                     </span>
                   </div>
                   <div>
                     <b>03</b>
                     <span>
                       <strong>点亮更大舞台</strong>
-                      到场粉丝 × 最高连击决定演出规模，目标是五万人体育场。
+                      把更多粉丝安全送达，解锁更大的演唱会场馆。
                     </span>
                   </div>
                 </div>

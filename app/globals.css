@@ -889,22 +889,64 @@ button:focus-visible {
 }
 
 .rules-overlay h1 {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
   margin: 4px 0 7px;
   color: white;
   font-family: "Arial Black", "PingFang SC", sans-serif;
-  font-size: clamp(38px, 10vw, 58px);
-  letter-spacing: -0.08em;
+  font-size: clamp(34px, 8vw, 48px);
+  letter-spacing: -0.1em;
   line-height: 0.95;
+  transform: skew(-4deg);
   text-shadow:
     4px 0 0 var(--pink),
     -3px 4px 0 #5037c4;
+}
+
+.story-title::before,
+.story-title::after {
+  position: absolute;
+  content: "";
+  top: 50%;
+  width: 25px;
+  height: 4px;
+  background: var(--cyan);
+  box-shadow:
+    0 -9px 0 -1px var(--pink),
+    0 9px 0 -1px var(--gold);
+}
+
+.story-title::before {
+  right: calc(100% + 10px);
+}
+
+.story-title::after {
+  left: calc(100% + 10px);
+}
+
+.story-title span,
+.story-title em {
+  position: relative;
+  z-index: 1;
+}
+
+.story-title em {
+  color: var(--gold);
+  font-style: normal;
+  text-shadow:
+    4px 0 0 var(--pink),
+    -3px 4px 0 #5037c4,
+    0 0 18px rgba(255, 230, 109, 0.42);
 }
 
 .rules-lead {
   max-width: 390px;
   margin: 0 0 13px;
   color: #c9c2e8;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.6;
 }
 
@@ -994,16 +1036,16 @@ button:focus-visible {
 }
 
 .rules-grid > div > span {
-  color: #9188b8;
-  font-size: 7px;
-  line-height: 1.4;
+  color: #c0b9df;
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .rules-grid strong {
   display: block;
   margin-bottom: 3px;
   color: white;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .rules-controls-preview {
@@ -2536,12 +2578,26 @@ footer i {
 
   .rules-overlay h1 {
     margin: 3px 0 5px;
-    font-size: clamp(25px, 8.5vw, 34px);
+    gap: 1px;
+    font-size: clamp(23px, 7.5vw, 30px);
+  }
+
+  .story-title::before,
+  .story-title::after {
+    width: 12px;
+  }
+
+  .story-title::before {
+    right: calc(100% + 4px);
+  }
+
+  .story-title::after {
+    left: calc(100% + 4px);
   }
 
   .rules-lead {
     margin-bottom: 7px;
-    font-size: 7px;
+    font-size: 7.5px;
     line-height: 1.4;
   }
 
@@ -2551,7 +2607,7 @@ footer i {
 
   .story-route > div {
     grid-template-columns: 23px 1fr;
-    min-height: 42px;
+    min-height: 46px;
     gap: 6px;
     padding: 5px 6px;
   }
@@ -2563,12 +2619,13 @@ footer i {
   }
 
   .story-route > div > span {
-    font-size: 6px;
+    font-size: 7.5px;
+    line-height: 1.35;
   }
 
   .story-route strong {
     margin-bottom: 1px;
-    font-size: 8px;
+    font-size: 9.5px;
   }
 
   .story-mission {

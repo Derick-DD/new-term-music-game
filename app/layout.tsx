@@ -12,9 +12,9 @@ export async function generateMetadata(): Promise<Metadata> {
     requestHeaders.get("x-forwarded-proto") ??
     (host.startsWith("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
-  const title = "应援巴士 · Rhythm Rush";
+  const title = "应援大巴冲冲冲！";
   const description =
-    "选择怪火、略略略略略、昨晚我环游了地球，或上传自己的歌曲；跟着每首歌的独立卡点地图驾驶明星巴士换道 HIT 应援棒。";
+    "驾驶明星大巴跟随歌曲强拍收集应援棒，每个应援棒让粉丝 +1，把不断壮大的应援队安全送到演唱会。";
 
   return {
     metadataBase: new URL(origin),
@@ -30,7 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
           url: `${origin}/og.png`,
           width: 1734,
           height: 907,
-          alt: "应援巴士 Rhythm Rush 像素游戏",
+          alt: "应援大巴冲冲冲像素节奏游戏",
         },
       ],
     },
