@@ -25,6 +25,22 @@ const STADIUM_SCORE_THRESHOLD = 6_500;
 const OBSTACLE_COLLISION_BEFORE = 36;
 const OBSTACLE_COLLISION_AFTER = 40;
 
+function triggerHaptic(pattern: number | number[]) {
+  if (
+    typeof navigator === "undefined" ||
+    typeof navigator.vibrate !== "function"
+  ) {
+    return false;
+  }
+
+  try {
+    navigator.vibrate(0);
+    return navigator.vibrate(pattern);
+  } catch {
+    return false;
+  }
+}
+
 type GameStatus =
   | "ready"
   | "playing"
@@ -167,7 +183,7 @@ type Track = {
   mapTheme: MapTheme;
   mapLabel: string;
   totalBeats: number;
-  grannyBeat: number;
+  grannyBeats: [number, number];
   melody: number[];
   lanePattern: number[];
   notePattern: number[];
@@ -260,7 +276,7 @@ const TRACKS: Track[] = [
     mapTheme: "illusion-city",
     mapLabel: "幻火夜城",
     totalBeats: 96,
-    grannyBeat: 48,
+    grannyBeats: [36, 70],
     melody: [220, 277.18, 329.63, 440, 415.3, 329.63, 277.18, 246.94],
     lanePattern: [2, 3, 2, 1, 0, 1, 3, 4],
     notePattern: [1],
@@ -280,7 +296,7 @@ const TRACKS: Track[] = [
     mapTheme: "candy-blocks",
     mapLabel: "糖果街区",
     totalBeats: 96,
-    grannyBeat: 52,
+    grannyBeats: [38, 72],
     melody: [246.94, 329.63, 392, 493.88, 440, 392, 329.63, 293.66],
     lanePattern: [2, 1, 3, 4, 2, 0, 1, 3],
     notePattern: [1],
@@ -300,7 +316,7 @@ const TRACKS: Track[] = [
     mapTheme: "earth-orbit",
     mapLabel: "星球环线",
     totalBeats: 96,
-    grannyBeat: 44,
+    grannyBeats: [34, 68],
     melody: [196, 246.94, 293.66, 369.99, 329.63, 293.66, 246.94, 220],
     lanePattern: [2, 2, 3, 4, 3, 2, 1, 0],
     notePattern: [1],
@@ -319,7 +335,7 @@ const TRACKS: Track[] = [
     mapTheme: "custom",
     mapLabel: "自定义巡演",
     totalBeats: 96,
-    grannyBeat: 42,
+    grannyBeats: [36, 70],
     melody: [220, 277.18, 329.63, 440, 415.3, 329.63, 277.18, 246.94],
     lanePattern: [
       2, 3, 2, 1, 0, 1, 3, 4, 3, 1, 2, 4, 3, 2, 0, 1,
@@ -330,6 +346,14 @@ const TRACKS: Track[] = [
     bpmAt: () => 96,
   },
 ];
+
+const BUILT_IN_TRACK_ORDER: Array<Exclude<TrackId, "custom-upload">> = [
+  "earth-tour",
+  "lueluelue",
+  "guaihuo",
+];
+const DEFAULT_TRACK =
+  TRACKS.find((track) => track.id === "earth-tour") ?? TRACKS[0];
 
 const MAP_PALETTES: Record<
   MapTheme,
@@ -387,7 +411,7 @@ const MAP_PALETTES: Record<
 };
 
 function getTrack(id: TrackId) {
-  return TRACKS.find((track) => track.id === id) ?? TRACKS[0];
+  return TRACKS.find((track) => track.id === id) ?? DEFAULT_TRACK;
 }
 
 function getLeaderboardSongKey(trackId: TrackId, songName: string) {
@@ -550,6 +574,19 @@ function getBeatTimes(track: Track) {
     times.push(times[times.length - 1] + 60_000 / track.bpmAt(beat));
   }
   return times;
+}
+
+function getPedestrianBeats(totalBeats: number): [number, number] {
+  const lastSafeBeat = Math.max(32, totalBeats - 8);
+  const firstBeat = Math.max(
+    16,
+    Math.min(lastSafeBeat - 22, Math.round(totalBeats * 0.36)),
+  );
+  const secondBeat = Math.min(
+    lastSafeBeat,
+    Math.max(firstBeat + 20, Math.round(totalBeats * 0.72)),
+  );
+  return [firstBeat, secondBeat];
 }
 
 function analyzeAudioBuffer(buffer: AudioBuffer) {
@@ -1010,8 +1047,8 @@ export default function Home() {
   const maxComboRef = useRef(0);
   const beatRef = useRef(0);
   const nextBeatRef = useRef(0);
-  const beatTimesRef = useRef<number[]>(getBeatTimes(TRACKS[0]));
-  const trackRef = useRef<Track>(TRACKS[0]);
+  const beatTimesRef = useRef<number[]>(getBeatTimes(DEFAULT_TRACK));
+  const trackRef = useRef<Track>(DEFAULT_TRACK);
   const startTimeRef = useRef(0);
   const lastTimeRef = useRef(0);
   const lastHudRef = useRef(0);
@@ -1028,10 +1065,10 @@ export default function Home() {
   const songRef = useRef<HTMLAudioElement | null>(null);
   const songUrlRef = useRef<string | null>(null);
   const detectedBeatTimesRef = useRef<number[]>([]);
-  const detectedLanePatternRef = useRef<number[]>(TRACKS[0].lanePattern);
-  const detectedNotePatternRef = useRef<number[]>(TRACKS[0].notePattern);
+  const detectedLanePatternRef = useRef<number[]>(DEFAULT_TRACK.lanePattern);
+  const detectedNotePatternRef = useRef<number[]>(DEFAULT_TRACK.notePattern);
   const detectedIntensityPatternRef = useRef<number[]>(
-    TRACKS[0].intensityPattern,
+    DEFAULT_TRACK.intensityPattern,
   );
   const detectedBpmRef = useRef(96);
   const songLoadRequestRef = useRef(0);
@@ -1054,7 +1091,7 @@ export default function Home() {
   const invincibleUntilRef = useRef(-1);
   const toneModeRef = useRef<ToneMode>("normal");
   const arrangementUntilRef = useRef(-1);
-  const grannyWarnedRef = useRef(false);
+  const grannyWarnedBeatsRef = useRef<Set<number>>(new Set());
   const toastTimerRef = useRef<number | null>(null);
   const judgementTimerRef = useRef<number | null>(null);
   const lastHitInputAtRef = useRef(-Infinity);
@@ -1063,6 +1100,7 @@ export default function Home() {
   const joystickPointerRef = useRef<number | null>(null);
   const joystickDirectionRef = useRef<-1 | 0 | 1>(0);
   const joystickRepeatRef = useRef<number | null>(null);
+  const lastPerfectSoundAtRef = useRef(-Infinity);
 
   const [status, setStatus] = useState<GameStatus>("ready");
   const [readyPage, setReadyPage] = useState<ReadyPage>("rules");
@@ -1075,7 +1113,7 @@ export default function Home() {
   const [detectedBpm, setDetectedBpm] = useState(96);
   const [songDuration, setSongDuration] = useState(0);
   const [selectedTrackId, setSelectedTrackId] =
-    useState<TrackId>("guaihuo");
+    useState<TrackId>("earth-tour");
   const [fans, setFans] = useState(STARTING_FANS);
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
@@ -1085,7 +1123,7 @@ export default function Home() {
   const [invincibleRemaining, setInvincibleRemaining] = useState(0);
   const [progress, setProgress] = useState(0);
   const [beatIndex, setBeatIndex] = useState(0);
-  const [currentBpm, setCurrentBpm] = useState(TRACKS[0].bpmAt(0));
+  const [currentBpm, setCurrentBpm] = useState(DEFAULT_TRACK.bpmAt(0));
   const [toneMode, setToneMode] = useState<ToneMode>("normal");
   const [muted, setMuted] = useState(false);
   const [shield, setShield] = useState(false);
@@ -1366,31 +1404,95 @@ export default function Home() {
   const playPerfectHit = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || mutedRef.current) return;
-    const now = audio.currentTime;
 
-    [880, 1320].forEach((frequency, index) => {
-      const sparkle = audio.createOscillator();
-      const sparkleGain = audio.createGain();
-      const startAt = now + index * 0.018;
-      sparkle.type = index === 0 ? "triangle" : "sine";
-      sparkle.frequency.setValueAtTime(frequency, startAt);
-      sparkle.frequency.exponentialRampToValueAtTime(
-        frequency * 1.08,
-        startAt + 0.07,
-      );
-      sparkleGain.gain.setValueAtTime(0.0001, startAt);
-      sparkleGain.gain.linearRampToValueAtTime(
-        index === 0 ? 0.032 : 0.022,
-        startAt + 0.008,
-      );
-      sparkleGain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        startAt + 0.12,
-      );
-      sparkle.connect(sparkleGain).connect(audio.destination);
-      sparkle.start(startAt);
-      sparkle.stop(startAt + 0.13);
-    });
+    const play = () => {
+      if (mutedRef.current || audio.state !== "running") return;
+      const inputAt = performance.now();
+      if (inputAt - lastPerfectSoundAtRef.current < 70) return;
+      lastPerfectSoundAtRef.current = inputAt;
+
+      const now = audio.currentTime + 0.006;
+      const sparkleBus = audio.createGain();
+      const sparkleFilter = audio.createBiquadFilter();
+      sparkleBus.gain.setValueAtTime(0.92, now);
+      sparkleFilter.type = "highpass";
+      sparkleFilter.frequency.setValueAtTime(520, now);
+      sparkleBus.connect(sparkleFilter).connect(audio.destination);
+
+      [
+        {
+          frequency: 740,
+          peak: 0.1,
+          delay: 0,
+          type: "triangle" as OscillatorType,
+        },
+        {
+          frequency: 1110,
+          peak: 0.072,
+          delay: 0.028,
+          type: "sine" as OscillatorType,
+        },
+        {
+          frequency: 1665,
+          peak: 0.042,
+          delay: 0.052,
+          type: "sine" as OscillatorType,
+        },
+      ].forEach(({ frequency, peak, delay, type }) => {
+        const sparkle = audio.createOscillator();
+        const sparkleGain = audio.createGain();
+        const startAt = now + delay;
+        sparkle.type = type;
+        sparkle.frequency.setValueAtTime(frequency, startAt);
+        sparkle.frequency.exponentialRampToValueAtTime(
+          frequency * 1.16,
+          startAt + 0.105,
+        );
+        sparkleGain.gain.setValueAtTime(0.0001, startAt);
+        sparkleGain.gain.linearRampToValueAtTime(peak, startAt + 0.008);
+        sparkleGain.gain.exponentialRampToValueAtTime(
+          0.0001,
+          startAt + 0.17,
+        );
+        sparkle.connect(sparkleGain).connect(sparkleBus);
+        sparkle.start(startAt);
+        sparkle.stop(startAt + 0.18);
+      });
+    };
+
+    if (audio.state !== "running") {
+      void audio.resume().then(play).catch(() => undefined);
+      return;
+    }
+    play();
+  }, []);
+
+  const playObstacleImpact = useCallback((obstacle: ObstacleType) => {
+    const audio = audioRef.current;
+    if (!audio || audio.state !== "running" || mutedRef.current) return;
+
+    const now = audio.currentTime + 0.004;
+    const impact = audio.createOscillator();
+    const impactGain = audio.createGain();
+    const impactFilter = audio.createBiquadFilter();
+    const startFrequency =
+      obstacle === "barrier" ? 125 : obstacle === "speaker" ? 155 : 185;
+    const peak = obstacle === "barrier" ? 0.075 : 0.055;
+
+    impact.type = "triangle";
+    impact.frequency.setValueAtTime(startFrequency, now);
+    impact.frequency.exponentialRampToValueAtTime(52, now + 0.14);
+    impactGain.gain.setValueAtTime(0.0001, now);
+    impactGain.gain.linearRampToValueAtTime(peak, now + 0.006);
+    impactGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+    impactFilter.type = "lowpass";
+    impactFilter.frequency.setValueAtTime(460, now);
+    impact
+      .connect(impactGain)
+      .connect(impactFilter)
+      .connect(audio.destination);
+    impact.start(now);
+    impact.stop(now + 0.16);
   }, []);
 
   const installPreparedSong = useCallback(
@@ -2360,26 +2462,44 @@ export default function Home() {
         playBeat(beat);
         spawnBeat(beat);
 
-        if (beat === track.grannyBeat - 4 && !grannyWarnedRef.current) {
-          grannyWarnedRef.current = true;
+        const pedestrianWarningIndex = track.grannyBeats.findIndex(
+          (targetBeat) =>
+            beat === targetBeat - 4 &&
+            !grannyWarnedBeatsRef.current.has(targetBeat),
+        );
+        if (pedestrianWarningIndex >= 0) {
+          const pedestrianBeat = track.grannyBeats[pedestrianWarningIndex];
+          grannyWarnedBeatsRef.current.add(pedestrianBeat);
+          const direction = pedestrianWarningIndex === 0 ? 1 : -1;
           pedestrianRef.current = {
             startAt: beatTimes[beat],
-            hitAt: beatTimes[track.grannyBeat],
+            hitAt: beatTimes[pedestrianBeat],
             endAt:
               beatTimes[
-                Math.min(track.grannyBeat + 4, beatTimes.length - 1)
+                Math.min(pedestrianBeat + 4, beatTimes.length - 1)
               ],
-            direction: track.grannyBeat % 2 === 0 ? 1 : -1,
+            direction,
             x:
-              track.grannyBeat % 2 === 0
+              direction === 1
                 ? ROAD_LEFT - 24
                 : ROAD_LEFT + ROAD_WIDTH + 24,
             y: -70,
           };
-          showToast("注意！4 拍后行人抵达中间车道", "gold");
+          showToast(
+            pedestrianWarningIndex === 0
+              ? "注意！4 拍后第一位行人抵达中间车道"
+              : "再次注意！4 拍后第二位行人从另一侧通过",
+            "gold",
+          );
         }
-        if (beat === track.grannyBeat) {
-          showToast("危险！离开中间车道", "danger");
+        const pedestrianDangerIndex = track.grannyBeats.indexOf(beat);
+        if (pedestrianDangerIndex >= 0) {
+          showToast(
+            pedestrianDangerIndex === 0
+              ? "危险！第一位行人到达，离开中间车道"
+              : "危险！第二位行人到达，再次避让",
+            "danger",
+          );
         }
         if (
           arrangementUntilRef.current > 0 &&
@@ -2470,12 +2590,12 @@ export default function Home() {
               fanGained ? "PERFECT +1" : `PERFECT · 满载 ${capacity}`,
               "#ffe66d",
             );
-            playFanHit(entity.targetBeat);
+            playPerfectHit();
             beatPulseRef.current = 1.45;
             collectFlashRef.current = 1;
             busBounceRef.current = 0.8;
             screenPunchRef.current = 0.75;
-            navigator.vibrate?.([14, 10, 20]);
+            triggerHaptic([14, 10, 20]);
             if (
               perfectCountRef.current % 8 === 0 &&
               !shieldRef.current
@@ -2585,13 +2705,14 @@ export default function Home() {
           setCombo(0);
           shakeRef.current = 0.34;
           hitFlashRef.current = 1;
-          navigator.vibrate?.(
+          triggerHaptic(
             entity.obstacle === "barrier"
               ? [85, 35, 120]
               : entity.obstacle === "speaker"
                 ? [65, 30, 95]
                 : [45, 24, 70],
           );
+          playObstacleImpact(entity.obstacle ?? "cone");
           triggerDamageVariation();
           addBurst(x, PLAYER_Y, "#ff375f", 17);
           addFloatText(x, PLAYER_Y - 58, `-${actualLoss} 粉丝`, "#ff526f");
@@ -2705,7 +2826,8 @@ export default function Home() {
       failGame,
       finishGame,
       playBeat,
-      playFanHit,
+      playObstacleImpact,
+      playPerfectHit,
       resetSongTone,
       showJudgement,
       showToast,
@@ -2779,8 +2901,11 @@ export default function Home() {
           : `JUST HIT · BUS FULL ${capacity} · ×${comboRef.current}`,
       );
     }
-    playFanHit(candidate.targetBeat);
-    if (quality === "PERFECT") playPerfectHit();
+    if (quality === "PERFECT") {
+      playPerfectHit();
+    } else {
+      playFanHit(candidate.targetBeat);
+    }
 
     const x = laneCenter(candidate.lane);
     addBurst(x, PLAYER_Y - 22, "#72f1ff", 28);
@@ -2799,7 +2924,7 @@ export default function Home() {
     collectFlashRef.current = 1;
     busBounceRef.current = 1;
     screenPunchRef.current = quality === "PERFECT" ? 1.2 : 0.72;
-    navigator.vibrate?.(quality === "PERFECT" ? [18, 16, 28] : 22);
+    triggerHaptic(quality === "PERFECT" ? [18, 16, 28] : 22);
 
     if (
       quality === "PERFECT" &&
@@ -2831,6 +2956,7 @@ export default function Home() {
       showToast("请先选择一首歌曲", "pink");
       return;
     }
+    triggerHaptic(1);
     if (animationRef.current) {
       window.cancelAnimationFrame(animationRef.current);
     }
@@ -2868,7 +2994,7 @@ export default function Home() {
       name: songTitle,
       english: songTitle,
       totalBeats,
-      grannyBeat: Math.max(8, Math.min(totalBeats - 6, Math.floor(totalBeats * 0.56))),
+      grannyBeats: getPedestrianBeats(totalBeats),
       tempoLabel: `${detectedBpmRef.current} BPM`,
       bpmAt: () => detectedBpmRef.current,
       lanePattern: detectedLanePatternRef.current,
@@ -2899,7 +3025,7 @@ export default function Home() {
     successfulHitsRef.current = 0;
     magnetUntilRef.current = -1;
     invincibleUntilRef.current = -1;
-    grannyWarnedRef.current = false;
+    grannyWarnedBeatsRef.current.clear();
     invulnerableUntilRef.current = 0;
     lastHitInputAtRef.current = -Infinity;
     beatPulseRef.current = 0;
@@ -3179,7 +3305,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    void loadBuiltInTrack("guaihuo");
+    void loadBuiltInTrack("earth-tour");
   }, [loadBuiltInTrack]);
 
   useEffect(() => {
@@ -3347,15 +3473,20 @@ export default function Home() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-kicker">
-            PIXEL TOUR /{" "}
-            {status === "playing" || status === "paused" || status === "lucky"
-              ? currentBpm
-              : songReady
-                ? detectedBpm
-                : "--"}{" "}
-            BPM
+            <small>PIXEL TOUR</small>
+            <strong>
+              {status === "playing" || status === "paused" || status === "lucky"
+                ? currentBpm
+                : songReady
+                  ? detectedBpm
+                  : "--"}
+              <i>BPM</i>
+            </strong>
           </span>
-          <span className="brand-title">应援大巴冲冲冲！</span>
+          <span className="brand-title">
+            <span>应援大巴</span>
+            <em>冲冲冲！</em>
+          </span>
         </div>
         <div className="meta-strip" aria-label="游戏记录">
           <span>
@@ -3367,7 +3498,7 @@ export default function Home() {
             <b className="coin-dot">●</b> {bankCoins}
           </span>
           <button
-            className="sound-button"
+            className={`sound-button ${muted ? "is-muted" : ""}`}
             onClick={toggleMute}
             aria-label={muted ? "打开声音" : "关闭声音"}
           >
@@ -3597,47 +3728,46 @@ export default function Home() {
                   <span>每首歌都有独立卡点、换道路线与道路主题</span>
                 </div>
                 <div className="track-picker" aria-label="选择歌曲">
-                  {TRACKS.filter((track) => track.audioSrc).map(
-                    (track, index) => {
-                      const isSelected = selectedTrackId === track.id;
-                      return (
-                        <button
-                          type="button"
-                          key={track.id}
-                          className={isSelected ? "is-selected" : ""}
-                          onClick={() =>
-                            void loadBuiltInTrack(
-                              track.id as Exclude<TrackId, "custom-upload">,
-                            )
-                          }
-                          style={{ color: track.color }}
-                          aria-pressed={isSelected}
-                        >
-                          <span className="song-number">
-                            {String(index + 1).padStart(2, "0")}
-                          </span>
-                          <span className="track-copy">
-                            <b>{track.name}</b>
-                            <small>
-                              {track.artist} · {track.description}
-                            </small>
-                          </span>
-                          <em>
-                            {isSelected && songReady
-                              ? `${detectedBpm} BPM`
-                              : track.mapLabel}
-                          </em>
-                          <i>
-                            {isSelected && songLoading
-                              ? "ANALYZING"
-                              : isSelected && songReady
-                                ? "✓ 已选择"
-                                : track.difficulty}
-                          </i>
-                        </button>
-                      );
-                    },
-                  )}
+                  {BUILT_IN_TRACK_ORDER.map((trackId, index) => {
+                    const track = getTrack(trackId);
+                    const isSelected = selectedTrackId === track.id;
+                    return (
+                      <button
+                        type="button"
+                        key={track.id}
+                        className={isSelected ? "is-selected" : ""}
+                        onClick={() =>
+                          void loadBuiltInTrack(
+                            track.id as Exclude<TrackId, "custom-upload">,
+                          )
+                        }
+                        style={{ color: track.color }}
+                        aria-pressed={isSelected}
+                      >
+                        <span className="song-number">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <span className="track-copy">
+                          <b>{track.name}</b>
+                          <small>
+                            {track.artist} · {track.description}
+                          </small>
+                        </span>
+                        <em>
+                          {isSelected && songReady
+                            ? `${detectedBpm} BPM`
+                            : track.mapLabel}
+                        </em>
+                        <i>
+                          {isSelected && songLoading
+                            ? "ANALYZING"
+                            : isSelected && songReady
+                              ? "✓ 已选择"
+                              : track.difficulty}
+                        </i>
+                      </button>
+                    );
+                  })}
                   <label
                     className={`uploaded-track-row ${
                       selectedTrackId === "custom-upload" ? "is-selected" : ""
@@ -4110,7 +4240,23 @@ export default function Home() {
                   style={{ transform: `translateX(${joystickOffset}px)` }}
                   aria-hidden="true"
                 >
-                  ↔
+                  <svg
+                    className="steer-glyph"
+                    viewBox="0 0 64 34"
+                    focusable="false"
+                  >
+                    <path className="steer-glyph-rail" d="M16 17H48" />
+                    <path className="steer-glyph-left" d="M24 8L15 17L24 26" />
+                    <path className="steer-glyph-right" d="M40 8L49 17L40 26" />
+                    <rect
+                      className="steer-glyph-core"
+                      x="29"
+                      y="12"
+                      width="6"
+                      height="10"
+                      rx="1"
+                    />
+                  </svg>
                 </b>
               </div>
               <small>DRAG TO STEER</small>

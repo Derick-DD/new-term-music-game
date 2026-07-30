@@ -55,8 +55,22 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /id="custom-song-upload"/);
   assert.match(page, /const hitNote = useCallback/);
   assert.match(page, /const playPerfectHit = useCallback/);
-  assert.match(page, /if \(quality === "PERFECT"\) playPerfectHit\(\)/);
-  assert.match(page, /index === 0 \? 0\.032 : 0\.022/);
+  assert.match(
+    page,
+    /if \(quality === "PERFECT"\) \{\s*playPerfectHit\(\);/,
+  );
+  assert.match(page, /frequency: 1665/);
+  assert.match(page, /function triggerHaptic/);
+  assert.match(page, /className="steer-glyph"/);
+  assert.doesNotMatch(page, />\s*↔\s*</);
+  assert.match(
+    page,
+    /const BUILT_IN_TRACK_ORDER[\s\S]*"earth-tour",\s*"lueluelue",\s*"guaihuo"/,
+  );
+  assert.match(page, /grannyBeats: \[number, number\]/);
+  assert.match(page, /function getPedestrianBeats/);
+  assert.match(page, /firstBeat \+ 20/);
+  assert.match(page, /第二位行人从另一侧通过/);
   assert.match(page, /"PERFECT" \| "GREAT" \| "GOOD" \| "MISS"/);
   assert.match(page, /const VEHICLE_LEVELS/);
   assert.match(page, /const pauseGame = useCallback/);
