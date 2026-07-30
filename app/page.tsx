@@ -144,6 +144,16 @@ type LeaderboardEntry = {
   rank: number;
 };
 
+type ShareCardData = {
+  nickname: string;
+  song: string;
+  score: number;
+  rank: number | null;
+  fans: number;
+  maxCombo: number;
+  venue: string;
+};
+
 type Track = {
   id: TrackId;
   name: string;
@@ -384,6 +394,154 @@ function getLeaderboardSongKey(trackId: TrackId, songName: string) {
   if (trackId !== "custom-upload") return `track:${trackId}`;
   const normalizedName = songName.trim().toLocaleLowerCase().slice(0, 80);
   return `custom:${normalizedName || "uploaded-song"}`;
+}
+
+function drawFittedText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  initialSize: number,
+  minimumSize: number,
+) {
+  let size = initialSize;
+  do {
+    context.font = `900 ${size}px "Arial Black", "PingFang SC", sans-serif`;
+    if (context.measureText(text).width <= maxWidth) break;
+    size -= 4;
+  } while (size > minimumSize);
+  context.fillText(text, x, y, maxWidth);
+}
+
+async function createShareCardBlob(data: ShareCardData) {
+  await document.fonts?.ready;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1440;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+
+  const background = context.createLinearGradient(0, 0, 1080, 1440);
+  background.addColorStop(0, "#090823");
+  background.addColorStop(0.56, "#1a1045");
+  background.addColorStop(1, "#09071d");
+  context.fillStyle = background;
+  context.fillRect(0, 0, 1080, 1440);
+
+  context.globalAlpha = 0.14;
+  context.strokeStyle = "#72f1ff";
+  context.lineWidth = 3;
+  for (let x = 36; x < 1080; x += 72) {
+    context.beginPath();
+    context.moveTo(x, 0);
+    context.lineTo(x, 1440);
+    context.stroke();
+  }
+  for (let y = 36; y < 1440; y += 72) {
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(1080, y);
+    context.stroke();
+  }
+  context.globalAlpha = 1;
+
+  const glow = context.createRadialGradient(540, 340, 30, 540, 340, 500);
+  glow.addColorStop(0, "rgba(255,79,163,0.42)");
+  glow.addColorStop(1, "rgba(255,79,163,0)");
+  context.fillStyle = glow;
+  context.fillRect(0, 0, 1080, 900);
+
+  context.fillStyle = "#ff4fa3";
+  context.fillRect(48, 48, 984, 12);
+  context.fillStyle = "#72f1ff";
+  context.fillRect(48, 1380, 984, 12);
+  context.strokeStyle = "#5b4da1";
+  context.lineWidth = 8;
+  context.strokeRect(48, 48, 984, 1344);
+
+  context.textAlign = "left";
+  context.fillStyle = "#72f1ff";
+  context.font = '900 30px "Courier New", monospace';
+  context.fillText("TOUR RESULT / FAN BUS", 92, 125);
+
+  context.fillStyle = "#ffe66d";
+  context.fillRect(92, 172, 96, 74);
+  context.fillStyle = "#5f36d5";
+  context.fillRect(104, 184, 72, 50);
+  context.fillStyle = "#ffe66d";
+  context.font = '900 42px "Arial Black", sans-serif';
+  context.textAlign = "center";
+  context.fillText("★", 140, 226);
+
+  context.fillStyle = "#ffffff";
+  context.textAlign = "left";
+  drawFittedText(context, "应援大巴冲冲冲！", 218, 232, 760, 66, 42);
+
+  context.fillStyle = "rgba(12,9,42,0.92)";
+  context.fillRect(92, 310, 896, 310);
+  context.strokeStyle = "#ff4fa3";
+  context.lineWidth = 6;
+  context.strokeRect(92, 310, 896, 310);
+  context.fillStyle = "#9e94cb";
+  context.font = '900 28px "Courier New", monospace';
+  context.fillText("PLAYER", 132, 374);
+  context.fillStyle = "#ffffff";
+  drawFittedText(context, data.nickname, 132, 466, 816, 88, 54);
+  context.fillStyle = "#72f1ff";
+  context.font = '900 28px "Courier New", monospace';
+  context.fillText("NOW PLAYING", 132, 535);
+  context.fillStyle = "#ffe66d";
+  drawFittedText(context, `《${data.song}》`, 132, 588, 816, 46, 28);
+
+  context.fillStyle = "#ff4fa3";
+  context.font = '900 34px "Courier New", monospace';
+  context.fillText("CONCERT SCORE", 92, 720);
+  context.fillStyle = "#ffffff";
+  drawFittedText(context, String(data.score), 92, 930, 896, 210, 150);
+  context.fillStyle = "#ffe66d";
+  context.fillRect(92, 970, 560, 14);
+
+  context.fillStyle = "#17113d";
+  context.fillRect(92, 1040, 426, 170);
+  context.fillRect(562, 1040, 426, 170);
+  context.strokeStyle = "#4f438d";
+  context.lineWidth = 5;
+  context.strokeRect(92, 1040, 426, 170);
+  context.strokeRect(562, 1040, 426, 170);
+  context.fillStyle = "#9e94cb";
+  context.font = '900 26px "Courier New", monospace';
+  context.fillText("SONG RANK", 124, 1092);
+  context.fillText("FANS / MAX COMBO", 594, 1092);
+  context.fillStyle = "#72f1ff";
+  context.font = '900 66px "Arial Black", sans-serif';
+  context.fillText(data.rank ? `#${data.rank}` : "--", 124, 1173);
+  context.fillStyle = "#ffffff";
+  context.font = '900 48px "Arial Black", sans-serif';
+  context.fillText(`${data.fans} / ×${data.maxCombo}`, 594, 1168);
+
+  context.fillStyle = "#ffffff";
+  context.font = '900 34px "PingFang SC", sans-serif';
+  context.fillText(data.venue, 92, 1292);
+  context.fillStyle = "#8f86b9";
+  context.font = '900 24px "Courier New", monospace';
+  context.fillText("带着粉丝奔赴下一场演唱会", 92, 1340);
+
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/png", 1);
+  });
+}
+
+function downloadShareCard(blob: Blob, song: string) {
+  const safeSong = song.replace(/[\\/:*?"<>|]/g, "-").slice(0, 36);
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `应援大巴-${safeSong || "巡演成绩"}.png`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
 function getBeatTimes(track: Track) {
@@ -938,6 +1096,9 @@ export default function Home() {
   const [currentRankEntryId, setCurrentRankEntryId] = useState<string | null>(
     null,
   );
+  const [leaderboardSyncing, setLeaderboardSyncing] = useState(false);
+  const [shareCardOpen, setShareCardOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
   const [joystickOffset, setJoystickOffset] = useState(0);
   const [noteJudgement, setNoteJudgement] =
     useState<NoteJudgement | null>(null);
@@ -956,6 +1117,9 @@ export default function Home() {
     selectedTrackId === "custom-upload" ? songTitle : selectedTrack.name,
   );
   const currentVehicle = getVehicle(vehicleLevel);
+  const currentLeaderboardEntry = currentRankEntryId
+    ? leaderboard.find((entry) => entry.playerId === currentRankEntryId)
+    : undefined;
   const vehicleTaskProgress = getVehicleTaskProgress(
     currentVehicle,
     successfulHits,
@@ -1004,6 +1168,81 @@ export default function Home() {
     setToast({ text, tone, key: Date.now() });
     toastTimerRef.current = window.setTimeout(() => setToast(null), 820);
   }, []);
+
+  const createCurrentShareCard = useCallback(
+    () =>
+      createShareCardBlob({
+        nickname: playerName.trim() || "巡演玩家",
+        song: songTitle,
+        score: fans * maxCombo,
+        rank: currentLeaderboardEntry?.rank ?? null,
+        fans,
+        maxCombo,
+        venue: resultTier.name,
+      }),
+    [
+      currentLeaderboardEntry?.rank,
+      fans,
+      maxCombo,
+      playerName,
+      resultTier.name,
+      songTitle,
+    ],
+  );
+
+  const saveShareCard = useCallback(async () => {
+    setShareBusy(true);
+    try {
+      const blob = await createCurrentShareCard();
+      if (!blob) throw new Error("Share card unavailable");
+      downloadShareCard(blob, songTitle);
+      showToast("成绩卡已保存，可以分享给好友啦", "cyan");
+    } catch {
+      showToast("成绩卡生成失败，请稍后重试", "danger");
+    } finally {
+      setShareBusy(false);
+    }
+  }, [createCurrentShareCard, showToast, songTitle]);
+
+  const shareResult = useCallback(async () => {
+    setShareBusy(true);
+    try {
+      const blob = await createCurrentShareCard();
+      if (!blob) throw new Error("Share card unavailable");
+      const file = new File([blob], "fan-bus-result.png", {
+        type: "image/png",
+      });
+      const score = fans * maxCombo;
+      const shareText = `${playerName.trim() || "巡演玩家"}在《${songTitle}》拿到 ${score} 分，歌曲榜第 ${currentLeaderboardEntry?.rank ?? "--"} 名！`;
+      if (navigator.share) {
+        const shareData: ShareData = {
+          title: "应援大巴冲冲冲！巡演成绩",
+          text: shareText,
+        };
+        if (navigator.canShare?.({ files: [file] })) {
+          shareData.files = [file];
+        }
+        await navigator.share(shareData);
+        showToast("分享面板已打开", "cyan");
+      } else {
+        downloadShareCard(blob, songTitle);
+        showToast("当前浏览器不支持直接分享，已保存成绩卡", "gold");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      showToast("分享失败，请尝试保存成绩卡", "danger");
+    } finally {
+      setShareBusy(false);
+    }
+  }, [
+    createCurrentShareCard,
+    currentLeaderboardEntry?.rank,
+    fans,
+    maxCombo,
+    playerName,
+    showToast,
+    songTitle,
+  ]);
 
   const showJudgement = useCallback(
     (quality: NoteJudgement["quality"], detail: string) => {
@@ -1121,6 +1360,36 @@ export default function Home() {
       sparkle.connect(gain).connect(audio.destination);
       sparkle.start(now + index * 0.045);
       sparkle.stop(now + 0.22 + index * 0.045);
+    });
+  }, []);
+
+  const playPerfectHit = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || mutedRef.current) return;
+    const now = audio.currentTime;
+
+    [880, 1320].forEach((frequency, index) => {
+      const sparkle = audio.createOscillator();
+      const sparkleGain = audio.createGain();
+      const startAt = now + index * 0.018;
+      sparkle.type = index === 0 ? "triangle" : "sine";
+      sparkle.frequency.setValueAtTime(frequency, startAt);
+      sparkle.frequency.exponentialRampToValueAtTime(
+        frequency * 1.08,
+        startAt + 0.07,
+      );
+      sparkleGain.gain.setValueAtTime(0.0001, startAt);
+      sparkleGain.gain.linearRampToValueAtTime(
+        index === 0 ? 0.032 : 0.022,
+        startAt + 0.008,
+      );
+      sparkleGain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        startAt + 0.12,
+      );
+      sparkle.connect(sparkleGain).connect(audio.destination);
+      sparkle.start(startAt);
+      sparkle.stop(startAt + 0.13);
     });
   }, []);
 
@@ -1958,6 +2227,7 @@ export default function Home() {
     if (statusRef.current !== "playing") return;
     statusRef.current = "finished";
     setStatus("finished");
+    setShareCardOpen(false);
     setProgress(100);
 
     const tier = getConcertTier(fansRef.current, maxComboRef.current);
@@ -1979,6 +2249,8 @@ export default function Home() {
 
     const playerId = playerIdRef.current;
     if (playerId) {
+      setLeaderboardSyncing(true);
+      setCurrentRankEntryId(playerId);
       void fetch("/api/leaderboard", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1999,9 +2271,9 @@ export default function Home() {
           const payload = (await response.json()) as {
             leaderboard?: LeaderboardEntry[];
           };
+          setLeaderboardSyncing(false);
           if (payload.leaderboard) {
             setLeaderboard(payload.leaderboard);
-            setCurrentRankEntryId(playerId);
             showToast(
               `已计入《${trackRef.current.name}》榜 · ${fansRef.current * maxComboRef.current} 分`,
               "gold",
@@ -2009,8 +2281,11 @@ export default function Home() {
           }
         })
         .catch(() => {
+          setLeaderboardSyncing(false);
           showToast("歌曲排行榜同步失败，请稍后重试", "danger");
         });
+    } else {
+      setLeaderboardSyncing(false);
     }
 
     addBurst(GAME_WIDTH / 2, PLAYER_Y - 120, tier.color, 38);
@@ -2030,9 +2305,12 @@ export default function Home() {
     setStatus("failed");
     setEarnedCoins(0);
     setCurrentRankEntryId(null);
+    setLeaderboardSyncing(false);
+    setShareCardOpen(false);
     setProgress(100);
     shakeRef.current = 0.7;
     hitFlashRef.current = 1;
+    navigator.vibrate?.([110, 55, 150]);
     addBurst(busXRef.current, PLAYER_Y - 8, "#ffe66d", 34);
     if (songRef.current) {
       songRef.current.pause();
@@ -2307,6 +2585,13 @@ export default function Home() {
           setCombo(0);
           shakeRef.current = 0.34;
           hitFlashRef.current = 1;
+          navigator.vibrate?.(
+            entity.obstacle === "barrier"
+              ? [85, 35, 120]
+              : entity.obstacle === "speaker"
+                ? [65, 30, 95]
+                : [45, 24, 70],
+          );
           triggerDamageVariation();
           addBurst(x, PLAYER_Y, "#ff375f", 17);
           addFloatText(x, PLAYER_Y - 58, `-${actualLoss} 粉丝`, "#ff526f");
@@ -2495,6 +2780,7 @@ export default function Home() {
       );
     }
     playFanHit(candidate.targetBeat);
+    if (quality === "PERFECT") playPerfectHit();
 
     const x = laneCenter(candidate.lane);
     addBurst(x, PLAYER_Y - 22, "#72f1ff", 28);
@@ -2529,6 +2815,7 @@ export default function Home() {
     addFloatText,
     checkVehicleUpgrade,
     playFanHit,
+    playPerfectHit,
     showJudgement,
     showToast,
   ]);
@@ -2635,6 +2922,9 @@ export default function Home() {
     setNoteJudgement(null);
     setLuckyDialog(null);
     setCurrentRankEntryId(null);
+    setLeaderboardSyncing(false);
+    setShareCardOpen(false);
+    setShareBusy(false);
     resetSongTone();
 
     song.pause();
@@ -2873,6 +3163,9 @@ export default function Home() {
     setNoteJudgement(null);
     setLuckyDialog(null);
     setCurrentRankEntryId(null);
+    setLeaderboardSyncing(false);
+    setShareCardOpen(false);
+    setShareBusy(false);
     entitiesRef.current = [];
     lastObstacleTargetBeatRef.current = -Infinity;
     pedestrianRef.current = null;
@@ -3626,6 +3919,18 @@ export default function Home() {
                   场馆奖励 {resultTier.coins} + 合拍奖励 {maxCombo * 3}
                 </p>
                 {leaderboardPanel}
+                <button
+                  className="share-result-button"
+                  onClick={() => setShareCardOpen(true)}
+                >
+                  <span>✦</span>
+                  <strong>分享巡演成绩</strong>
+                  <small>
+                    {leaderboardSyncing
+                      ? "排行榜同步中…"
+                      : "分享昵称、歌曲、得分与排名"}
+                  </small>
+                </button>
                 <div className="result-actions">
                   <button className="primary-button" onClick={() => void startGame()}>
                     再跑一场
@@ -3634,6 +3939,99 @@ export default function Home() {
                     返回选歌
                   </button>
                 </div>
+
+                {shareCardOpen && (
+                  <div
+                    className="share-card-backdrop"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="巡演成绩分享卡"
+                    onPointerDown={(event) => {
+                      if (event.target === event.currentTarget && !shareBusy) {
+                        setShareCardOpen(false);
+                      }
+                    }}
+                  >
+                    <section className="share-card-shell">
+                      <button
+                        className="share-card-close"
+                        onClick={() => setShareCardOpen(false)}
+                        aria-label="关闭成绩卡"
+                        disabled={shareBusy}
+                      >
+                        ×
+                      </button>
+                      <article className="share-result-card">
+                        <div className="share-card-topline">
+                          TOUR RESULT <i />
+                        </div>
+                        <div className="share-card-brand">
+                          <span>★</span>
+                          <div>
+                            <small>FAN BUS RHYTHM TOUR</small>
+                            <strong>应援大巴冲冲冲！</strong>
+                          </div>
+                        </div>
+                        <div className="share-card-player">
+                          <small>PLAYER / 巡演明星</small>
+                          <strong>{playerName.trim() || "巡演玩家"}</strong>
+                          <span title={songTitle}>《{songTitle}》</span>
+                        </div>
+                        <div className="share-card-score">
+                          <small>CONCERT SCORE</small>
+                          <strong>{fans * maxCombo}</strong>
+                          <i />
+                        </div>
+                        <div className="share-card-rank">
+                          <div>
+                            <small>SONG RANK</small>
+                            <strong>
+                              {currentLeaderboardEntry?.rank
+                                ? `第 ${currentLeaderboardEntry.rank} 名`
+                                : leaderboardSyncing
+                                  ? "同步中…"
+                                  : "暂未上榜"}
+                            </strong>
+                          </div>
+                          <div>
+                            <small>FANS / COMBO</small>
+                            <strong>
+                              {fans} / ×{maxCombo}
+                            </strong>
+                          </div>
+                        </div>
+                        <div className="share-card-venue">
+                          <span>{resultTier.icon}</span>
+                          <div>
+                            <small>今晚解锁</small>
+                            <strong>{resultTier.name}</strong>
+                          </div>
+                        </div>
+                        <p>带着粉丝，奔赴下一场演唱会。</p>
+                      </article>
+                      <div className="share-card-actions">
+                        <button
+                          className="primary-button"
+                          onClick={() => void shareResult()}
+                          disabled={shareBusy || leaderboardSyncing}
+                        >
+                          {leaderboardSyncing
+                            ? "等待排名…"
+                            : shareBusy
+                              ? "生成中…"
+                              : "分享给好友"}
+                        </button>
+                        <button
+                          className="secondary-button"
+                          onClick={() => void saveShareCard()}
+                          disabled={shareBusy || leaderboardSyncing}
+                        >
+                          保存图片
+                        </button>
+                      </div>
+                    </section>
+                  </div>
+                )}
               </div>
             )}
 

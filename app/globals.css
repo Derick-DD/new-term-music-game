@@ -1807,6 +1807,8 @@ button:focus-visible {
 }
 
 .result-overlay {
+  overflow-y: auto;
+  justify-content: flex-start;
   padding: 18px;
   background:
     linear-gradient(rgba(9, 8, 35, 0.75), rgba(9, 8, 35, 0.92)),
@@ -2008,6 +2010,344 @@ button:focus-visible {
   padding: 14px 6px 8px;
   color: #8279a9;
   font-size: 7px;
+}
+
+.share-result-button {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  width: min(100%, 390px);
+  margin: -3px 0 14px;
+  border: 2px solid var(--gold);
+  background:
+    linear-gradient(90deg, rgba(255, 230, 109, 0.15), transparent 62%),
+    #19113c;
+  color: white;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    5px 5px 0 #6b4c23,
+    0 0 16px rgba(255, 230, 109, 0.2);
+}
+
+.share-result-button > span {
+  grid-row: span 2;
+  color: var(--gold);
+  font-size: 22px;
+  line-height: 1;
+  text-shadow: 0 0 12px var(--gold);
+}
+
+.share-result-button strong {
+  font-size: 9px;
+}
+
+.share-result-button small {
+  margin-top: 2px;
+  color: #aaa1ce;
+  font-size: 6px;
+}
+
+.share-result-button:hover {
+  background:
+    linear-gradient(90deg, rgba(255, 230, 109, 0.24), transparent 70%),
+    #211649;
+}
+
+.share-card-backdrop {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 50% 25%, rgba(255, 79, 163, 0.28), transparent 42%),
+    rgba(5, 4, 20, 0.94);
+  padding: 13px;
+  backdrop-filter: blur(4px);
+}
+
+.share-card-shell {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  width: min(96%, 370px);
+}
+
+.share-card-close {
+  position: absolute;
+  z-index: 2;
+  top: 9px;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #6c5bb1;
+  background: #0b0925;
+  color: white;
+  font-size: 19px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 #312752;
+}
+
+.share-result-card {
+  position: relative;
+  overflow: hidden;
+  border: 3px solid #5b4da1;
+  background:
+    radial-gradient(circle at 60% 10%, rgba(255, 79, 163, 0.28), transparent 34%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(114, 241, 255, 0.035) 0 2px,
+      transparent 2px 27px
+    ),
+    linear-gradient(160deg, #17103f, #08071d 72%);
+  padding: 15px;
+  box-shadow:
+    7px 7px 0 #291d56,
+    0 0 28px rgba(114, 241, 255, 0.16);
+  text-align: left;
+}
+
+.share-result-card::before,
+.share-result-card::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 5px;
+  content: "";
+}
+
+.share-result-card::before {
+  top: 0;
+  background: linear-gradient(90deg, var(--pink), var(--gold));
+}
+
+.share-result-card::after {
+  bottom: 0;
+  background: linear-gradient(90deg, var(--cyan), #7b5cff);
+}
+
+.share-card-topline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--cyan);
+  font-size: 6px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+}
+
+.share-card-topline i {
+  width: 38px;
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--pink) 0 8px,
+    transparent 8px 12px
+  );
+}
+
+.share-card-brand {
+  display: grid;
+  grid-template-columns: 39px 1fr;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 11px;
+}
+
+.share-card-brand > span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 34px;
+  border: 4px solid var(--pink);
+  background: #6038d4;
+  color: var(--gold);
+  font-size: 18px;
+  box-shadow: 4px 4px 0 #2c205f;
+}
+
+.share-card-brand div {
+  min-width: 0;
+}
+
+.share-card-brand small,
+.share-card-brand strong {
+  display: block;
+}
+
+.share-card-brand small {
+  color: #9188b9;
+  font-size: 5px;
+  letter-spacing: 0.12em;
+}
+
+.share-card-brand strong {
+  margin-top: 2px;
+  color: white;
+  font-family: "Arial Black", "PingFang SC", sans-serif;
+  font-size: 15px;
+  letter-spacing: -0.04em;
+}
+
+.share-card-player {
+  border: 2px solid var(--pink);
+  background: rgba(8, 7, 29, 0.82);
+  padding: 10px;
+}
+
+.share-card-player small,
+.share-card-player strong,
+.share-card-player span {
+  display: block;
+}
+
+.share-card-player small,
+.share-card-score small,
+.share-card-rank small,
+.share-card-venue small {
+  color: #948bbd;
+  font-size: 5px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+}
+
+.share-card-player strong {
+  margin: 3px 0;
+  overflow: hidden;
+  color: white;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-card-player span {
+  overflow: hidden;
+  color: var(--gold);
+  font-size: 8px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-card-score {
+  padding: 12px 2px 7px;
+}
+
+.share-card-score small,
+.share-card-score strong {
+  display: block;
+}
+
+.share-card-score small {
+  color: var(--pink);
+}
+
+.share-card-score strong {
+  color: white;
+  font-family: "Arial Black", sans-serif;
+  font-size: 44px;
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+  text-shadow:
+    3px 3px 0 #5e2d76,
+    0 0 18px rgba(255, 255, 255, 0.18);
+}
+
+.share-card-score i {
+  display: block;
+  width: 54%;
+  height: 5px;
+  margin-top: 8px;
+  background: linear-gradient(90deg, var(--gold), var(--pink));
+}
+
+.share-card-rank {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.share-card-rank > div {
+  border: 1px solid #50438d;
+  background: #100d32;
+  padding: 8px;
+}
+
+.share-card-rank strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--cyan);
+  font-size: 12px;
+}
+
+.share-card-rank > div:last-child strong {
+  color: white;
+}
+
+.share-card-venue {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  border-left: 4px solid var(--gold);
+  background: rgba(255, 230, 109, 0.08);
+  padding: 7px 9px;
+}
+
+.share-card-venue > span {
+  color: var(--gold);
+  font-size: 22px;
+  text-align: center;
+}
+
+.share-card-venue small,
+.share-card-venue strong {
+  display: block;
+}
+
+.share-card-venue strong {
+  margin-top: 1px;
+  color: var(--gold);
+  font-size: 10px;
+}
+
+.share-result-card > p {
+  margin: 10px 0 1px;
+  color: #aaa1ce;
+  font-size: 6px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.share-card-actions {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+}
+
+.share-card-actions .primary-button,
+.share-card-actions .secondary-button {
+  min-width: 0;
+  flex: 1;
+}
+
+.share-card-actions .primary-button {
+  padding: 11px 9px;
+  font-size: 10px;
+}
+
+.share-card-actions .secondary-button:disabled,
+.share-card-close:disabled {
+  cursor: wait;
+  opacity: 0.5;
 }
 
 .failed-overlay {

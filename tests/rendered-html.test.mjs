@@ -54,6 +54,9 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /昨晚我环游了地球/);
   assert.match(page, /id="custom-song-upload"/);
   assert.match(page, /const hitNote = useCallback/);
+  assert.match(page, /const playPerfectHit = useCallback/);
+  assert.match(page, /if \(quality === "PERFECT"\) playPerfectHit\(\)/);
+  assert.match(page, /index === 0 \? 0\.032 : 0\.022/);
   assert.match(page, /"PERFECT" \| "GREAT" \| "GOOD" \| "MISS"/);
   assert.match(page, /const VEHICLE_LEVELS/);
   assert.match(page, /const pauseGame = useCallback/);
@@ -88,6 +91,7 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /附近应援棒自动 PERFECT/);
   assert.match(page, /5 秒内无视所有障碍/);
   assert.match(page, /elapsed < invincibleUntilRef\.current/);
+  assert.match(page, /entity\.obstacle === "barrier"\s*\? \[85, 35, 120\]/);
   assert.match(page, /audioRef\.current\?\.suspend/);
   assert.match(page, /vehicleLevelRef\.current = 1/);
   assert.doesNotMatch(page, /localStorage\.setItem\("fan-bus-vehicle-level"/);
@@ -103,6 +107,12 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /fans \* maxCombo/);
   assert.match(page, /fetch\("\/api\/leaderboard"/);
   assert.match(page, /SONG TOP 8/);
+  assert.match(page, /分享巡演成绩/);
+  assert.match(page, /createShareCardBlob/);
+  assert.match(page, /className="share-result-card"/);
+  assert.match(page, /SONG RANK/);
+  assert.match(page, /navigator\.share/);
+  assert.match(page, /downloadShareCard/);
   assert.match(page, /getLeaderboardSongKey/);
   assert.match(page, /songKey: getLeaderboardSongKey/);
   assert.match(page, /if \(!upgraded\)/);
