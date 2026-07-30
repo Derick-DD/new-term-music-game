@@ -49,7 +49,7 @@ type ToastTone = "cyan" | "pink" | "gold" | "danger";
 type TrackId = "guaihuo" | "lueluelue" | "earth-tour" | "custom-upload";
 type ToneMode = "normal" | "thick" | "thin";
 type MapTheme = "illusion-city" | "candy-blocks" | "earth-orbit" | "custom";
-type ReadyPage = "rules" | "songs";
+type ReadyPage = "home" | "rules" | "songs";
 
 type VehicleLevel = {
   level: number;
@@ -1159,7 +1159,7 @@ export default function Home() {
   const lastPerfectSoundAtRef = useRef(-Infinity);
 
   const [status, setStatus] = useState<GameStatus>("ready");
-  const [readyPage, setReadyPage] = useState<ReadyPage>("rules");
+  const [readyPage, setReadyPage] = useState<ReadyPage>("home");
   const [playerName, setPlayerName] = useState("");
   const [songReady, setSongReady] = useState(false);
   const [songLoading, setSongLoading] = useState(false);
@@ -3839,7 +3839,10 @@ export default function Home() {
         event.key === " " &&
         ["ready", "finished", "failed"].includes(statusRef.current)
       ) {
-        if (statusRef.current === "ready" && readyPage === "rules") {
+        if (
+          statusRef.current === "ready" &&
+          (readyPage === "home" || readyPage === "rules")
+        ) {
           setReadyPage("songs");
         } else {
           void startGame();
@@ -3915,9 +3918,140 @@ export default function Home() {
     if (status !== "playing") stopJoystick();
   }, [status, stopJoystick]);
 
+  const isHomePage = status === "ready" && readyPage === "home";
+
   return (
-    <main className="arcade-page">
+    <main className={`arcade-page ${isHomePage ? "is-home-page" : ""}`}>
       <div className="sky-grid" aria-hidden="true" />
+      {isHomePage ? (
+        <section className="home-screen" aria-labelledby="home-title">
+          <div className="home-glow home-glow-pink" aria-hidden="true" />
+          <div className="home-glow home-glow-cyan" aria-hidden="true" />
+
+          <header className="home-nav">
+            <div className="home-mark" aria-label="应援大巴冲冲冲">
+              <span aria-hidden="true">★</span>
+              <div>
+                <small>FAN BUS</small>
+                <strong>RHYTHM TOUR</strong>
+              </div>
+            </div>
+            <div className="home-records" aria-label="游戏记录">
+              <span>
+                <small>BEST</small>
+                <strong>{bestFans}</strong> 粉丝
+              </span>
+              <i aria-hidden="true" />
+              <span>
+                <small>BANK</small>
+                <strong>{bankCoins}</strong> 金币
+              </span>
+              <button
+                className={`home-sound-button ${muted ? "is-muted" : ""}`}
+                onClick={toggleMute}
+                aria-label={muted ? "打开声音" : "关闭声音"}
+                aria-pressed={!muted}
+              >
+                {muted ? "SOUND OFF" : "SOUND ON"}
+              </button>
+            </div>
+          </header>
+
+          <div className="home-hero">
+            <div className="home-copy">
+              <p className="home-eyebrow">
+                <span>NEW TOUR OPEN</span>
+                <i aria-hidden="true" />
+                跟着节拍，一路涨粉
+              </p>
+              <h1 id="home-title">
+                <span>应援大巴</span>
+                <strong>冲冲冲！</strong>
+              </h1>
+              <p className="home-lead">
+                驾驶明星大巴穿过霓虹城市，踩准强拍收集应援棒，
+                把一路加入的粉丝安全送到今晚的演唱会。
+              </p>
+              <div className="home-tags" aria-label="游戏特色">
+                <span>
+                  <b>03</b> 首巡演歌曲
+                </span>
+                <span>
+                  <b>∞</b> 自动卡点谱面
+                </span>
+                <span>
+                  <b>TOP 8</b> 歌曲排行榜
+                </span>
+              </div>
+              <div className="home-actions">
+                <button
+                  className="home-start-button"
+                  onClick={() => setReadyPage("songs")}
+                  autoFocus
+                >
+                  <span>开始游戏</span>
+                  <i className="home-play-icon" aria-hidden="true" />
+                </button>
+                <button
+                  className="home-rules-button"
+                  onClick={() => setReadyPage("rules")}
+                >
+                  查看玩法
+                  <span aria-hidden="true">↗</span>
+                </button>
+              </div>
+              <p className="home-key-hint">
+                <kbd>SPACE</kbd>
+                <span>也可快速开始</span>
+              </p>
+            </div>
+
+            <div className="home-visual" aria-hidden="true">
+              <div className="home-art">
+                <span className="home-live-badge">
+                  <i />
+                  TOUR LIVE
+                </span>
+                <div className="home-art-stats">
+                  <span>
+                    <small>MISSION</small>
+                    接上全城应援
+                  </span>
+                  <b>→</b>
+                  <span>
+                    <small>DESTINATION</small>
+                    演唱会现场
+                  </span>
+                </div>
+              </div>
+              <div className="home-track-card">
+                <span className="home-track-number">01</span>
+                <div>
+                  <small>FEATURED TRACK</small>
+                  <strong>昨晚我环游了地球</strong>
+                  <em>GALACTIC LOVE TOUR</em>
+                </div>
+                <span className="home-equalizer">
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <footer className="home-footer">
+            <span>← → / A D 换道</span>
+            <i />
+            <span>SPACE 击打节拍</span>
+            <i />
+            <span>安全送达演唱会</span>
+          </footer>
+        </section>
+      ) : (
+        <>
       <header className="topbar">
         <div className="brand">
           <span className="brand-kicker">
@@ -4023,9 +4157,7 @@ export default function Home() {
                     aria-hidden="true"
                   />
                   <span>
-                    <strong>
-                      {selectedTrackId === "lueluelue" ? "电流路障" : "障碍物"}
-                    </strong>
+                    <strong>障碍物</strong>
                     <small>障碍 · 注意换道</small>
                   </span>
                 </div>
@@ -4035,9 +4167,7 @@ export default function Home() {
                     aria-hidden="true"
                   />
                   <span>
-                    <strong>
-                      {selectedTrackId === "lueluelue" ? "故障音箱" : "障碍物"}
-                    </strong>
+                    <strong>障碍物</strong>
                     <small>障碍 · 及时避让</small>
                   </span>
                 </div>
@@ -4865,6 +4995,8 @@ export default function Home() {
         <i />
         <span>祝你一路涨粉</span>
       </footer>
+        </>
+      )}
     </main>
   );
 }
