@@ -11,7 +11,7 @@ const PLAYER_Y = 584;
 const STARTING_FANS = 12;
 const TRAVEL_BEATS = 4;
 const MISS_WINDOW = 190;
-const HIT_INPUT_GUARD_MS = 90;
+const HIT_INPUT_GUARD_MS = 70;
 const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
 
@@ -37,6 +37,7 @@ type TrackId =
   | "custom-upload";
 type ToneMode = "normal" | "thick" | "thin";
 type MapTheme = "illusion-city" | "candy-blocks" | "earth-orbit" | "custom";
+type ReadyPage = "rules" | "songs";
 
 type VehicleLevel = {
   level: number;
@@ -117,6 +118,18 @@ type ConcertTier = {
   coins: number;
   color: string;
   icon: string;
+};
+
+type LeaderboardEntry = {
+  id: number;
+  playerId: string;
+  name: string;
+  fans: number;
+  maxCombo: number;
+  score: number;
+  concert: string;
+  song: string;
+  createdAt: number;
 };
 
 type Track = {
@@ -589,39 +602,40 @@ function clampLane(lane: number) {
   return Math.max(0, Math.min(4, lane));
 }
 
-function getConcertTier(fans: number): ConcertTier {
-  if (fans >= 80) {
+function getConcertTier(fans: number, maxCombo = 0): ConcertTier {
+  const concertScore = fans * maxCombo;
+  if (concertScore >= 6_500) {
     return {
       name: "星河体育场",
       place: "五万人全景演唱会",
-      coins: 880,
+      coins: 1080,
       color: "#ffe66d",
       icon: "✦",
     };
   }
-  if (fans >= 55) {
+  if (concertScore >= 4_500) {
     return {
       name: "霓虹体育馆",
       place: "万人应援演唱会",
-      coins: 560,
+      coins: 680,
       color: "#72f1ff",
       icon: "★",
     };
   }
-  if (fans >= 35) {
+  if (concertScore >= 2_800) {
     return {
       name: "城市剧场",
       place: "千人专场",
-      coins: 320,
+      coins: 420,
       color: "#ff7ac8",
       icon: "♪",
     };
   }
-  if (fans >= 20) {
+  if (concertScore >= 1_400) {
     return {
       name: "星光 Livehouse",
       place: "百人见面会",
-      coins: 180,
+      coins: 240,
       color: "#bca7ff",
       icon: "♫",
     };
@@ -629,7 +643,7 @@ function getConcertTier(fans: number): ConcertTier {
   return {
     name: "街角快闪",
     place: "小型惊喜舞台",
-    coins: 80,
+    coins: 100,
     color: "#a8ff78",
     icon: "♬",
   };
@@ -693,8 +707,15 @@ export default function Home() {
   const toastTimerRef = useRef<number | null>(null);
   const judgementTimerRef = useRef<number | null>(null);
   const lastHitInputAtRef = useRef(-Infinity);
+  const playerNameRef = useRef("巡演玩家");
+  const playerIdRef = useRef("");
+  const joystickPointerRef = useRef<number | null>(null);
+  const joystickDirectionRef = useRef<-1 | 0 | 1>(0);
+  const joystickRepeatRef = useRef<number | null>(null);
 
   const [status, setStatus] = useState<GameStatus>("ready");
+  const [readyPage, setReadyPage] = useState<ReadyPage>("rules");
+  const [playerName, setPlayerName] = useState("巡演玩家");
   const [songReady, setSongReady] = useState(false);
   const [songLoading, setSongLoading] = useState(false);
   const [songFileName, setSongFileName] = useState("");
@@ -720,6 +741,11 @@ export default function Home() {
   const [bestFans, setBestFans] = useState(0);
   const [bankCoins, setBankCoins] = useState(0);
   const [earnedCoins, setEarnedCoins] = useState(0);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [currentRankEntryId, setCurrentRankEntryId] = useState<string | null>(
+    null,
+  );
+  const [joystickOffset, setJoystickOffset] = useState(0);
   const [noteJudgement, setNoteJudgement] =
     useState<NoteJudgement | null>(null);
   const [resultTier, setResultTier] = useState<ConcertTier>(
@@ -738,6 +764,40 @@ export default function Home() {
     successfulHits,
     perfectCountRef.current,
     maxCombo,
+  );
+  const leaderboardPanel = (
+    <section className="leaderboard-panel" aria-label="玩家排行榜">
+      <div className="leaderboard-heading">
+        <span>PLAYER RANKING</span>
+        <small>GLOBAL TOP 5</small>
+      </div>
+      {leaderboard.length > 0 ? (
+        <div className="leaderboard-list">
+          {leaderboard.map((entry, index) => (
+            <div
+              className={
+                entry.playerId === currentRankEntryId ? "is-current" : undefined
+              }
+              key={entry.id}
+            >
+              <b>{String(index + 1).padStart(2, "0")}</b>
+              <span>
+                <strong>{entry.name}</strong>
+                <small>
+                  {entry.song} · {entry.concert}
+                </small>
+              </span>
+              <em>{entry.score} PTS</em>
+              <i>{entry.fans}F · ×{entry.maxCombo}</i>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="leaderboard-empty">
+          还没有全局成绩，完成第一场演唱会吧。
+        </p>
+      )}
+    </section>
   );
 
   const showToast = useCallback((text: string, tone: ToastTone) => {
@@ -826,6 +886,7 @@ export default function Home() {
     const next = getVehicle(current.level + 1);
     vehicleLevelRef.current = next.level;
     setVehicleLevel(next.level);
+    setNoteJudgement(null);
     screenPunchRef.current = 1.8;
     collectFlashRef.current = 1.4;
     busBounceRef.current = 1.35;
@@ -1178,13 +1239,13 @@ export default function Home() {
       track.notePattern[targetBeat % track.notePattern.length] ?? 0;
     const intensity =
       track.intensityPattern[targetBeat % track.intensityPattern.length] ?? 0;
-    if (noteLevel === 0) return;
+    if (noteLevel !== 2) return;
     const spawnY = -70;
     const spawnAt = beatTimesRef.current[beat];
     const hitAt = beatTimesRef.current[targetBeat];
     const activeNoteOrdinal = track.notePattern
       .slice(0, targetBeat + 1)
-      .reduce((total, level) => total + (level > 0 ? 1 : 0), 0);
+      .reduce((total, level) => total + (level === 2 ? 1 : 0), 0);
 
     const pickupType: EntityType =
       activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 8
@@ -1682,7 +1743,7 @@ export default function Home() {
     setStatus("finished");
     setProgress(100);
 
-    const tier = getConcertTier(fansRef.current);
+    const tier = getConcertTier(fansRef.current, maxComboRef.current);
     const coins = tier.coins + maxComboRef.current * 3;
     setEarnedCoins(coins);
     setResultTier(tier);
@@ -1699,6 +1760,34 @@ export default function Home() {
     setBankCoins(nextCoins);
     setBestFans(nextBest);
 
+    const playerId = playerIdRef.current;
+    if (playerId) {
+      void fetch("/api/leaderboard", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          playerId,
+          name: playerNameRef.current.trim() || "巡演玩家",
+          fans: fansRef.current,
+          maxCombo: maxComboRef.current,
+          song: trackRef.current.name,
+        }),
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Leaderboard sync failed");
+          const payload = (await response.json()) as {
+            leaderboard?: LeaderboardEntry[];
+          };
+          if (payload.leaderboard) {
+            setLeaderboard(payload.leaderboard);
+            setCurrentRankEntryId(playerId);
+          }
+        })
+        .catch(() => {
+          showToast("全局排行榜同步失败，请稍后重试", "danger");
+        });
+    }
+
     addBurst(GAME_WIDTH / 2, PLAYER_Y - 120, tier.color, 38);
     if (songRef.current) {
       songRef.current.pause();
@@ -1708,13 +1797,14 @@ export default function Home() {
     setMagnetRemaining(0);
     setInvincibleRemaining(0);
     resetSongTone();
-  }, [addBurst, resetSongTone]);
+  }, [addBurst, resetSongTone, showToast]);
 
   const failGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
     statusRef.current = "failed";
     setStatus("failed");
     setEarnedCoins(0);
+    setCurrentRankEntryId(null);
     setProgress(100);
     shakeRef.current = 0.7;
     hitFlashRef.current = 1;
@@ -1852,17 +1942,19 @@ export default function Home() {
             setCombo(comboRef.current);
             setMaxCombo(maxComboRef.current);
             setSuccessfulHits(successfulHitsRef.current);
-            checkVehicleUpgrade();
+            const upgraded = checkVehicleUpgrade();
             const capacity = getVehicle(vehicleLevelRef.current).capacity;
             const fanGained = fansRef.current < capacity;
             fansRef.current = Math.min(capacity, fansRef.current + 1);
             setFans(fansRef.current);
-            showJudgement(
-              "PERFECT",
-              fanGained
-                ? `MAGNET PERFECT · +1 FAN · ×${comboRef.current}`
-                : `MAGNET PERFECT · BUS FULL ${capacity} · ×${comboRef.current}`,
-            );
+            if (!upgraded) {
+              showJudgement(
+                "PERFECT",
+                fanGained
+                  ? `MAGNET PERFECT · +1 FAN · ×${comboRef.current}`
+                  : `MAGNET PERFECT · BUS FULL ${capacity} · ×${comboRef.current}`,
+              );
+            }
             addBurst(
               laneCenter(entity.lane),
               entity.y,
@@ -2162,19 +2254,21 @@ export default function Home() {
     if (quality === "PERFECT") perfectCountRef.current += 1;
     successfulHitsRef.current += 1;
     setSuccessfulHits(successfulHitsRef.current);
-    checkVehicleUpgrade();
+    const upgraded = checkVehicleUpgrade();
     const capacity = getVehicle(vehicleLevelRef.current).capacity;
     const fanGained = fansRef.current < capacity;
     fansRef.current = Math.min(capacity, fansRef.current + 1);
     setFans(fansRef.current);
     setCombo(comboRef.current);
     setMaxCombo(maxComboRef.current);
-    showJudgement(
-      quality,
-      fanGained
-        ? `JUST HIT · +1 FAN · ×${comboRef.current}`
-        : `JUST HIT · BUS FULL ${capacity} · ×${comboRef.current}`,
-    );
+    if (!upgraded) {
+      showJudgement(
+        quality,
+        fanGained
+          ? `JUST HIT · +1 FAN · ×${comboRef.current}`
+          : `JUST HIT · BUS FULL ${capacity} · ×${comboRef.current}`,
+      );
+    }
     playFanHit(candidate.targetBeat);
 
     const x = laneCenter(candidate.lane);
@@ -2310,6 +2404,7 @@ export default function Home() {
     setToast(null);
     setNoteJudgement(null);
     setLuckyDialog(null);
+    setCurrentRankEntryId(null);
     resetSongTone();
 
     song.pause();
@@ -2457,6 +2552,51 @@ export default function Home() {
     [addBurst],
   );
 
+  const stopJoystick = useCallback(() => {
+    if (joystickRepeatRef.current !== null) {
+      window.clearInterval(joystickRepeatRef.current);
+      joystickRepeatRef.current = null;
+    }
+    joystickPointerRef.current = null;
+    joystickDirectionRef.current = 0;
+    setJoystickOffset(0);
+  }, []);
+
+  const steerWithJoystick = useCallback(
+    (direction: -1 | 0 | 1) => {
+      if (
+        direction === joystickDirectionRef.current ||
+        statusRef.current !== "playing"
+      ) {
+        return;
+      }
+      if (joystickRepeatRef.current !== null) {
+        window.clearInterval(joystickRepeatRef.current);
+        joystickRepeatRef.current = null;
+      }
+      joystickDirectionRef.current = direction;
+      if (direction === 0) return;
+      move(direction);
+      joystickRepeatRef.current = window.setInterval(() => {
+        move(direction);
+      }, 135);
+    },
+    [move],
+  );
+
+  const updateJoystick = useCallback(
+    (clientX: number, target: HTMLElement) => {
+      const bounds = target.getBoundingClientRect();
+      const rawOffset = clientX - (bounds.left + bounds.width / 2);
+      const nextOffset = Math.max(-34, Math.min(34, rawOffset));
+      setJoystickOffset(nextOffset);
+      steerWithJoystick(
+        nextOffset < -12 ? -1 : nextOffset > 12 ? 1 : 0,
+      );
+    },
+    [steerWithJoystick],
+  );
+
   const returnToSongSelect = useCallback(() => {
     if (animationRef.current) {
       window.cancelAnimationFrame(animationRef.current);
@@ -2469,6 +2609,7 @@ export default function Home() {
     resetSongTone();
     statusRef.current = "ready";
     setStatus("ready");
+    setReadyPage("songs");
     laneRef.current = 2;
     busXRef.current = laneCenter(2);
     vehicleLevelRef.current = 1;
@@ -2493,9 +2634,11 @@ export default function Home() {
     setToast(null);
     setNoteJudgement(null);
     setLuckyDialog(null);
+    setCurrentRankEntryId(null);
     entitiesRef.current = [];
     pedestrianRef.current = null;
-  }, [resetSongTone]);
+    stopJoystick();
+  }, [resetSongTone, stopJoystick]);
 
   const toggleMute = useCallback(() => {
     mutedRef.current = !mutedRef.current;
@@ -2510,10 +2653,37 @@ export default function Home() {
   useEffect(() => {
     const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
     const savedCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
+    const savedPlayerName =
+      window.localStorage.getItem("fan-bus-player-name") || "巡演玩家";
+    let savedPlayerId = window.localStorage.getItem("fan-bus-player-id");
+    if (!savedPlayerId) {
+      savedPlayerId =
+        typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      window.localStorage.setItem("fan-bus-player-id", savedPlayerId);
+    }
+    playerIdRef.current = savedPlayerId;
+    let cancelled = false;
+    void fetch("/api/leaderboard")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Leaderboard load failed");
+        const payload = (await response.json()) as {
+          leaderboard?: LeaderboardEntry[];
+        };
+        if (!cancelled && payload.leaderboard) {
+          setLeaderboard(payload.leaderboard);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLeaderboard([]);
+      });
     window.localStorage.removeItem("fan-bus-vehicle-level");
     const savedScoreTimer = window.setTimeout(() => {
       setBestFans(savedBest);
       setBankCoins(savedCoins);
+      playerNameRef.current = savedPlayerName;
+      setPlayerName(savedPlayerName);
       vehicleLevelRef.current = 1;
       setVehicleLevel(1);
     }, 0);
@@ -2562,11 +2732,16 @@ export default function Home() {
         event.key === " " &&
         ["ready", "finished", "failed"].includes(statusRef.current)
       ) {
-        void startGame();
+        if (statusRef.current === "ready" && readyPage === "rules") {
+          setReadyPage("songs");
+        } else {
+          void startGame();
+        }
       }
     };
     window.addEventListener("keydown", keydown);
     return () => {
+      cancelled = true;
       window.clearTimeout(savedScoreTimer);
       window.removeEventListener("keydown", keydown);
     };
@@ -2574,6 +2749,7 @@ export default function Home() {
     hitNote,
     move,
     pauseGame,
+    readyPage,
     resumeGame,
     startGame,
     toggleMute,
@@ -2608,8 +2784,13 @@ export default function Home() {
       if (judgementTimerRef.current) {
         window.clearTimeout(judgementTimerRef.current);
       }
+      stopJoystick();
     };
-  }, [drawGame]);
+  }, [drawGame, stopJoystick]);
+
+  useEffect(() => {
+    if (status !== "playing") stopJoystick();
+  }, [status, stopJoystick]);
 
   return (
     <main className="arcade-page">
@@ -2806,7 +2987,73 @@ export default function Home() {
               </div>
             )}
 
-            {status === "ready" && (
+            {status === "ready" && readyPage === "rules" && (
+              <div className="game-overlay rules-overlay">
+                <p className="overlay-kicker">TONIGHT&apos;S STORY / TOUR CALL</p>
+                <div className="rules-logo" aria-hidden="true">
+                  ★
+                </div>
+                <h1>带粉丝去演唱会</h1>
+                <p className="rules-lead">
+                  今晚，明星已经登上应援巴士。你要穿过霓虹城市，
+                  把一路加入的粉丝<strong>安全送到演唱会</strong>。
+                </p>
+                <div className="rules-grid story-route" aria-label="巡演故事">
+                  <div>
+                    <b>01</b>
+                    <span>
+                      <strong>从小巴启程</strong>
+                      载着最初的应援团出发，每一位新粉丝都让巡演更有声势。
+                    </span>
+                  </div>
+                  <div>
+                    <b>02</b>
+                    <span>
+                      <strong>召集应援队</strong>
+                      跟随歌曲强拍接上应援棒，升级车辆，容纳更多同行粉丝。
+                    </span>
+                  </div>
+                  <div>
+                    <b>03</b>
+                    <span>
+                      <strong>点亮更大舞台</strong>
+                      到场粉丝 × 最高连击决定演出规模，目标是五万人体育场。
+                    </span>
+                  </div>
+                </div>
+                <div className="story-mission">
+                  <span>TONIGHT&apos;S GOAL</span>
+                  <strong>让每一位粉丝准时抵达现场</strong>
+                  <small>道路安全第一，遇到行人必须停车礼让。</small>
+                </div>
+                <label className="player-name-field">
+                  <span>PLAYER NAME</span>
+                  <input
+                    value={playerName}
+                    maxLength={10}
+                    onChange={(event) => {
+                      const nextName = event.target.value;
+                      playerNameRef.current = nextName;
+                      setPlayerName(nextName);
+                      window.localStorage.setItem(
+                        "fan-bus-player-name",
+                        nextName,
+                      );
+                    }}
+                    placeholder="输入你的昵称"
+                    aria-label="玩家昵称"
+                  />
+                </label>
+                <button
+                  className="primary-button rules-start-button"
+                  onClick={() => setReadyPage("songs")}
+                >
+                  开始巡演 · 进入选歌
+                </button>
+              </div>
+            )}
+
+            {status === "ready" && readyPage === "songs" && (
               <div className="game-overlay intro-overlay">
                 <div className="song-select-title">
                   <p className="overlay-kicker">SONG SELECT</p>
@@ -2917,18 +3164,26 @@ export default function Home() {
                     ? "你上传的音频只保留在当前浏览器"
                     : `当前 ${currentVehicle.name} · 上限 ${currentVehicle.capacity} 粉丝`}
                 </p>
-                <button
-                  className="primary-button"
-                  onClick={() => void startGame()}
-                  disabled={!songReady || songLoading}
-                >
-                  <span>▶</span>{" "}
-                  {songLoading
-                    ? "正在生成卡点地图…"
-                    : songReady
-                      ? `用《${songTitle}》发车`
-                      : "请选择歌曲"}
-                </button>
+                <div className="result-actions song-start-actions">
+                  <button
+                    className="primary-button"
+                    onClick={() => void startGame()}
+                    disabled={!songReady || songLoading}
+                  >
+                    <span>▶</span>{" "}
+                    {songLoading
+                      ? "正在生成卡点地图…"
+                      : songReady
+                        ? `用《${songTitle}》发车`
+                        : "请选择歌曲"}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => setReadyPage("rules")}
+                  >
+                    查看玩法
+                  </button>
+                </div>
                 <p className="control-hint">
                   ← → / A D 换道 · SPACE 击打 · P / ESC 暂停
                 </p>
@@ -3097,9 +3352,15 @@ export default function Home() {
                     <strong className="gold-text">+{earnedCoins}</strong>
                   </div>
                 </div>
+                <p className="concert-score">
+                  演唱会积分 <strong>{fans}</strong> 粉丝 ×{" "}
+                  <strong>{maxCombo}</strong> 连击 ={" "}
+                  <b>{fans * maxCombo}</b>
+                </p>
                 <p className="coin-formula">
                   场馆奖励 {resultTier.coins} + 合拍奖励 {maxCombo * 3}
                 </p>
+                {leaderboardPanel}
                 <div className="result-actions">
                   <button className="primary-button" onClick={() => void startGame()}>
                     再跑一场
@@ -3126,6 +3387,7 @@ export default function Home() {
                   <strong>{fans}</strong>
                   <small>COINS +0</small>
                 </div>
+                {leaderboardPanel}
                 <div className="result-actions">
                   <button className="primary-button" onClick={() => void startGame()}>
                     重新发车
@@ -3139,30 +3401,68 @@ export default function Home() {
           </div>
 
           <div className="mobile-controls">
-            <button
-              onPointerDown={() => move(-1)}
-              aria-label="向左换道"
-              disabled={status !== "playing"}
+            <div
+              className={`joystick-control ${status !== "playing" ? "is-disabled" : ""}`}
+              aria-label="左右换道摇杆"
             >
-              <span>←</span>
-              LEFT
-            </button>
+              <div
+                className="joystick-base"
+                role="slider"
+                tabIndex={status === "playing" ? 0 : -1}
+                aria-label="拖动摇杆左右换道"
+                aria-valuemin={-1}
+                aria-valuemax={1}
+                aria-valuenow={joystickDirectionRef.current}
+                aria-disabled={status !== "playing"}
+                onPointerDown={(event) => {
+                  if (statusRef.current !== "playing") return;
+                  event.preventDefault();
+                  joystickPointerRef.current = event.pointerId;
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  updateJoystick(event.clientX, event.currentTarget);
+                }}
+                onPointerMove={(event) => {
+                  if (joystickPointerRef.current !== event.pointerId) return;
+                  event.preventDefault();
+                  updateJoystick(event.clientX, event.currentTarget);
+                }}
+                onPointerUp={(event) => {
+                  if (joystickPointerRef.current === event.pointerId) {
+                    event.preventDefault();
+                    stopJoystick();
+                  }
+                }}
+                onPointerCancel={stopJoystick}
+                onLostPointerCapture={stopJoystick}
+              >
+                <span className="joystick-track" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <b
+                  className="joystick-knob"
+                  style={{ transform: `translateX(${joystickOffset}px)` }}
+                  aria-hidden="true"
+                >
+                  ↔
+                </b>
+              </div>
+              <small>DRAG TO STEER</small>
+            </div>
             <button
               className="hit-button"
-              onPointerDown={hitNote}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                hitNote();
+              }}
               aria-label="击打当前节拍"
               disabled={status !== "playing"}
             >
               <span>HIT</span>
               <small>SPACE</small>
-            </button>
-            <button
-              onPointerDown={() => move(1)}
-              aria-label="向右换道"
-              disabled={status !== "playing"}
-            >
-              <span>→</span>
-              RIGHT
             </button>
           </div>
         </div>
