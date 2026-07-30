@@ -2055,14 +2055,29 @@ export default function Home() {
           GAME_WIDTH / concertRoadImage.naturalWidth,
           GAME_HEIGHT / concertRoadImage.naturalHeight,
         );
-        const imageWidth = concertRoadImage.naturalWidth * coverScale;
-        const imageHeight = concertRoadImage.naturalHeight * coverScale;
+        const sourceWidth = Math.min(
+          concertRoadImage.naturalWidth,
+          GAME_WIDTH / coverScale,
+        );
+        const sourceHeight = Math.min(
+          concertRoadImage.naturalHeight,
+          GAME_HEIGHT / coverScale,
+        );
+        const sourceX = 0;
+        const sourceY = Math.max(
+          0,
+          (concertRoadImage.naturalHeight - sourceHeight) / 2,
+        );
         ctx.drawImage(
           concertRoadImage,
-          (GAME_WIDTH - imageWidth) / 2,
-          (GAME_HEIGHT - imageHeight) / 2,
-          imageWidth,
-          imageHeight,
+          sourceX,
+          sourceY,
+          sourceWidth,
+          sourceHeight,
+          0,
+          0,
+          GAME_WIDTH,
+          GAME_HEIGHT,
         );
       }
 
@@ -2189,7 +2204,7 @@ export default function Home() {
       ctx.fillStyle = isEarthTour
         ? "rgba(67, 33, 52, 0.9)"
         : isLueLueLue
-          ? "rgba(139, 139, 147, 0.94)"
+          ? "rgba(139, 139, 147, 0.82)"
           : palette.road;
       ctx.fillRect(ROAD_LEFT, 0, ROAD_WIDTH, GAME_HEIGHT);
       ctx.fillStyle = isLueLueLue ? "#15131c" : "#2a245b";

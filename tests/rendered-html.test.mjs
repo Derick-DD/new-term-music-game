@@ -200,6 +200,8 @@ test("isolates the lueluelue hand-drawn theme and keeps all supplied assets", as
   assert.ok(assets.every((asset) => asset.byteLength > 1_000));
   assert.match(page, /const LUELUELUE_ASSETS/);
   assert.match(page, /const isLueLueLue = activeTrack\.id === "lueluelue"/);
+  assert.match(page, /const sourceX = 0/);
+  assert.match(page, /"rgba\(139, 139, 147, 0\.82\)"/);
   assert.match(page, /selectedTrackId === "lueluelue"\s*\? "is-lueluelue"/);
   assert.match(page, /lueLueLueImages\.levelTwoScooter/);
   assert.match(page, /lueLueLueImages\.levelThreeCar/);
