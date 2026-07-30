@@ -1,1 +1,0 @@
-CREATE INDEX `leaderboard_scores_rank_idx` ON `leaderboard_scores` (`score`,`fans`,`max_combo`);

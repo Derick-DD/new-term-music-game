@@ -115,28 +115,42 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.doesNotMatch(page, /https?:\/\/.*\.(mp3|m4a|wav|aac|ogg)/i);
 });
 
-test("keeps per-song leaderboard persistence and server-side score rules", async () => {
-  const [route, schema, database, hosting] = await Promise.all([
-    readFile(
-      new URL("../app/api/leaderboard/route.ts", import.meta.url),
-      "utf8",
-    ),
-    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
-    readFile(new URL("../db/index.ts", import.meta.url), "utf8"),
-    readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
-  ]);
+test("keeps Alibaba Cloud compatible per-song leaderboard persistence", async () => {
+  const [route, database, packageFile, nextConfig, dockerfile, compose] =
+    await Promise.all([
+      readFile(
+        new URL("../app/api/leaderboard/route.ts", import.meta.url),
+        "utf8",
+      ),
+      readFile(new URL("../db/index.ts", import.meta.url), "utf8"),
+      readFile(new URL("../package.json", import.meta.url), "utf8"),
+      readFile(new URL("../next.config.ts", import.meta.url), "utf8"),
+      readFile(new URL("../Dockerfile", import.meta.url), "utf8"),
+      readFile(new URL("../docker-compose.yml", import.meta.url), "utf8"),
+    ]);
 
   assert.match(route, /export async function GET/);
   assert.match(route, /export async function POST/);
+  assert.match(route, /export const runtime = "nodejs"/);
   assert.match(route, /const score = fans \* maxCombo/);
   assert.match(route, /if \(score >= 6_500\)/);
   assert.match(route, /const TOP_LIMIT = 8/);
   assert.match(route, /ROW_NUMBER\(\) OVER/);
-  assert.match(route, /leaderboardScores\.songKey/);
-  assert.match(route, /leaderboardScores\.playerId/);
+  assert.match(route, /WHERE player_id = \? AND song_key = \?/);
   assert.match(route, /submittedScore: score/);
-  assert.match(schema, /leaderboard_scores/);
-  assert.match(schema, /leaderboard_scores_player_song_unique/);
+  assert.match(database, /CREATE TABLE IF NOT EXISTS leaderboard_scores/);
+  assert.match(database, /leaderboard_scores_player_song_unique/);
   assert.match(database, /ALTER TABLE leaderboard_scores ADD COLUMN song_key/);
-  assert.equal(JSON.parse(hosting).d1, "DB");
+  assert.match(database, /new DatabaseSync\(databasePath\)/);
+  assert.match(database, /from "node:sqlite"/);
+  assert.match(database, /process\.env\.DATABASE_PATH/);
+  assert.match(database, /journal_mode = WAL/);
+  assert.doesNotMatch(packageFile, /better-sqlite3/);
+  assert.doesNotMatch(
+    packageFile,
+    /vinext|wrangler|@cloudflare\/vite-plugin/,
+  );
+  assert.match(nextConfig, /output: "standalone"/);
+  assert.match(dockerfile, /DATABASE_PATH=\/app\/data\/fan-bus\.sqlite/);
+  assert.match(compose, /fan_bus_data:\/app\/data/);
 });

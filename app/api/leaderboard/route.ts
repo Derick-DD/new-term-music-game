@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
-import { ensureDbSchema, getD1, getDb } from "../../../db";
-import { leaderboardScores } from "../../../db/schema";
+import { getDb } from "../../../db";
+
+export const runtime = "nodejs";
 
 const TOP_LIMIT = 8;
 
@@ -17,6 +17,8 @@ type RankedLeaderboardRow = {
   updated_at: number;
   rank: number;
 };
+
+type StoredLeaderboardRow = Omit<RankedLeaderboardRow, "rank">;
 
 function concertForScore(score: number) {
   if (score >= 6_500) return "星河体育场";
@@ -42,8 +44,8 @@ function mapLeaderboardRow(row: RankedLeaderboardRow) {
   };
 }
 
-async function getLeaderboard(songKey: string, currentPlayerId?: string) {
-  const d1 = getD1();
+function getLeaderboard(songKey: string, currentPlayerId?: string) {
+  const database = getDb();
   const rankedQuery = `
     SELECT
       id,
@@ -66,24 +68,21 @@ async function getLeaderboard(songKey: string, currentPlayerId?: string) {
     FROM leaderboard_scores
     WHERE song_key = ?
   `;
-  const topRows = await d1
+  const rows = database
     .prepare(`${rankedQuery} ORDER BY rank ASC LIMIT ?`)
-    .bind(songKey, TOP_LIMIT)
-    .all<RankedLeaderboardRow>();
-  const rows = [...topRows.results];
+    .all(songKey, TOP_LIMIT) as RankedLeaderboardRow[];
 
   if (
     currentPlayerId &&
     !rows.some((row) => row.player_id === currentPlayerId)
   ) {
-    const currentRow = await d1
+    const currentRow = database
       .prepare(
         `SELECT * FROM (${rankedQuery}) ranked
          WHERE player_id = ?
          LIMIT 1`,
       )
-      .bind(songKey, currentPlayerId)
-      .first<RankedLeaderboardRow>();
+      .get(songKey, currentPlayerId) as RankedLeaderboardRow | undefined;
     if (currentRow) rows.push(currentRow);
   }
 
@@ -97,9 +96,9 @@ export async function GET(request: Request) {
     if (!songKey || songKey.length > 100) {
       return Response.json({ error: "请选择歌曲后查看排行榜" }, { status: 400 });
     }
-    await ensureDbSchema();
-    return Response.json({ leaderboard: await getLeaderboard(songKey) });
-  } catch {
+    return Response.json({ leaderboard: getLeaderboard(songKey) });
+  } catch (error) {
+    console.error("[leaderboard] load failed", error);
     return Response.json(
       { error: "歌曲排行榜暂时不可用" },
       { status: 503 },
@@ -138,77 +137,113 @@ export async function POST(request: Request) {
       return Response.json({ error: "排行榜成绩无效" }, { status: 400 });
     }
 
-    await ensureDbSchema();
-    const db = getDb();
+    const database = getDb();
     const score = fans * maxCombo;
     const concert = concertForScore(score);
-    const [existing] = await db
-      .select()
-      .from(leaderboardScores)
-      .where(
-        and(
-          eq(leaderboardScores.playerId, playerId),
-          eq(leaderboardScores.songKey, songKey),
-        ),
-      )
-      .limit(1);
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      const existing = database
+        .prepare(
+          `SELECT
+            id,
+            player_id,
+            player_name,
+            song_key,
+            fans,
+            max_combo,
+            score,
+            concert,
+            song,
+            updated_at
+           FROM leaderboard_scores
+           WHERE player_id = ? AND song_key = ?
+           LIMIT 1`,
+        )
+        .get(playerId, songKey) as StoredLeaderboardRow | undefined;
 
-    if (!existing) {
-      await db.insert(leaderboardScores).values({
-        playerId,
-        playerName: name,
-        songKey,
-        fans,
-        maxCombo,
-        score,
-        concert,
-        song,
-        updatedAt: Date.now(),
-      });
-    } else if (
-      score > existing.score ||
-      (score === existing.score && fans > existing.fans) ||
-      (score === existing.score &&
-        fans === existing.fans &&
-        maxCombo > existing.maxCombo)
-    ) {
-      await db
-        .update(leaderboardScores)
-        .set({
-          playerName: name,
-          fans,
-          maxCombo,
-          score,
-          concert,
-          song,
-          updatedAt: Date.now(),
-        })
-        .where(
-          and(
-            eq(leaderboardScores.playerId, playerId),
-            eq(leaderboardScores.songKey, songKey),
-          ),
-        );
-    } else if (name !== existing.playerName) {
-      await db
-        .update(leaderboardScores)
-        .set({ playerName: name, updatedAt: Date.now() })
-        .where(
-          and(
-            eq(leaderboardScores.playerId, playerId),
-            eq(leaderboardScores.songKey, songKey),
-          ),
-        );
+      if (!existing) {
+        database
+          .prepare(
+            `INSERT INTO leaderboard_scores (
+              player_id,
+              player_name,
+              song_key,
+              fans,
+              max_combo,
+              score,
+              concert,
+              song,
+              updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            playerId,
+            name,
+            songKey,
+            fans,
+            maxCombo,
+            score,
+            concert,
+            song,
+            Date.now(),
+          );
+      } else {
+        const isBetterScore =
+          score > existing.score ||
+          (score === existing.score && fans > existing.fans) ||
+          (score === existing.score &&
+            fans === existing.fans &&
+            maxCombo > existing.max_combo);
+        if (isBetterScore) {
+          database
+            .prepare(
+              `UPDATE leaderboard_scores
+               SET
+                 player_name = ?,
+                 fans = ?,
+                 max_combo = ?,
+                 score = ?,
+                 concert = ?,
+                 song = ?,
+                 updated_at = ?
+               WHERE player_id = ? AND song_key = ?`,
+            )
+            .run(
+              name,
+              fans,
+              maxCombo,
+              score,
+              concert,
+              song,
+              Date.now(),
+              playerId,
+              songKey,
+            );
+        } else if (name !== existing.player_name) {
+          database
+            .prepare(
+              `UPDATE leaderboard_scores
+               SET player_name = ?, updated_at = ?
+               WHERE player_id = ? AND song_key = ?`,
+            )
+            .run(name, Date.now(), playerId, songKey);
+        }
+      }
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
     }
 
     return Response.json(
       {
-        leaderboard: await getLeaderboard(songKey, playerId),
+        leaderboard: getLeaderboard(songKey, playerId),
         submittedScore: score,
       },
       { status: 201 },
     );
-  } catch {
+  } catch (error) {
+    console.error("[leaderboard] submit failed", error);
     return Response.json(
       { error: "歌曲排行榜成绩提交失败" },
       { status: 500 },
