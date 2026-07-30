@@ -982,6 +982,13 @@ button:focus-visible {
   border-left-color: var(--gold);
 }
 
+.story-route em {
+  color: var(--gold);
+  font-style: normal;
+  font-weight: 950;
+  text-shadow: 0 0 8px rgba(255, 230, 109, 0.4);
+}
+
 .story-mission {
   display: grid;
   width: min(100%, 390px);
@@ -1124,40 +1131,6 @@ button:focus-visible {
   color: var(--gold);
   font-family: "Arial Black", sans-serif;
   font-size: 13px;
-}
-
-.player-name-field {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  width: min(100%, 330px);
-  margin-bottom: 11px;
-  border: 2px solid #4b3f84;
-  background: #0d0b2b;
-}
-
-.player-name-field > span {
-  padding: 0 10px;
-  color: var(--cyan);
-  font-size: 7px;
-  font-weight: 950;
-  letter-spacing: 0.1em;
-}
-
-.player-name-field input {
-  min-width: 0;
-  border: 0;
-  border-left: 1px solid #4b3f84;
-  outline: 0;
-  background: #17133c;
-  color: white;
-  padding: 9px 10px;
-  font: inherit;
-  font-size: 10px;
-}
-
-.player-name-field:focus-within {
-  border-color: var(--gold);
 }
 
 .rules-start-button {
@@ -1688,48 +1661,76 @@ button:focus-visible {
   }
 }
 
-.intro-copy {
-  margin: 0 18px 14px;
-  color: #d9d3f5;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.7;
-}
-
-.map-balance-note {
+.song-player-name-field {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: min(92%, 390px);
-  margin: -5px 0 13px;
-  border: 1px solid #554891;
-  background: rgba(18, 15, 53, 0.92);
-  color: #a9a0ce;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  width: min(92%, 430px);
+  margin: 2px 0 14px;
+  border: 2px solid var(--cyan);
+  background:
+    linear-gradient(90deg, rgba(114, 241, 255, 0.1), transparent 62%),
+    #0c0a2a;
+  padding: 8px;
+  box-shadow:
+    5px 5px 0 #263d68,
+    0 0 16px rgba(114, 241, 255, 0.18);
   text-align: left;
 }
 
-.map-balance-note span {
-  padding: 7px 9px;
-  font-size: 7px;
-  font-weight: 900;
+.song-player-name-field > span {
+  display: grid;
+  gap: 2px;
+  min-width: 92px;
+  padding: 0 10px 0 4px;
 }
 
-.map-balance-note span + span {
-  border-left: 1px solid #554891;
-}
-
-.map-balance-note b {
-  color: var(--gold);
-  font-size: 11px;
-}
-
-.map-balance-note small {
-  grid-column: 1 / -1;
-  border-top: 1px solid #39316d;
-  padding: 6px 9px;
+.song-player-name-field small {
   color: var(--cyan);
   font-size: 6px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+}
+
+.song-player-name-field strong {
+  color: white;
+  font-size: 10px;
+}
+
+.song-player-name-field input {
+  min-width: 0;
+  border: 2px solid #50458e;
+  outline: 0;
+  background: #17133c;
+  color: white;
+  padding: 10px 11px;
+  font: inherit;
+  font-size: 11px;
   font-weight: 900;
-  line-height: 1.35;
+}
+
+.song-player-name-field input::placeholder {
+  color: #746b9d;
+}
+
+.song-player-name-field:focus-within {
+  border-color: var(--gold);
+  box-shadow:
+    5px 5px 0 #6b5622,
+    0 0 18px rgba(255, 230, 109, 0.24);
+}
+
+.song-player-name-field:focus-within input {
+  border-color: var(--gold);
+}
+
+.song-player-name-field > em {
+  grid-column: 1 / -1;
+  margin: 6px 3px 0;
+  color: #9189ba;
+  font-size: 6px;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .primary-button {
@@ -2679,18 +2680,25 @@ footer i {
     font-size: 5.5px;
   }
 
-  .player-name-field {
-    margin-bottom: 7px;
-  }
-
-  .player-name-field input {
-    padding: 7px 8px;
-    font-size: 8px;
-  }
-
   .rules-start-button {
     min-width: 190px;
     padding: 9px 12px;
+    font-size: 9px;
+  }
+
+  .song-player-name-field {
+    grid-template-columns: 82px minmax(0, 1fr);
+    margin-bottom: 10px;
+    padding: 6px;
+  }
+
+  .song-player-name-field > span {
+    min-width: 0;
+    padding-left: 2px;
+  }
+
+  .song-player-name-field input {
+    padding: 8px;
     font-size: 9px;
   }
 

@@ -850,7 +850,7 @@ export default function Home() {
   const toastTimerRef = useRef<number | null>(null);
   const judgementTimerRef = useRef<number | null>(null);
   const lastHitInputAtRef = useRef(-Infinity);
-  const playerNameRef = useRef("巡演玩家");
+  const playerNameRef = useRef("");
   const playerIdRef = useRef("");
   const joystickPointerRef = useRef<number | null>(null);
   const joystickDirectionRef = useRef<-1 | 0 | 1>(0);
@@ -858,7 +858,7 @@ export default function Home() {
 
   const [status, setStatus] = useState<GameStatus>("ready");
   const [readyPage, setReadyPage] = useState<ReadyPage>("rules");
-  const [playerName, setPlayerName] = useState("巡演玩家");
+  const [playerName, setPlayerName] = useState("");
   const [songReady, setSongReady] = useState(false);
   const [songLoading, setSongLoading] = useState(false);
   const [songFileName, setSongFileName] = useState("");
@@ -866,7 +866,6 @@ export default function Home() {
   const [songError, setSongError] = useState("");
   const [detectedBpm, setDetectedBpm] = useState(96);
   const [songDuration, setSongDuration] = useState(0);
-  const [strongBeatCount, setStrongBeatCount] = useState(0);
   const [selectedTrackId, setSelectedTrackId] =
     useState<TrackId>("guaihuo");
   const [fans, setFans] = useState(STARTING_FANS);
@@ -1114,11 +1113,6 @@ export default function Home() {
       detectedNotePatternRef.current = analysis.notePattern;
       detectedIntensityPatternRef.current = analysis.intensityPattern;
       detectedBpmRef.current = analysis.bpm;
-      setStrongBeatCount(
-        analysis.notePattern
-          .slice(TRAVEL_BEATS, -1)
-          .filter((level) => level === 2).length,
-      );
       setSongFileName(fileName);
       setSongTitle(title);
       setDetectedBpm(analysis.bpm);
@@ -2480,6 +2474,10 @@ export default function Home() {
   const startGame = useCallback(async () => {
     const song = songRef.current;
     const analysedBeats = detectedBeatTimesRef.current;
+    if (!playerNameRef.current.trim()) {
+      showToast("请先填写排行榜昵称", "pink");
+      return;
+    }
     if (!songReady || !song || analysedBeats.length < 12) {
       showToast("请先选择一首歌曲", "pink");
       return;
@@ -2824,8 +2822,10 @@ export default function Home() {
   useEffect(() => {
     const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
     const savedCoins = Number(window.localStorage.getItem("fan-bus-coins") || 0);
+    const storedPlayerName =
+      window.localStorage.getItem("fan-bus-player-name") || "";
     const savedPlayerName =
-      window.localStorage.getItem("fan-bus-player-name") || "巡演玩家";
+      storedPlayerName === "巡演玩家" ? "" : storedPlayerName;
     let savedPlayerId = window.localStorage.getItem("fan-bus-player-id");
     if (!savedPlayerId) {
       savedPlayerId =
@@ -3185,7 +3185,8 @@ export default function Home() {
                     <b>02</b>
                     <span>
                       <strong>收集应援棒</strong>
-                      收集 1 个应援棒，粉丝 +1；踩中强拍还能延续连击。
+                      应援棒到达黄色判定线时按 <em>HIT</em> 吸粉；命中 1
+                      根，粉丝 +1。
                     </span>
                   </div>
                   <div>
@@ -3201,24 +3202,6 @@ export default function Home() {
                   <strong>让每一位粉丝准时抵达现场</strong>
                   <small>道路安全第一，遇到行人必须停车礼让。</small>
                 </div>
-                <label className="player-name-field">
-                  <span>PLAYER NAME</span>
-                  <input
-                    value={playerName}
-                    maxLength={10}
-                    onChange={(event) => {
-                      const nextName = event.target.value;
-                      playerNameRef.current = nextName;
-                      setPlayerName(nextName);
-                      window.localStorage.setItem(
-                        "fan-bus-player-name",
-                        nextName,
-                      );
-                    }}
-                    placeholder="输入你的昵称"
-                    aria-label="玩家昵称"
-                  />
-                </label>
                 <button
                   className="primary-button rules-start-button"
                   onClick={() => setReadyPage("songs")}
@@ -3332,35 +3315,43 @@ export default function Home() {
                   </p>
                 )}
                 {songError && <p className="song-error">{songError}</p>}
-                <p className="intro-copy">
-                  应援棒到达黄色判定线时按 <strong>SPACE / HIT</strong><br />
-                  {selectedTrack.mapLabel} · {selectedTrack.description}<br />
-                  {selectedTrackId === "custom-upload"
-                    ? "你上传的音频只保留在当前浏览器"
-                    : `当前 ${currentVehicle.name} · 上限 ${currentVehicle.capacity} 粉丝`}
-                </p>
-                {songReady && (
-                  <p className="map-balance-note">
-                    <span>
-                      本歌 <b>{strongBeatCount}</b> 个强拍应援棒
-                    </span>
-                    <span>
-                      理论最高连击 <b>×{strongBeatCount}</b>
-                    </span>
-                    <small>
-                      最密每 2 拍 1 根 · 原曲恒速 · 体育场需{" "}
-                      {STADIUM_SCORE_THRESHOLD} 分，完整谱面保证可达成
-                    </small>
-                  </p>
-                )}
+                <label className="song-player-name-field">
+                  <span>
+                    <small>PLAYER NAME</small>
+                    <strong>排行榜昵称</strong>
+                  </span>
+                  <input
+                    value={playerName}
+                    maxLength={10}
+                    onChange={(event) => {
+                      const nextName = event.target.value;
+                      playerNameRef.current = nextName;
+                      setPlayerName(nextName);
+                      window.localStorage.setItem(
+                        "fan-bus-player-name",
+                        nextName,
+                      );
+                    }}
+                    placeholder="请输入昵称后发车"
+                    aria-label="排行榜昵称"
+                  />
+                  <em>成绩将以此昵称进入全局排行榜</em>
+                </label>
                 <div className="result-actions song-start-actions">
                   <button
                     className="primary-button"
                     onClick={() => void startGame()}
-                    disabled={!songReady || songLoading}
+                    disabled={
+                      !songReady || songLoading || !playerName.trim()
+                    }
                   >
-                    <span>▶</span>{" "}
-                    {songLoading
+                    <span>
+                      ▶
+                    </span>
+                    {" "}
+                    {!playerName.trim()
+                      ? "请填写排行榜昵称"
+                      : songLoading
                       ? "正在生成卡点地图…"
                       : songReady
                         ? `用《${songTitle}》发车`
