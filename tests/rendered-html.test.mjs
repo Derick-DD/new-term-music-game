@@ -62,8 +62,13 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /const POWERUP_DURATION_MS = 5_000/);
   assert.match(page, /const HIT_INPUT_GUARD_MS = 70/);
   assert.match(page, /const STARTING_FANS = 0/);
+  assert.match(page, /const MIN_PLAYABLE_STRONG_BEATS = 90/);
+  assert.match(page, /const MIN_STRONG_BEAT_GAP = 2/);
+  assert.match(page, /const POWERUP_TRAIL_DELAY_MS = 220/);
   assert.match(page, /const MAGNET_RADIUS = 185/);
-  assert.match(page, /type: pickupType/);
+  assert.match(page, /type: "fan"/);
+  assert.match(page, /type: bonusType/);
+  assert.match(page, /spawnAt: spawnAt \+ POWERUP_TRAIL_DELAY_MS/);
   assert.match(page, /MAGNET PERFECT · \+1 FAN/);
   assert.doesNotMatch(page, /MAGNET ACTIVE · AUTO PERFECT/);
   assert.match(page, /lastHitInputAtRef\.current < HIT_INPUT_GUARD_MS/);
@@ -85,6 +90,8 @@ test("keeps beat analysis and active hit judgement in the client game", async ()
   assert.match(page, /fetch\("\/api\/leaderboard"/);
   assert.match(page, /GLOBAL TOP 5/);
   assert.match(page, /if \(!upgraded\)/);
+  assert.match(page, /本歌 <b>\{strongBeatCount\}<\/b> 个强拍应援棒/);
+  assert.match(page, /最密每 2 拍 1 根 · 原曲恒速/);
   assert.match(page, /createMediaElementSource/);
   assert.match(page, /createBiquadFilter/);
   assert.match(page, /songRef\.current\.playbackRate = 1/);

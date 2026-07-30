@@ -1696,6 +1696,42 @@ button:focus-visible {
   line-height: 1.7;
 }
 
+.map-balance-note {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(92%, 390px);
+  margin: -5px 0 13px;
+  border: 1px solid #554891;
+  background: rgba(18, 15, 53, 0.92);
+  color: #a9a0ce;
+  text-align: left;
+}
+
+.map-balance-note span {
+  padding: 7px 9px;
+  font-size: 7px;
+  font-weight: 900;
+}
+
+.map-balance-note span + span {
+  border-left: 1px solid #554891;
+}
+
+.map-balance-note b {
+  color: var(--gold);
+  font-size: 11px;
+}
+
+.map-balance-note small {
+  grid-column: 1 / -1;
+  border-top: 1px solid #39316d;
+  padding: 6px 9px;
+  color: var(--cyan);
+  font-size: 6px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
 .primary-button {
   position: relative;
   min-width: 166px;

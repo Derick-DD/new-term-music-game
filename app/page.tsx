@@ -14,6 +14,10 @@ const MISS_WINDOW = 190;
 const HIT_INPUT_GUARD_MS = 70;
 const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
+const MIN_PLAYABLE_STRONG_BEATS = 90;
+const MIN_STRONG_BEAT_GAP = 2;
+const POWERUP_TRAIL_DELAY_MS = 220;
+const STADIUM_SCORE_THRESHOLD = 6_500;
 
 type GameStatus =
   | "ready"
@@ -566,6 +570,141 @@ function analyzeAudioBuffer(buffer: AudioBuffer) {
     }
   }
 
+  // Keep the top venue difficult but achievable. Each full-length map exposes
+  // at least 90 genuine musical accents, which is enough to reach 6,500 points
+  // with a strong run. Adjacent accents are thinned so dense choruses never
+  // make the road feel as though the song itself suddenly sped up.
+  const lastPlayableBeat = notePattern.length - 2;
+  let previousStrongBeat = -Infinity;
+  for (
+    let beat = TRAVEL_BEATS;
+    beat <= lastPlayableBeat;
+    beat += 1
+  ) {
+    if (notePattern[beat] !== 2) continue;
+    if (beat - previousStrongBeat >= MIN_STRONG_BEAT_GAP) {
+      previousStrongBeat = beat;
+      continue;
+    }
+    if (intensityPattern[beat] > intensityPattern[previousStrongBeat]) {
+      notePattern[previousStrongBeat] = 1;
+      previousStrongBeat = beat;
+    } else {
+      notePattern[beat] = 1;
+    }
+  }
+  const playableStrongBeats = () =>
+    notePattern
+      .slice(TRAVEL_BEATS, lastPlayableBeat + 1)
+      .filter((level) => level === 2).length;
+  const targetStrongBeats = Math.min(
+    MIN_PLAYABLE_STRONG_BEATS,
+    Math.ceil(
+      Math.max(0, lastPlayableBeat - TRAVEL_BEATS + 1) /
+        MIN_STRONG_BEAT_GAP,
+    ),
+  );
+  if (playableStrongBeats() < targetStrongBeats) {
+    const strongestEmptyBars: number[] = [];
+    for (
+      let barStart = TRAVEL_BEATS;
+      barStart <= lastPlayableBeat;
+      barStart += 4
+    ) {
+      const barEnd = Math.min(lastPlayableBeat, barStart + 3);
+      const barBeats = Array.from(
+        { length: barEnd - barStart + 1 },
+        (_, index) => barStart + index,
+      );
+      if (barBeats.some((beat) => notePattern[beat] === 2)) continue;
+      const strongestBeat = barBeats
+        .filter(
+          (beat) =>
+            beatFeatures[beat].energy > Math.max(0.002, energyFloor * 0.72),
+        )
+        .sort(
+          (first, second) =>
+            intensityPattern[second] - intensityPattern[first],
+        )[0];
+      if (strongestBeat !== undefined) strongestEmptyBars.push(strongestBeat);
+    }
+
+    const remainingAccents = Array.from(
+      { length: Math.max(0, lastPlayableBeat - TRAVEL_BEATS + 1) },
+      (_, index) => index + TRAVEL_BEATS,
+    )
+      .filter(
+        (beat) =>
+          notePattern[beat] !== 2 &&
+          beatFeatures[beat].energy > Math.max(0.002, energyFloor * 0.72),
+      )
+      .sort(
+        (first, second) =>
+          intensityPattern[second] - intensityPattern[first],
+      );
+    const promotionOrder = [
+      ...strongestEmptyBars.sort(
+        (first, second) =>
+          intensityPattern[second] - intensityPattern[first],
+      ),
+      ...remainingAccents,
+    ];
+    const promoted = new Set<number>();
+    for (const beat of promotionOrder) {
+      if (playableStrongBeats() >= targetStrongBeats) break;
+      if (promoted.has(beat) || notePattern[beat] === 2) continue;
+      const hasNearbyStrongBeat = Array.from(
+        { length: MIN_STRONG_BEAT_GAP * 2 - 1 },
+        (_, index) => beat - MIN_STRONG_BEAT_GAP + 1 + index,
+      ).some(
+        (nearbyBeat) =>
+          nearbyBeat !== beat && notePattern[nearbyBeat] === 2,
+      );
+      if (hasNearbyStrongBeat) continue;
+      notePattern[beat] = 2;
+      promoted.add(beat);
+    }
+
+    // Extremely quiet or unusual uploads can leave too few audible candidates.
+    // Fall back to the more energetic half-beat parity so the published maximum
+    // combo remains honest without ever placing adjacent strong notes.
+    if (playableStrongBeats() < targetStrongBeats) {
+      const parityOptions = [0, 1].map((parity) => {
+        const beats = Array.from(
+          { length: Math.max(0, lastPlayableBeat - TRAVEL_BEATS + 1) },
+          (_, index) => index + TRAVEL_BEATS,
+        )
+          .filter(
+            (beat) => (beat - TRAVEL_BEATS) % MIN_STRONG_BEAT_GAP === parity,
+          )
+          .sort(
+            (first, second) =>
+              intensityPattern[second] - intensityPattern[first],
+          )
+          .slice(0, targetStrongBeats);
+        return {
+          beats,
+          energy: beats.reduce(
+            (total, beat) => total + intensityPattern[beat],
+            0,
+          ),
+        };
+      });
+      const fallback =
+        parityOptions[1].energy > parityOptions[0].energy
+          ? parityOptions[1]
+          : parityOptions[0];
+      for (
+        let beat = TRAVEL_BEATS;
+        beat <= lastPlayableBeat;
+        beat += 1
+      ) {
+        if (notePattern[beat] === 2) notePattern[beat] = 1;
+      }
+      for (const beat of fallback.beats) notePattern[beat] = 2;
+    }
+  }
+
   let lane = 2;
   let laneDirection: -1 | 1 = 1;
   const lanePattern = beatTimes.map((time, beat) => {
@@ -604,7 +743,7 @@ function clampLane(lane: number) {
 
 function getConcertTier(fans: number, maxCombo = 0): ConcertTier {
   const concertScore = fans * maxCombo;
-  if (concertScore >= 6_500) {
+  if (concertScore >= STADIUM_SCORE_THRESHOLD) {
     return {
       name: "星河体育场",
       place: "五万人全景演唱会",
@@ -723,6 +862,7 @@ export default function Home() {
   const [songError, setSongError] = useState("");
   const [detectedBpm, setDetectedBpm] = useState(96);
   const [songDuration, setSongDuration] = useState(0);
+  const [strongBeatCount, setStrongBeatCount] = useState(0);
   const [selectedTrackId, setSelectedTrackId] =
     useState<TrackId>("guaihuo");
   const [fans, setFans] = useState(STARTING_FANS);
@@ -970,6 +1110,11 @@ export default function Home() {
       detectedNotePatternRef.current = analysis.notePattern;
       detectedIntensityPatternRef.current = analysis.intensityPattern;
       detectedBpmRef.current = analysis.bpm;
+      setStrongBeatCount(
+        analysis.notePattern
+          .slice(TRAVEL_BEATS, -1)
+          .filter((level) => level === 2).length,
+      );
       setSongFileName(fileName);
       setSongTitle(title);
       setDetectedBpm(analysis.bpm);
@@ -1247,17 +1392,17 @@ export default function Home() {
       .slice(0, targetBeat + 1)
       .reduce((total, level) => total + (level === 2 ? 1 : 0), 0);
 
-    const pickupType: EntityType =
+    const bonusType: EntityType | null =
       activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 8
         ? "magnet"
         : activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 20
           ? "invincible"
           : activeNoteOrdinal > 8 && activeNoteOrdinal % 19 === 0
             ? "lucky"
-            : "fan";
+            : null;
     entitiesRef.current.push({
       id: entityIdRef.current++,
-      type: pickupType,
+      type: "fan",
       lane: safeLane,
       y: spawnY,
       targetBeat,
@@ -1266,6 +1411,19 @@ export default function Home() {
       handled: false,
       wobble: Math.random() * Math.PI,
     });
+    if (bonusType) {
+      entitiesRef.current.push({
+        id: entityIdRef.current++,
+        type: bonusType,
+        lane: safeLane,
+        y: spawnY,
+        targetBeat,
+        spawnAt: spawnAt + POWERUP_TRAIL_DELAY_MS,
+        hitAt: hitAt + POWERUP_TRAIL_DELAY_MS,
+        handled: false,
+        wobble: Math.random() * Math.PI,
+      });
+    }
 
     if (beat < 2) return;
     const obstacleCount = beat > 12 && noteLevel === 2 && intensity > 0.68 ? 2 : 1;
@@ -3168,6 +3326,20 @@ export default function Home() {
                     ? "你上传的音频只保留在当前浏览器"
                     : `当前 ${currentVehicle.name} · 上限 ${currentVehicle.capacity} 粉丝`}
                 </p>
+                {songReady && (
+                  <p className="map-balance-note">
+                    <span>
+                      本歌 <b>{strongBeatCount}</b> 个强拍应援棒
+                    </span>
+                    <span>
+                      理论最高连击 <b>×{strongBeatCount}</b>
+                    </span>
+                    <small>
+                      最密每 2 拍 1 根 · 原曲恒速 · 体育场需{" "}
+                      {STADIUM_SCORE_THRESHOLD} 分，完整谱面保证可达成
+                    </small>
+                  </p>
+                )}
                 <div className="result-actions song-start-actions">
                   <button
                     className="primary-button"
