@@ -245,6 +245,7 @@ test("keeps hit judgement and gameplay safeguards", async () => {
   assert.match(page, /const OBSTACLE_COLLISION_BEFORE = 36/);
   assert.match(page, /const OBSTACLE_COLLISION_AFTER = 40/);
   assert.match(page, /const MAGNET_RADIUS = 185/);
+  assert.doesNotMatch(page, /预制|卡点|浏览器解析|PREBUILT/i);
   assert.match(page, /type: "fan"/);
   assert.match(page, /type: bonusType/);
   assert.match(page, /spawnAt: spawnAt \+ POWERUP_TRAIL_DELAY_MS/);
@@ -276,34 +277,54 @@ test("keeps hit judgement and gameplay safeguards", async () => {
   assert.match(page, /createMediaElementSource/);
   assert.match(page, /createBiquadFilter/);
   assert.match(page, /songRef\.current\.playbackRate = 1/);
+  assert.match(page, /type FailureSummary = \{/);
+  assert.match(page, /const failGame = useCallback/);
+  assert.match(page, /statusRef\.current = "failed"/);
+  assert.match(page, /setFailureSummary\(\{/);
+  assert.match(page, /failGame\(\);\s*return;/);
+  assert.match(page, /status === "failed"/);
+  assert.match(page, /安全挑战未完成/);
+  assert.match(page, /重新挑战/);
   assert.doesNotMatch(page, /playbackRate\s*=\s*(?:0\.|1\.[1-9])/);
   assert.doesNotMatch(page, /https?:\/\/.*\.(mp3|m4a|wav|aac|ogg)/i);
 });
 
-test("keeps road, power-up, and vehicle upgrade rows aligned", async () => {
+test("uses a compact high-contrast run dashboard and a perspective road", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /<strong>校园路障<\/strong>/);
-  assert.match(page, /<strong>校园坑洼<\/strong>/);
-  assert.doesNotMatch(page, /obstacle-group-label/);
+  assert.match(page, /className="vehicle-run-card"/);
+  assert.doesNotMatch(page, /className="road-legend"/);
+  assert.doesNotMatch(page, /className="powerup-legend"/);
+  assert.doesNotMatch(page, /className="vehicle-upgrade-strip"/);
+  assert.match(page, /const ROAD_HORIZON_Y = 302/);
+  assert.match(page, /const ENTITY_RENDER_SIZE = 68/);
+  assert.match(page, /function roadYFromProgress/);
+  assert.match(page, /function laneXAtDepth/);
+  assert.match(page, /const visibleEntities = \[\.\.\.entitiesRef\.current\]\.sort/);
+  assert.match(page, /const drawRoadSprite = \(image: HTMLImageElement\)/);
+  assert.match(page, /y: roadYFromProgress\(travelProgress\)/);
+  assert.match(page, /const pedestrianY = PLAYER_Y - 4/);
+  assert.match(page, /obstacle === "pothole"/);
+  assert.match(page, /obstacle-pothole\.png/);
+  assert.doesNotMatch(page, /obstacle-books\.png/);
   assert.match(
     styles,
-    /\.hud\s*\{[\s\S]*?grid-template-columns:\s*19%\s+19%\s+44%\s+18%/,
+    /\/\* Campus run redesign:[\s\S]*?\.hud\s*\{[\s\S]*?grid-template-columns:\s*18%\s+16%\s+minmax\(0,\s*1\.35fr\)\s+minmax\(90px,\s*0\.85fr\)/,
   );
   assert.match(
     styles,
-    /\.vehicle-upgrade-strip\s*\{[\s\S]*?grid-template-columns:\s*19%\s+19%\s+44%\s+18%/,
+    /\.vehicle-run-card\s*\{[\s\S]*?grid-template-columns:\s*52px\s+minmax\(0,\s*1fr\)/,
   );
   assert.match(
     styles,
-    /\.road-legend\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    /\.music-state,[\s\S]*?background:\s*#fff9d9;[\s\S]*?color:\s*var\(--ink\)/,
   );
   assert.match(
     styles,
-    /\.powerup-legend\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    /\.game-toast\s*\{[\s\S]*?background:\s*rgba\(255,\s*250,\s*241,\s*0\.96\);[\s\S]*?color:\s*var\(--ink\)/,
   );
   assert.match(page, /className="single-song-card"/);
   assert.match(page, /className="chart-ready-note"/);
