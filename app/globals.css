@@ -1643,6 +1643,42 @@ button:focus-visible {
   image-rendering: auto;
 }
 
+.road-icon.is-light-stick.is-campus-season::after {
+  content: "★";
+  color: #ffd84d;
+  -webkit-text-stroke: 1px var(--ink);
+}
+
+.road-icon.is-dish.is-campus-season::after {
+  content: "▲";
+  color: var(--pink);
+  -webkit-text-stroke: 1px var(--ink);
+}
+
+.road-icon.is-crystal.is-campus-season::after {
+  content: "▤";
+  color: #23cfb2;
+  -webkit-text-stroke: 1px var(--ink);
+}
+
+.legend-icon.is-lucky.is-campus-season {
+  border-color: var(--ink);
+  border-radius: 8px;
+  background: var(--pink);
+  box-shadow: inset 0 5px #ffd7e6;
+}
+
+.legend-icon.is-magnet.is-campus-season {
+  border-color: #23cfb2;
+}
+
+.legend-icon.is-invincible.is-campus-season {
+  border-color: var(--ink);
+  border-radius: 8px;
+  background: var(--gold);
+  color: var(--ink);
+}
+
 .powerup-hud {
   position: absolute;
   z-index: 3;
@@ -4580,5 +4616,1067 @@ footer i {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+/* Opening-season campus art direction. */
+:root {
+  --ink: #17223a;
+  --panel: #fff5e8;
+  --panel-light: #e8fff8;
+  --pink: #f47ead;
+  --cyan: #45c8ed;
+  --gold: #ffd84d;
+  --lavender: #7187b2;
+  --cream: #17223a;
+}
+
+html {
+  background: #45c8ed;
+}
+
+body {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 13% 16%, rgba(255, 245, 232, 0.82), transparent 18rem),
+    radial-gradient(circle at 88% 78%, rgba(244, 126, 173, 0.32), transparent 24rem),
+    linear-gradient(180deg, #45c8ed 0%, #bff6ea 56%, #fff5e8 100%);
+  font-family: "Arial Rounded MT Bold", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.sky-grid {
+  opacity: 0.18;
+  background-image:
+    linear-gradient(rgba(23, 34, 58, 0.11) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23, 34, 58, 0.11) 1px, transparent 1px);
+  mask-image: linear-gradient(to bottom, black 0%, transparent 92%);
+}
+
+.home-screen {
+  border: 3px solid var(--ink);
+  border-radius: 26px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px),
+    radial-gradient(circle at 76% 40%, rgba(35, 207, 178, 0.22), transparent 34%),
+    #fff5e8;
+  background-size: 54px 54px, 54px 54px, auto, auto;
+  box-shadow: 12px 14px 0 rgba(23, 34, 58, 0.28);
+}
+
+.home-screen::before {
+  background:
+    linear-gradient(135deg, rgba(69, 200, 237, 0.18), transparent 30%),
+    repeating-linear-gradient(165deg, rgba(23, 34, 58, 0.035) 0 1px, transparent 1px 7px);
+}
+
+.home-screen::after {
+  height: 8px;
+  border-radius: 22px 0 0;
+  background: linear-gradient(90deg, var(--pink), var(--gold), #23cfb2);
+  box-shadow: calc(100vw - 58px) 0 0 #23cfb2;
+}
+
+.home-glow {
+  opacity: 0.2;
+}
+
+.home-nav {
+  border-bottom: 2px dashed rgba(23, 34, 58, 0.22);
+}
+
+.home-mark > span {
+  border: 3px solid var(--ink);
+  border-radius: 13px;
+  background: var(--pink);
+  color: #fff5e8;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.home-mark small,
+.home-records small,
+.home-eyebrow {
+  color: #52617a;
+}
+
+.home-mark strong,
+.home-records,
+.home-records > span,
+.home-records strong {
+  color: var(--ink);
+}
+
+.home-records > i {
+  background: rgba(23, 34, 58, 0.3);
+}
+
+.home-sound-button,
+.sound-button {
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #d9fff4;
+  color: #087e72;
+  box-shadow: 3px 3px 0 rgba(23, 34, 58, 0.18);
+}
+
+.home-eyebrow span {
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #ffd7e6;
+  color: #b52f69;
+}
+
+.home-eyebrow i {
+  background: #23cfb2;
+  box-shadow: 8px 5px 0 -0.5px var(--gold);
+}
+
+.home-copy h1 {
+  filter: none;
+}
+
+.home-copy h1 span {
+  color: #fff5e8;
+  -webkit-text-stroke: 2px var(--ink);
+  text-shadow: 5px 5px 0 var(--pink);
+}
+
+.home-copy h1 strong {
+  color: #23cfb2;
+  -webkit-text-stroke: 2px var(--ink);
+  text-shadow: 5px 5px 0 #45c8ed;
+}
+
+.home-copy h1 strong::after {
+  background: var(--gold);
+  box-shadow: 6px 5px 0 var(--ink);
+}
+
+.home-lead {
+  color: #43526c;
+}
+
+.home-tags span {
+  border-color: rgba(23, 34, 58, 0.26);
+  background: rgba(255, 255, 255, 0.56);
+  color: #43526c;
+}
+
+.home-tags b {
+  color: #159b8b;
+}
+
+.home-start-button,
+.primary-button {
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--gold);
+  color: var(--ink);
+  box-shadow: 5px 6px 0 var(--ink);
+}
+
+.home-start-button::before {
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.home-rules-button,
+.secondary-button,
+.upload-button {
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fff5e8;
+  color: var(--ink);
+  box-shadow: 3px 4px 0 rgba(23, 34, 58, 0.28);
+}
+
+.home-key-hint,
+.home-footer {
+  color: #52617a;
+}
+
+.home-key-hint kbd {
+  border-color: var(--ink);
+  border-radius: 7px;
+  background: white;
+  color: var(--ink);
+}
+
+.home-art {
+  border: 4px solid var(--ink);
+  border-radius: 22px;
+  background-image:
+    linear-gradient(0deg, rgba(23, 34, 58, 0.18), transparent 35%),
+    url("/assets/campus-season/campus-hero.png");
+  background-position: center, center;
+  background-size: cover;
+  box-shadow: 13px 15px 0 var(--pink), 17px 19px 0 var(--ink);
+}
+
+.home-art::before {
+  opacity: 0.24;
+}
+
+.home-live-badge,
+.home-art-stats {
+  border: 2px solid var(--ink);
+  border-radius: 13px;
+  background: rgba(255, 245, 232, 0.9);
+  color: var(--ink);
+  backdrop-filter: blur(6px);
+}
+
+.home-art-stats span,
+.home-art-stats small {
+  color: var(--ink);
+}
+
+.home-track-card {
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  background: #d9fff4;
+  color: var(--ink);
+  box-shadow: 7px 8px 0 var(--ink);
+}
+
+.home-track-card small,
+.home-track-card em,
+.home-track-card strong {
+  color: var(--ink);
+}
+
+.topbar {
+  border-bottom: 3px solid var(--ink);
+  background: rgba(255, 245, 232, 0.9);
+  box-shadow: 0 7px 0 rgba(23, 34, 58, 0.14);
+}
+
+.brand-kicker,
+.brand-title,
+.brand-title span,
+.brand-title em,
+.meta-strip,
+.meta-strip > span {
+  color: var(--ink);
+}
+
+.brand-kicker {
+  border-color: var(--ink);
+  background: #23cfb2;
+}
+
+.brand-kicker small,
+.brand-kicker i,
+.meta-strip small {
+  color: #43526c;
+}
+
+.game-cabinet {
+  border: 4px solid var(--ink);
+  border-radius: 24px;
+  background: #fff5e8;
+  box-shadow: 9px 11px 0 rgba(23, 34, 58, 0.32);
+}
+
+.cabinet-top {
+  border-bottom-color: var(--ink);
+  background: #45c8ed;
+  color: var(--ink);
+}
+
+.hud,
+.vehicle-upgrade-strip {
+  border-bottom-color: rgba(23, 34, 58, 0.36);
+  background: #e8fff8;
+}
+
+.hud-block,
+.road-legend,
+.powerup-legend,
+.music-state,
+.vehicle-level-badge,
+.vehicle-task-copy,
+.vehicle-task-meter {
+  border-color: rgba(23, 34, 58, 0.34);
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--ink);
+}
+
+.hud-block span,
+.hud-block strong,
+.hud-block small,
+.road-legend-item strong,
+.road-legend-item small,
+.powerup-legend-item strong,
+.powerup-legend-item small,
+.vehicle-task-copy strong,
+.vehicle-task-copy small,
+.music-state strong,
+.music-state span {
+  color: var(--ink);
+}
+
+.vehicle-level-badge {
+  background: var(--pink);
+}
+
+.vehicle-task-meter > span,
+.progress-track span {
+  background: linear-gradient(90deg, #23cfb2, #45c8ed, var(--pink));
+}
+
+.progress-track {
+  background: rgba(113, 135, 178, 0.28);
+}
+
+.game-screen {
+  border-top: 3px solid var(--ink);
+  background: #7187b2;
+}
+
+.game-screen canvas.is-handdrawn-theme {
+  image-rendering: auto;
+}
+
+.game-overlay {
+  background:
+    linear-gradient(180deg, rgba(255, 245, 232, 0.95), rgba(217, 255, 244, 0.96)),
+    url("/assets/campus-season/campus-road.png") center / cover;
+  color: var(--ink);
+}
+
+.rules-overlay h1,
+.rules-overlay p,
+.intro-overlay h1,
+.song-select-title span,
+.overlay-kicker,
+.result-overlay h2,
+.failure-copy,
+.pause-overlay p {
+  color: var(--ink);
+}
+
+.rules-logo,
+.stage-icon,
+.pause-icon,
+.failure-sign {
+  border-color: var(--ink);
+  background: var(--pink);
+  color: var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+.story-route > div,
+.story-mission,
+.track-picker button,
+.track-picker .uploaded-track-row,
+.song-player-name-field,
+.leaderboard-panel,
+.result-stats > div,
+.failure-ticket {
+  border-color: var(--ink);
+  background: rgba(255, 245, 232, 0.9);
+  color: var(--ink);
+}
+
+.track-picker button:hover,
+.track-picker button.is-selected,
+.track-picker .uploaded-track-row.is-selected {
+  border-color: var(--ink);
+  background: #d9fff4;
+  box-shadow: 5px 5px 0 var(--pink);
+}
+
+.track-picker .track-copy b,
+.track-picker .track-copy small,
+.track-picker em,
+.track-picker i,
+.song-player-name-field strong,
+.song-player-name-field small,
+.song-player-name-field > em {
+  color: var(--ink);
+}
+
+.song-player-name-field input {
+  border-color: rgba(23, 34, 58, 0.42);
+  border-radius: 9px;
+  background: white;
+  color: var(--ink);
+}
+
+.music-license-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 2px dashed var(--ink);
+  border-radius: 13px;
+  background: #fff0f6;
+  padding: 9px 11px;
+  color: var(--ink);
+  text-align: left;
+}
+
+.music-license-note > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--gold);
+  font-size: 15px;
+}
+
+.music-license-note div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.music-license-note strong {
+  font-size: 8px;
+}
+
+.music-license-note small {
+  color: #52617a;
+  font-size: 6px;
+  line-height: 1.45;
+}
+
+.music-license-note a {
+  border-bottom: 1px solid currentColor;
+  color: #b52f69;
+  font-size: 7px;
+  font-weight: 900;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.leaderboard-heading,
+.leaderboard-list > div,
+.result-label,
+.result-place,
+.concert-score,
+.coin-formula,
+.share-result-button {
+  color: var(--ink);
+}
+
+.result-stats {
+  border-color: var(--ink);
+  background: transparent;
+}
+
+.result-stats div + div {
+  border-color: rgba(23, 34, 58, 0.48);
+}
+
+.result-stats small {
+  color: #52617a;
+}
+
+.result-stats strong,
+.result-stats strong.gold-text,
+.share-card-rank > div:last-child strong {
+  color: var(--ink);
+}
+
+.share-result-button {
+  border-color: var(--ink);
+  border-radius: 15px;
+  background: #d9fff4;
+  box-shadow: 4px 5px 0 var(--ink);
+}
+
+.share-card-backdrop {
+  background: rgba(69, 200, 237, 0.9);
+}
+
+.share-result-card {
+  border-color: var(--ink);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 75% 10%, rgba(244, 126, 173, 0.3), transparent 35%),
+    repeating-linear-gradient(90deg, rgba(23, 34, 58, 0.035) 0 2px, transparent 2px 27px),
+    linear-gradient(160deg, #fff5e8, #d9fff4 72%);
+  box-shadow: 8px 9px 0 var(--ink);
+}
+
+.share-card-topline,
+.share-card-brand strong,
+.share-card-player strong,
+.share-card-score strong,
+.share-card-rank strong,
+.share-result-card > p {
+  color: var(--ink);
+}
+
+.share-card-brand > span {
+  border-color: var(--ink);
+  border-radius: 10px;
+  background: var(--pink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.share-card-player,
+.share-card-rank > div,
+.share-card-venue {
+  border-color: rgba(23, 34, 58, 0.5);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.share-card-player small,
+.share-card-score small,
+.share-card-rank small,
+.share-card-venue small,
+.share-card-player span,
+.share-card-venue strong {
+  color: #52617a;
+}
+
+.mobile-controls {
+  border-color: var(--ink);
+  background: #fff5e8;
+}
+
+.hit-button {
+  border-color: var(--ink);
+  border-radius: 50%;
+  background: var(--pink);
+  color: var(--ink);
+  box-shadow: 5px 6px 0 var(--ink);
+}
+
+footer {
+  color: #43526c;
+}
+
+@media (max-width: 780px) {
+  .home-screen {
+    background:
+      linear-gradient(180deg, rgba(69, 200, 237, 0.2), rgba(255, 245, 232, 0.94)),
+      url("/assets/campus-season/campus-road.png") center top / cover;
+  }
+
+  .home-copy {
+    border: 3px solid var(--ink);
+    border-radius: 20px;
+    background: rgba(255, 245, 232, 0.9);
+    padding: 18px;
+    box-shadow: 7px 8px 0 rgba(23, 34, 58, 0.28);
+    backdrop-filter: blur(6px);
+  }
+
+  .music-license-note {
+    grid-template-columns: auto 1fr;
+  }
+
+  .music-license-note a {
+    grid-column: 2;
+    width: max-content;
+  }
+}
+
+/* Single-track campus release: ImageGen icon system and spacing pass. */
+.home-mark > img {
+  display: block;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(3px 4px 0 rgba(23, 34, 58, 0.2));
+}
+
+.home-start-button .home-play-icon {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 0 rgba(23, 34, 58, 0.24));
+}
+
+.pause-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 78px;
+}
+
+.pause-toggle > img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.road-legend-item > img,
+.powerup-legend-item > img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.road-legend-item {
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 5px;
+}
+
+.powerup-chip > img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.rules-logo,
+.pause-icon,
+.stage-icon,
+.lucky-dialog-icon,
+.failure-sign {
+  display: block;
+  border: 0;
+  background: transparent;
+  object-fit: contain;
+  box-shadow: none;
+  clip-path: none;
+  filter: drop-shadow(4px 5px 0 rgba(23, 34, 58, 0.2));
+}
+
+.rules-logo {
+  width: 72px;
+  height: 72px;
+  margin: 4px 0 2px;
+}
+
+.pause-icon,
+.lucky-dialog-icon {
+  width: 92px;
+  height: 92px;
+  margin: 10px 0 6px;
+  padding: 0;
+}
+
+.stage-icon {
+  width: 82px;
+  height: 82px;
+  margin: 2px 0 -4px;
+}
+
+.failure-sign {
+  width: 94px;
+  height: 94px;
+  margin: 7px 0 0;
+  padding: 0;
+}
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.primary-button > img,
+.secondary-button > img,
+.rules-start-button > img {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.single-track-overlay {
+  justify-content: center;
+  gap: 0;
+  padding: 22px 18px;
+}
+
+.single-track-overlay .song-select-title {
+  margin-bottom: 16px;
+}
+
+.single-track-overlay .song-select-title h1 {
+  margin: 4px 0 5px;
+  font-size: clamp(42px, 10vw, 62px);
+  letter-spacing: -0.08em;
+}
+
+.single-track-overlay .song-select-title > span {
+  max-width: 390px;
+  font-size: 8px;
+  line-height: 1.55;
+  letter-spacing: 0.06em;
+}
+
+.single-song-card {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: center;
+  width: min(92%, 430px);
+  min-height: 96px;
+  gap: 12px;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  background: rgba(255, 245, 232, 0.94);
+  padding: 11px 13px;
+  color: var(--ink);
+  text-align: left;
+  box-shadow: 6px 7px 0 var(--pink);
+}
+
+.single-song-art {
+  display: grid;
+  width: 68px;
+  height: 68px;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: #d9fff4;
+}
+
+.single-song-art img {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+
+.single-song-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.single-song-copy small {
+  color: #159b8b;
+  font-size: 6px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+}
+
+.single-song-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.single-song-copy span {
+  color: #52617a;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.single-song-badges {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.single-song-badges b,
+.single-song-badges em {
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.single-song-badges b {
+  background: var(--gold);
+}
+
+.single-song-badges em {
+  background: #ffd7e6;
+}
+
+.chart-ready-note {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  width: min(92%, 430px);
+  gap: 10px;
+  margin: 15px 0 12px;
+  border: 2px dashed rgba(23, 34, 58, 0.65);
+  border-radius: 14px;
+  background: rgba(217, 255, 244, 0.9);
+  padding: 10px 12px;
+  color: var(--ink);
+  text-align: left;
+}
+
+.chart-ready-note > img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.chart-ready-note div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.chart-ready-note strong {
+  font-size: 9px;
+}
+
+.chart-ready-note small {
+  color: #43526c;
+  font-size: 7px;
+  line-height: 1.5;
+}
+
+.single-track-overlay .song-player-name-field {
+  margin: 0 0 13px;
+}
+
+.single-track-overlay .control-hint {
+  margin-top: 14px;
+  color: #43526c;
+}
+
+.share-result-button {
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+}
+
+.share-result-button > img {
+  grid-row: span 2;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.share-card-close {
+  padding: 3px;
+}
+
+.share-card-close > img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.share-card-brand > img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+}
+
+.share-card-venue {
+  grid-template-columns: 38px 1fr;
+}
+
+.share-card-venue > img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.steer-glyph {
+  display: block;
+  width: 44px;
+  height: 30px;
+  object-fit: contain;
+}
+
+@media (max-width: 780px) {
+  .home-mark > img {
+    width: 34px;
+    height: 34px;
+  }
+
+  .home-start-button .home-play-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .pause-toggle {
+    min-width: 68px;
+    gap: 3px;
+  }
+
+  .pause-toggle > img {
+    width: 15px;
+    height: 15px;
+  }
+
+  .road-legend-item,
+  .powerup-legend-item {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .road-legend-item > img,
+  .powerup-legend-item > img {
+    width: 24px;
+    height: 24px;
+  }
+
+  .single-track-overlay {
+    justify-content: center;
+    padding: 12px 10px;
+  }
+
+  .single-track-overlay .song-select-title {
+    margin-bottom: 10px;
+  }
+
+  .single-track-overlay .song-select-title h1 {
+    margin-block: 2px 3px;
+    font-size: clamp(36px, 11vw, 48px);
+  }
+
+  .single-track-overlay .song-select-title > span {
+    max-width: 310px;
+    font-size: 6.5px;
+  }
+
+  .single-song-card {
+    grid-template-columns: 58px minmax(0, 1fr);
+    width: 96%;
+    min-height: 82px;
+    gap: 9px;
+    border-width: 2px;
+    border-radius: 14px;
+    padding: 8px 10px;
+    box-shadow: 4px 5px 0 var(--pink);
+  }
+
+  .single-song-art {
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+  }
+
+  .single-song-art img {
+    width: 44px;
+    height: 44px;
+  }
+
+  .single-song-copy strong {
+    font-size: 12px;
+  }
+
+  .single-song-copy span {
+    font-size: 7px;
+  }
+
+  .single-song-badges {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 5px;
+    margin-top: -2px;
+  }
+
+  .single-song-badges b,
+  .single-song-badges em {
+    padding: 3px 7px;
+    font-size: 6px;
+  }
+
+  .chart-ready-note {
+    grid-template-columns: 34px minmax(0, 1fr);
+    width: 96%;
+    gap: 7px;
+    margin: 10px 0 8px;
+    padding: 7px 9px;
+  }
+
+  .chart-ready-note > img {
+    width: 32px;
+    height: 32px;
+  }
+
+  .chart-ready-note strong {
+    font-size: 8px;
+  }
+
+  .chart-ready-note small {
+    font-size: 6px;
+    line-height: 1.4;
+  }
+
+  .single-track-overlay .song-player-name-field {
+    width: 96%;
+    min-height: 62px;
+    margin-bottom: 8px;
+  }
+
+  .single-track-overlay .song-start-actions {
+    width: 96%;
+    gap: 7px;
+  }
+
+  .single-track-overlay .song-start-actions .primary-button {
+    min-width: 0;
+    flex: 1;
+    padding: 9px 10px;
+    font-size: 9px;
+  }
+
+  .single-track-overlay .song-start-actions .secondary-button {
+    min-width: 82px;
+    padding: 9px 10px;
+    font-size: 8px;
+  }
+
+  .single-track-overlay .song-start-actions img {
+    width: 20px;
+    height: 20px;
+  }
+
+  .single-track-overlay .control-hint {
+    margin-top: 9px;
+    font-size: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  .pause-icon,
+  .lucky-dialog-icon {
+    width: 76px;
+    height: 76px;
+  }
+
+  .stage-icon {
+    width: 68px;
+    height: 68px;
+  }
+
+  .failure-sign {
+    width: 78px;
+    height: 78px;
+  }
+}
+
+@media (max-width: 380px), (max-height: 710px) and (max-width: 780px) {
+  .single-track-overlay {
+    justify-content: flex-start;
+    padding-top: 9px;
+  }
+
+  .single-track-overlay .song-select-title h1 {
+    font-size: 33px;
+  }
+
+  .single-track-overlay .song-select-title > span,
+  .single-track-overlay .control-hint {
+    display: none;
+  }
+
+  .single-song-card {
+    min-height: 74px;
+  }
+
+  .chart-ready-note {
+    margin-block: 7px 6px;
   }
 }

@@ -1,22 +1,26 @@
 "use client";
 
+/* ImageGen assets need fluid CSS sizing inside the canvas-adjacent game UI. */
+/* eslint-disable @next/next/no-img-element */
+
 import { useCallback, useEffect, useRef, useState } from "react";
+import treasureChart from "./data/congratulations-treasure.chart.json";
 
 const GAME_WIDTH = 480;
 const GAME_HEIGHT = 720;
 const ROAD_LEFT = 42;
 const ROAD_WIDTH = 396;
 const LANE_WIDTH = ROAD_WIDTH / 5;
+const ROAD_HORIZON_Y = 302;
+const ROAD_VANISH_X = GAME_WIDTH / 2;
 const PLAYER_Y = 584;
+const ENTITY_RENDER_SIZE = 68;
 const STARTING_FANS = 0;
 const TRAVEL_BEATS = 4;
 const MISS_WINDOW = 190;
 const HIT_INPUT_GUARD_MS = 70;
 const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
-const MIN_PLAYABLE_STRONG_BEATS = 90;
-const MIN_STRONG_BEAT_GAP = 2;
-const MAX_STRONG_BEAT_GAP = 4;
 const MIN_OBSTACLE_BEAT_GAP = 3;
 const JOYSTICK_FIRST_REPEAT_MS = 280;
 const JOYSTICK_REPEAT_MS = 220;
@@ -44,12 +48,10 @@ function triggerHaptic(pattern: number | number[]) {
 type GameStatus =
   "ready" | "playing" | "paused" | "lucky" | "finished" | "failed";
 type EntityType = "fan" | "obstacle" | "lucky" | "magnet" | "invincible";
-type ObstacleType = "cone" | "speaker" | "barrier";
+type ObstacleType = "cone" | "pothole" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
-type TrackId = "guaihuo" | "lueluelue" | "earth-tour" | "custom-upload";
 type ToneMode = "normal" | "thick" | "thin";
-type MapTheme = "illusion-city" | "candy-blocks" | "earth-orbit" | "custom";
-type ReadyPage = "home" | "rules" | "songs";
+type ReadyPage = "home" | "rules" | "start";
 
 type VehicleLevel = {
   level: number;
@@ -104,6 +106,13 @@ type LuckyDialog =
       capped: boolean;
     };
 
+type FailureSummary = {
+  reason: "pedestrian-collision";
+  fans: number;
+  maxCombo: number;
+  progress: number;
+};
+
 type Particle = {
   x: number;
   y: number;
@@ -129,7 +138,7 @@ type ConcertTier = {
   place: string;
   coins: number;
   color: string;
-  icon: string;
+  iconSrc: string;
 };
 
 type LeaderboardEntry = {
@@ -154,10 +163,11 @@ type ShareCardData = {
   fans: number;
   maxCombo: number;
   venue: string;
+  tierIconSrc: string;
 };
 
 type Track = {
-  id: TrackId;
+  id: "congratulations-treasure";
   name: string;
   artist: string;
   english: string;
@@ -165,8 +175,8 @@ type Track = {
   tempoLabel: string;
   difficulty: string;
   color: string;
-  audioSrc?: string;
-  mapTheme: MapTheme;
+  audioSrc: string;
+  mapTheme: "campus-season";
   mapLabel: string;
   totalBeats: number;
   grannyBeats: [number, number];
@@ -180,37 +190,37 @@ type Track = {
 const VEHICLE_LEVELS: VehicleLevel[] = [
   {
     level: 1,
-    name: "星芽小巴",
+    name: "校园自行车",
     capacity: 30,
-    primary: "#ff4fa3",
-    secondary: "#ff78bf",
-    task: "本局 HIT 4 次 + PERFECT 1 次",
+    primary: "#23cfb2",
+    secondary: "#f5a5c3",
+    task: "收集 4 颗知识星 + PERFECT 1 次",
     requirement: { hits: 4, perfect: 1 },
   },
   {
     level: 2,
-    name: "应援大巴",
+    name: "元气摩托车",
     capacity: 55,
-    primary: "#6a5cff",
-    secondary: "#9c8cff",
-    task: "本局 HIT 12 次 + 最高连击 6",
+    primary: "#f47ead",
+    secondary: "#23cfb2",
+    task: "收集 12 颗知识星 + 最高连击 6",
     requirement: { hits: 12, maxCombo: 6 },
   },
   {
     level: 3,
-    name: "巡演豪华号",
+    name: "校园小轿车",
     capacity: 85,
-    primary: "#00b9c8",
-    secondary: "#72f1ff",
-    task: "本局 HIT 22 次 + PERFECT 7 次 + 最高连击 10",
+    primary: "#45c8ed",
+    secondary: "#f5a5c3",
+    task: "收集 22 颗知识星 + PERFECT 7 次 + 最高连击 10",
     requirement: { hits: 22, perfect: 7, maxCombo: 10 },
   },
   {
     level: 4,
-    name: "银河应援号",
+    name: "开学校车大巴",
     capacity: 120,
-    primary: "#e9a900",
-    secondary: "#ffe66d",
+    primary: "#45c8ed",
+    secondary: "#f47ead",
     task: "已达最高等级",
   },
 ];
@@ -250,184 +260,81 @@ function getVehicleTaskProgress(
   return Math.round(Math.min(1, Math.min(...progressParts)) * 100);
 }
 
-const TRACKS: Track[] = [
-  {
-    id: "guaihuo",
-    name: "怪火",
-    artist: "aespa",
-    english: "ILLUSION",
-    description: "低频强拍谱面 · 重拍折返换道",
-    tempoLabel: "AUTO MAP",
-    difficulty: "HARD",
-    color: "#ff5b9f",
-    audioSrc: "/audio/guaihuo.mp3",
-    mapTheme: "illusion-city",
-    mapLabel: "幻火夜城",
-    totalBeats: 96,
-    grannyBeats: [36, 70],
-    melody: [220, 277.18, 329.63, 440, 415.3, 329.63, 277.18, 246.94],
-    lanePattern: [2, 3, 2, 1, 0, 1, 3, 4],
-    notePattern: [1],
-    intensityPattern: [0.7],
-    bpmAt: () => 96,
-  },
-  {
-    id: "lueluelue",
-    name: "略略略略略",
-    artist: "TOP登陆少年组合",
-    english: "LUE LUE LUE",
-    description: "跳跃节拍谱面 · 高频连续变道",
-    tempoLabel: "AUTO MAP",
-    difficulty: "EXPERT",
-    color: "#ffe66d",
-    audioSrc: "/audio/lueluelue.mp3",
-    mapTheme: "candy-blocks",
-    mapLabel: "糖果街区",
-    totalBeats: 96,
-    grannyBeats: [38, 72],
-    melody: [246.94, 329.63, 392, 493.88, 440, 392, 329.63, 293.66],
-    lanePattern: [2, 1, 3, 4, 2, 0, 1, 3],
-    notePattern: [1],
-    intensityPattern: [0.7],
-    bpmAt: () => 112,
-  },
-  {
-    id: "earth-tour",
-    name: "昨晚我环游了地球",
-    artist: "汪苏泷",
-    english: "AROUND THE EARTH",
-    description: "旋律流动谱面 · 随段落能量展开",
-    tempoLabel: "AUTO MAP",
-    difficulty: "NORMAL",
-    color: "#72f1ff",
-    audioSrc: "/audio/earth-tour.mp3",
-    mapTheme: "earth-orbit",
-    mapLabel: "星球环线",
-    totalBeats: 96,
-    grannyBeats: [34, 68],
-    melody: [196, 246.94, 293.66, 369.99, 329.63, 293.66, 246.94, 220],
-    lanePattern: [2, 2, 3, 4, 3, 2, 1, 0],
-    notePattern: [1],
-    intensityPattern: [0.6],
-    bpmAt: () => 92,
-  },
-  {
-    id: "custom-upload",
-    name: "自选歌曲",
-    artist: "本地音乐",
-    english: "CUSTOM TRACK",
-    description: "上传本地歌曲，自动分析鼓点与节拍",
-    tempoLabel: "AUTO BPM",
-    difficulty: "RHYTHM",
-    color: "#ffe66d",
-    mapTheme: "custom",
-    mapLabel: "自定义巡演",
-    totalBeats: 96,
-    grannyBeats: [36, 70],
-    melody: [220, 277.18, 329.63, 440, 415.3, 329.63, 277.18, 246.94],
-    lanePattern: [
-      2, 3, 2, 1, 0, 1, 3, 4, 3, 1, 2, 4, 3, 2, 0, 1, 2, 4, 3, 2, 1, 0, 2, 3, 4,
-      2, 0, 1, 3, 4, 2, 1,
-    ],
-    notePattern: [1],
-    intensityPattern: [0.65],
-    bpmAt: () => 96,
-  },
-];
+const PRECOMPUTED_CHART = treasureChart;
+const AUDIO_SOURCE_API =
+  process.env.NEXT_PUBLIC_TREASURE_AUDIO_API?.trim() ?? "";
+const DIRECT_AUDIO_URL =
+  process.env.NEXT_PUBLIC_TREASURE_AUDIO_URL?.trim() ?? "";
+const LEADERBOARD_SONG_KEY = `track:${PRECOMPUTED_CHART.audio.id}:${PRECOMPUTED_CHART.chartVersion}`;
 
-const BUILT_IN_TRACK_ORDER: Array<Exclude<TrackId, "custom-upload">> = [
-  "earth-tour",
-  "lueluelue",
-  "guaihuo",
-];
-const DEFAULT_TRACK =
-  TRACKS.find((track) => track.id === "earth-tour") ?? TRACKS[0];
-
-const MAP_PALETTES: Record<
-  MapTheme,
-  {
-    sky: string;
-    sidewalk: string;
-    building: string;
-    road: string;
-    edgeLeft: string;
-    edgeRight: string;
-    windowA: string;
-    windowB: string;
-  }
-> = {
-  "illusion-city": {
-    sky: "#09061b",
-    sidewalk: "#1c1037",
-    building: "#32184d",
-    road: "#120f24",
-    edgeLeft: "#ff4fa3",
-    edgeRight: "#8a5cff",
-    windowA: "#ff6e3f",
-    windowB: "#ff4fa3",
-  },
-  "candy-blocks": {
-    sky: "#120d2d",
-    sidewalk: "#27194c",
-    building: "#56326b",
-    road: "#17122d",
-    edgeLeft: "#ffe66d",
-    edgeRight: "#ff73bd",
-    windowA: "#ffe66d",
-    windowB: "#72f1ff",
-  },
-  "earth-orbit": {
-    sky: "#f4a19f",
-    sidewalk: "#e95496",
-    building: "#d73786",
-    road: "#69324f",
-    edgeLeft: "#ffdc69",
-    edgeRight: "#ff72bb",
-    windowA: "#ffdc69",
-    windowB: "#ff9cc8",
-  },
-  custom: {
-    sky: "#090823",
-    sidewalk: "#15113b",
-    building: "#272054",
-    road: "#111129",
-    edgeLeft: "#72f1ff",
-    edgeRight: "#ff4fa3",
-    windowA: "#ff4faf",
-    windowB: "#5ff6ff",
-  },
+const GAME_TRACK: Track = {
+  id: "congratulations-treasure",
+  name: PRECOMPUTED_CHART.audio.title,
+  artist: PRECOMPUTED_CHART.audio.artist,
+  english: "CONGRATULATIONS, TREASURE FOUND",
+  description: "开学季唯一主题曲 · 跟随节奏一路冲进校园",
+  tempoLabel: "OPENING SEASON",
+  difficulty: "NORMAL",
+  color: "#23cfb2",
+  audioSrc: PRECOMPUTED_CHART.audio.localSrc,
+  mapTheme: "campus-season",
+  mapLabel: "开学季校园",
+  totalBeats: PRECOMPUTED_CHART.timing.beatTimesMs.length - 1,
+  grannyBeats: PRECOMPUTED_CHART.gameplay.grannyBeats as [number, number],
+  melody: [261.63, 329.63, 392, 329.63, 293.66, 261.63, 220, 196],
+  lanePattern: PRECOMPUTED_CHART.gameplay.lanePattern,
+  notePattern: PRECOMPUTED_CHART.gameplay.notePattern,
+  intensityPattern: PRECOMPUTED_CHART.gameplay.intensityPattern,
+  bpmAt: () => PRECOMPUTED_CHART.timing.bpm,
 };
 
-const EARTH_TOUR_ASSETS = {
-  city: "/assets/earth-tour/romance-city.png",
-  buggy: "/assets/earth-tour/electric-buggy.png",
-  monsterCar: "/assets/earth-tour/monster-car.png",
-  dragon: "/assets/earth-tour/pink-dragon.png",
-  hundredThousandVolts: "/assets/earth-tour/hundred-thousand-volts.png",
-  magnetCrystal: "/assets/earth-tour/romance-magnet.png",
-  luckyBag: "/assets/earth-tour/lucky-bag.png",
-  dish: "/assets/earth-tour/broken-dish.png",
-  crystalObstacle: "/assets/earth-tour/crystal-obstacle.png",
-  lightStick: "/assets/earth-tour/support-light-stick.png",
+const MAP_PALETTE = {
+  sky: "#45c8ed",
+  sidewalk: "#23cfb2",
+  building: "#f5a5c3",
+  road: "#7187b2",
+  edgeLeft: "#23cfb2",
+  edgeRight: "#f47ead",
+  windowA: "#fff5e8",
+  windowB: "#45c8ed",
+};
+
+const CAMPUS_ASSETS = {
+  road: "/assets/campus-season/campus-road.png",
+  bicycle: "/assets/campus-season/vehicle-bicycle.png",
+  motorcycle: "/assets/campus-season/vehicle-motorcycle.png",
+  car: "/assets/campus-season/vehicle-car.png",
+  schoolBus: "/assets/campus-season/vehicle-school-bus.png",
+  knowledgeStar: "/assets/campus-season/icons/knowledge-star.png",
+  mysterySchoolbag: "/assets/campus-season/icons/mystery-schoolbag.png",
+  magnet: "/assets/campus-season/icons/campus-magnet.png",
+  lightning: "/assets/campus-season/icons/energy-lightning.png",
+  cone: "/assets/campus-season/icons/obstacle-cone.png",
+  pothole: "/assets/campus-season/icons/obstacle-pothole.png",
+  barrier: "/assets/campus-season/icons/obstacle-barrier.png",
+  grandma: "/assets/campus-season/icons/grandma-crossing.png",
 } as const;
 
-type EarthTourAsset = keyof typeof EARTH_TOUR_ASSETS;
-
-const LUELUELUE_ASSETS = {
-  concertRoad: "/assets/lueluelue/concert-road.png",
-  lightStick: "/assets/lueluelue/support-light-stick.png",
-  electricBarrier: "/assets/lueluelue/electric-barrier.png",
-  brokenSpeakers: "/assets/lueluelue/broken-speakers.png",
-  chainedMine: "/assets/lueluelue/chained-mine.png",
-  levelTwoScooter: "/assets/lueluelue/level-2-scooter.png",
-  levelThreeCar: "/assets/lueluelue/level-3-car.png",
-  levelFourStageTruck: "/assets/lueluelue/level-4-stage-truck.png",
-  magnet: "/assets/lueluelue/magnet.png",
-  luckyBag: "/assets/lueluelue/lucky-bag.png",
-  invincible: "/assets/lueluelue/invincible.png",
+const UI_ICONS = {
+  pencil: "/assets/campus-season/icons/pencil-mark.png",
+  play: "/assets/campus-season/icons/play.png",
+  pause: "/assets/campus-season/icons/pause.png",
+  restart: "/assets/campus-season/icons/restart.png",
+  close: "/assets/campus-season/icons/close.png",
+  steer: "/assets/campus-season/icons/steer.png",
+  crossing: "/assets/campus-season/icons/crossing-warning.png",
+  star: "/assets/campus-season/icons/knowledge-star.png",
 } as const;
 
-type LueLueLueAsset = keyof typeof LUELUELUE_ASSETS;
+const OUTCOME_ICONS = {
+  slacker: "/assets/campus-season/icons/outcome-slacker-fish.png",
+  scholar: "/assets/campus-season/icons/outcome-scholar.png",
+  grinder: "/assets/campus-season/icons/outcome-grind-king.png",
+  hidden: "/assets/campus-season/icons/outcome-hidden-achiever.png",
+  genius: "/assets/campus-season/icons/outcome-genius.png",
+} as const;
+
+type CampusAsset = keyof typeof CAMPUS_ASSETS;
 
 function drawContainedImage(
   context: CanvasRenderingContext2D,
@@ -452,16 +359,6 @@ function drawContainedImage(
   );
 }
 
-function getTrack(id: TrackId) {
-  return TRACKS.find((track) => track.id === id) ?? DEFAULT_TRACK;
-}
-
-function getLeaderboardSongKey(trackId: TrackId, songName: string) {
-  if (trackId !== "custom-upload") return `track:${trackId}`;
-  const normalizedName = songName.trim().toLocaleLowerCase().slice(0, 80);
-  return `custom:${normalizedName || "uploaded-song"}`;
-}
-
 function drawFittedText(
   context: CanvasRenderingContext2D,
   text: string,
@@ -480,8 +377,21 @@ function drawFittedText(
   context.fillText(text, x, y, maxWidth);
 }
 
+function loadBrowserImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Unable to load image: ${src}`));
+    image.src = src;
+  });
+}
+
 async function createShareCardBlob(data: ShareCardData) {
   await document.fonts?.ready;
+  const [brandIcon, tierIcon] = await Promise.all([
+    loadBrowserImage(UI_ICONS.star),
+    loadBrowserImage(data.tierIconSrc),
+  ]);
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1440;
@@ -489,14 +399,14 @@ async function createShareCardBlob(data: ShareCardData) {
   if (!context) return null;
 
   const background = context.createLinearGradient(0, 0, 1080, 1440);
-  background.addColorStop(0, "#090823");
-  background.addColorStop(0.56, "#1a1045");
-  background.addColorStop(1, "#09071d");
+  background.addColorStop(0, "#45c8ed");
+  background.addColorStop(0.56, "#d9fff4");
+  background.addColorStop(1, "#fff5e8");
   context.fillStyle = background;
   context.fillRect(0, 0, 1080, 1440);
 
   context.globalAlpha = 0.14;
-  context.strokeStyle = "#72f1ff";
+  context.strokeStyle = "#17223a";
   context.lineWidth = 3;
   for (let x = 36; x < 1080; x += 72) {
     context.beginPath();
@@ -513,85 +423,81 @@ async function createShareCardBlob(data: ShareCardData) {
   context.globalAlpha = 1;
 
   const glow = context.createRadialGradient(540, 340, 30, 540, 340, 500);
-  glow.addColorStop(0, "rgba(255,79,163,0.42)");
-  glow.addColorStop(1, "rgba(255,79,163,0)");
+  glow.addColorStop(0, "rgba(244,126,173,0.55)");
+  glow.addColorStop(1, "rgba(244,126,173,0)");
   context.fillStyle = glow;
   context.fillRect(0, 0, 1080, 900);
 
-  context.fillStyle = "#ff4fa3";
+  context.fillStyle = "#f47ead";
   context.fillRect(48, 48, 984, 12);
-  context.fillStyle = "#72f1ff";
+  context.fillStyle = "#23cfb2";
   context.fillRect(48, 1380, 984, 12);
-  context.strokeStyle = "#5b4da1";
+  context.strokeStyle = "#17223a";
   context.lineWidth = 8;
   context.strokeRect(48, 48, 984, 1344);
 
   context.textAlign = "left";
-  context.fillStyle = "#72f1ff";
+  context.fillStyle = "#17223a";
   context.font = '900 30px "Courier New", monospace';
-  context.fillText("TOUR RESULT / FAN BUS", 92, 125);
+  context.fillText("CAMPUS RESULT / OPENING SEASON", 92, 125);
 
-  context.fillStyle = "#ffe66d";
+  context.fillStyle = "#fff5e8";
   context.fillRect(92, 172, 96, 74);
-  context.fillStyle = "#5f36d5";
-  context.fillRect(104, 184, 72, 50);
-  context.fillStyle = "#ffe66d";
-  context.font = '900 42px "Arial Black", sans-serif';
-  context.textAlign = "center";
-  context.fillText("★", 140, 226);
+  drawContainedImage(context, brandIcon, 100, 176, 80, 66);
 
-  context.fillStyle = "#ffffff";
+  context.fillStyle = "#17223a";
   context.textAlign = "left";
-  drawFittedText(context, "应援大巴冲冲冲！", 218, 232, 760, 66, 42);
+  drawFittedText(context, "开学冲冲冲！", 218, 232, 760, 66, 42);
 
-  context.fillStyle = "rgba(12,9,42,0.92)";
+  context.fillStyle = "rgba(255,245,232,0.94)";
   context.fillRect(92, 310, 896, 310);
-  context.strokeStyle = "#ff4fa3";
+  context.strokeStyle = "#f47ead";
   context.lineWidth = 6;
   context.strokeRect(92, 310, 896, 310);
-  context.fillStyle = "#9e94cb";
+  context.fillStyle = "#52617a";
   context.font = '900 28px "Courier New", monospace';
-  context.fillText("PLAYER", 132, 374);
-  context.fillStyle = "#ffffff";
+  context.fillText("STUDENT", 132, 374);
+  context.fillStyle = "#17223a";
   drawFittedText(context, data.nickname, 132, 466, 816, 88, 54);
-  context.fillStyle = "#72f1ff";
+  context.fillStyle = "#159b8b";
   context.font = '900 28px "Courier New", monospace';
-  context.fillText("NOW PLAYING", 132, 535);
-  context.fillStyle = "#ffe66d";
+  context.fillText("TODAY'S TRACK", 132, 535);
+  context.fillStyle = "#e7518f";
   drawFittedText(context, `《${data.song}》`, 132, 588, 816, 46, 28);
 
-  context.fillStyle = "#ff4fa3";
+  context.fillStyle = "#e7518f";
   context.font = '900 34px "Courier New", monospace';
-  context.fillText("CONCERT SCORE", 92, 720);
-  context.fillStyle = "#ffffff";
+  context.fillText("KNOWLEDGE SCORE", 92, 720);
+  context.fillStyle = "#17223a";
   drawFittedText(context, String(data.score), 92, 930, 896, 210, 150);
-  context.fillStyle = "#ffe66d";
+  context.fillStyle = "#f47ead";
   context.fillRect(92, 970, 560, 14);
 
-  context.fillStyle = "#17113d";
+  context.fillStyle = "rgba(255,255,255,0.72)";
   context.fillRect(92, 1040, 426, 170);
   context.fillRect(562, 1040, 426, 170);
-  context.strokeStyle = "#4f438d";
+  context.strokeStyle = "#7187b2";
   context.lineWidth = 5;
   context.strokeRect(92, 1040, 426, 170);
   context.strokeRect(562, 1040, 426, 170);
-  context.fillStyle = "#9e94cb";
+  context.fillStyle = "#52617a";
   context.font = '900 26px "Courier New", monospace';
-  context.fillText("SONG RANK", 124, 1092);
-  context.fillText("FANS / MAX COMBO", 594, 1092);
-  context.fillStyle = "#72f1ff";
+  context.fillText("CAMPUS RANK", 124, 1092);
+  context.fillText("STARS / MAX COMBO", 594, 1092);
+  context.fillStyle = "#159b8b";
   context.font = '900 66px "Arial Black", sans-serif';
   context.fillText(data.rank ? `#${data.rank}` : "--", 124, 1173);
-  context.fillStyle = "#ffffff";
+  context.fillStyle = "#17223a";
   context.font = '900 48px "Arial Black", sans-serif';
   context.fillText(`${data.fans} / ×${data.maxCombo}`, 594, 1168);
 
-  context.fillStyle = "#ffffff";
+  drawContainedImage(context, tierIcon, 92, 1234, 72, 72);
+  context.fillStyle = "#17223a";
   context.font = '900 34px "PingFang SC", sans-serif';
-  context.fillText(data.venue, 92, 1292);
-  context.fillStyle = "#8f86b9";
+  context.fillText(data.venue, 184, 1288);
+  context.fillStyle = "#52617a";
   context.font = '900 24px "Courier New", monospace';
-  context.fillText("带着粉丝奔赴下一场演唱会", 92, 1340);
+  context.fillText("这次开学，我的隐藏人设被发现了", 184, 1332);
 
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob(resolve, "image/png", 1);
@@ -603,436 +509,32 @@ function downloadShareCard(blob: Blob, song: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `应援大巴-${safeSong || "巡演成绩"}.png`;
+  anchor.download = `开学冲冲冲-${safeSong || "校园成绩"}.png`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-function getBeatTimes(track: Track) {
-  const times = [0];
-  for (let beat = 0; beat < track.totalBeats + TRAVEL_BEATS + 2; beat += 1) {
-    times.push(times[times.length - 1] + 60_000 / track.bpmAt(beat));
-  }
-  return times;
-}
-
-function getPedestrianBeats(totalBeats: number): [number, number] {
-  const lastSafeBeat = Math.max(32, totalBeats - 8);
-  const firstBeat = Math.max(
-    16,
-    Math.min(lastSafeBeat - 22, Math.round(totalBeats * 0.36)),
-  );
-  const secondBeat = Math.min(
-    lastSafeBeat,
-    Math.max(firstBeat + 20, Math.round(totalBeats * 0.72)),
-  );
-  return [firstBeat, secondBeat];
-}
-
-function analyzeAudioBuffer(buffer: AudioBuffer) {
-  const hopSize = 1024;
-  const frameCount = Math.floor(buffer.length / hopSize);
-  const envelope = new Float32Array(frameCount);
-  const channels = Math.min(2, buffer.numberOfChannels);
-
-  for (let frame = 0; frame < frameCount; frame += 1) {
-    let energy = 0;
-    const start = frame * hopSize;
-    const end = Math.min(start + hopSize, buffer.length);
-    for (let channel = 0; channel < channels; channel += 1) {
-      const data = buffer.getChannelData(channel);
-      for (let sample = start; sample < end; sample += 4) {
-        energy += Math.abs(data[sample]);
-      }
-    }
-    envelope[frame] = energy / Math.max(1, ((end - start) / 4) * channels);
-  }
-
-  const flux = new Float32Array(frameCount);
-  for (let frame = 1; frame < frameCount; frame += 1) {
-    flux[frame] = Math.max(0, envelope[frame] - envelope[frame - 1]);
-  }
-
-  const secondsPerFrame = hopSize / buffer.sampleRate;
-  const onsets: Array<{ time: number; strength: number }> = [];
-  let lastOnset = -1;
-  const rollingRadius = Math.max(4, Math.round(0.45 / secondsPerFrame));
-  const minGapFrames = Math.max(1, Math.round(0.16 / secondsPerFrame));
-
-  for (
-    let frame = rollingRadius;
-    frame < frameCount - rollingRadius;
-    frame += 1
-  ) {
-    let localAverage = 0;
-    for (
-      let index = frame - rollingRadius;
-      index <= frame + rollingRadius;
-      index += 1
-    ) {
-      localAverage += flux[index];
-    }
-    localAverage /= rollingRadius * 2 + 1;
-    const isPeak =
-      flux[frame] > flux[frame - 1] && flux[frame] >= flux[frame + 1];
-    if (
-      isPeak &&
-      flux[frame] > Math.max(0.002, localAverage * 1.45) &&
-      frame - lastOnset >= minGapFrames
-    ) {
-      onsets.push({ time: frame * secondsPerFrame, strength: flux[frame] });
-      lastOnset = frame;
-    }
-  }
-
-  const bpmScores = new Map<number, number>();
-  const strongest = [...onsets]
-    .sort((a, b) => b.strength - a.strength)
-    .slice(0, 220)
-    .sort((a, b) => a.time - b.time);
-
-  for (let first = 0; first < strongest.length; first += 1) {
-    for (
-      let second = first + 1;
-      second < Math.min(strongest.length, first + 9);
-      second += 1
-    ) {
-      const gap = strongest[second].time - strongest[first].time;
-      if (gap < 0.28 || gap > 1.35) continue;
-      let candidate = 60 / gap;
-      while (candidate < 78) candidate *= 2;
-      while (candidate > 168) candidate /= 2;
-      const rounded = Math.round(candidate);
-      const weight = Math.sqrt(
-        strongest[first].strength * strongest[second].strength,
-      );
-      bpmScores.set(rounded, (bpmScores.get(rounded) ?? 0) + weight);
-    }
-  }
-
-  let bpm = 96;
-  let bestScore = -1;
-  for (const [candidate, score] of bpmScores) {
-    const smoothed =
-      score +
-      (bpmScores.get(candidate - 1) ?? 0) * 0.55 +
-      (bpmScores.get(candidate + 1) ?? 0) * 0.55;
-    if (smoothed > bestScore) {
-      bestScore = smoothed;
-      bpm = candidate;
-    }
-  }
-
-  const beatInterval = 60 / bpm;
-  const phaseCandidates = strongest.filter(
-    (onset) => onset.time < Math.min(20, buffer.duration),
-  );
-  let phase = phaseCandidates[0]?.time ?? 0;
-  let phaseScore = -1;
-  for (const candidate of phaseCandidates.slice(0, 80)) {
-    let score = 0;
-    for (const onset of strongest) {
-      const distanceInBeats = Math.abs(
-        (onset.time - candidate.time) / beatInterval,
-      );
-      const distanceToGrid = Math.abs(
-        distanceInBeats - Math.round(distanceInBeats),
-      );
-      if (distanceToGrid < 0.16) {
-        score += onset.strength * (1 - distanceToGrid / 0.16);
-      }
-    }
-    if (score > phaseScore) {
-      phaseScore = score;
-      phase = candidate.time;
-    }
-  }
-
-  while (phase - beatInterval >= 0) phase -= beatInterval;
-  const beatTimes: number[] = [];
-  for (let time = phase; time <= buffer.duration; time += beatInterval) {
-    beatTimes.push(Math.round(time * 1000));
-  }
-  if (beatTimes.length < 12) {
-    beatTimes.length = 0;
-    for (let time = 0; time <= buffer.duration; time += 60 / 96) {
-      beatTimes.push(Math.round(time * 1000));
-    }
-    bpm = 96;
-  }
-
-  const beatFeatures = beatTimes.map((time) => {
-    const frame = Math.min(
-      flux.length - 1,
-      Math.max(0, Math.round(time / 1000 / secondsPerFrame)),
-    );
-    let onset = 0;
-    let energy = 0;
-    let samples = 0;
-    for (
-      let index = Math.max(0, frame - 3);
-      index <= Math.min(flux.length - 1, frame + 3);
-      index += 1
-    ) {
-      onset = Math.max(onset, flux[index]);
-      energy += envelope[index];
-      samples += 1;
-    }
-    return { onset, energy: energy / Math.max(1, samples) };
-  });
-  const percentile = (values: number[], ratio: number) => {
-    const sorted = [...values].sort((a, b) => a - b);
-    return (
-      sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))] ??
-      0
-    );
-  };
-  const onsetReference = Math.max(
-    0.0001,
-    percentile(
-      beatFeatures.map((feature) => feature.onset),
-      0.82,
-    ),
-  );
-  const energyFloor = percentile(
-    beatFeatures.map((feature) => feature.energy),
-    0.16,
-  );
-  const energyReference = Math.max(
-    energyFloor + 0.0001,
-    percentile(
-      beatFeatures.map((feature) => feature.energy),
-      0.78,
-    ),
-  );
-  const intensityPattern = beatFeatures.map((feature) => {
-    const onsetStrength = Math.min(1, feature.onset / onsetReference);
-    const bodyStrength = Math.min(
-      1,
-      Math.max(
-        0,
-        (feature.energy - energyFloor) / (energyReference - energyFloor),
-      ),
-    );
-    return Math.round((onsetStrength * 0.72 + bodyStrength * 0.28) * 100) / 100;
-  });
-  const notePattern = intensityPattern.map((intensity, beat) => {
-    const feature = beatFeatures[beat];
-    const hasBody = feature.energy > Math.max(0.002, energyFloor * 0.72);
-    if (!hasBody) return 0;
-    if (intensity >= 0.72 || (beat % 4 === 0 && intensity >= 0.42)) return 2;
-    if (intensity >= 0.34 || (beat % 2 === 0 && intensity >= 0.24)) return 1;
-    return 0;
-  });
-
-  // Avoid long empty stretches in sustained sections, while keeping intros and
-  // breakdowns sparse. Every inserted note still sits on the analysed beat grid.
-  let emptyRun = 0;
-  for (let beat = 0; beat < notePattern.length; beat += 1) {
-    if (notePattern[beat] > 0) {
-      emptyRun = 0;
-      continue;
-    }
-    emptyRun += 1;
-    if (
-      emptyRun >= 4 &&
-      beatFeatures[beat].energy > Math.max(0.002, energyFloor)
-    ) {
-      notePattern[beat] = 1;
-      emptyRun = 0;
-    }
-  }
-
-  // Keep the top venue difficult but achievable. Each full-length map exposes
-  // at least 90 genuine musical accents, which is enough to reach 6,500 points
-  // with a strong run. Adjacent accents are thinned so dense choruses never
-  // make the road feel as though the song itself suddenly sped up.
-  const lastPlayableBeat = notePattern.length - 2;
-  let previousStrongBeat = -Infinity;
-  for (let beat = TRAVEL_BEATS; beat <= lastPlayableBeat; beat += 1) {
-    if (notePattern[beat] !== 2) continue;
-    if (beat - previousStrongBeat >= MIN_STRONG_BEAT_GAP) {
-      previousStrongBeat = beat;
-      continue;
-    }
-    if (intensityPattern[beat] > intensityPattern[previousStrongBeat]) {
-      notePattern[previousStrongBeat] = 1;
-      previousStrongBeat = beat;
-    } else {
-      notePattern[beat] = 1;
-    }
-  }
-  const playableStrongBeats = () =>
-    notePattern
-      .slice(TRAVEL_BEATS, lastPlayableBeat + 1)
-      .filter((level) => level === 2).length;
-  const targetStrongBeats = Math.min(
-    MIN_PLAYABLE_STRONG_BEATS,
-    Math.ceil(
-      Math.max(0, lastPlayableBeat - TRAVEL_BEATS + 1) / MIN_STRONG_BEAT_GAP,
-    ),
-  );
-  if (playableStrongBeats() < targetStrongBeats) {
-    const strongestEmptyBars: number[] = [];
-    for (
-      let barStart = TRAVEL_BEATS;
-      barStart <= lastPlayableBeat;
-      barStart += 4
-    ) {
-      const barEnd = Math.min(lastPlayableBeat, barStart + 3);
-      const barBeats = Array.from(
-        { length: barEnd - barStart + 1 },
-        (_, index) => barStart + index,
-      );
-      if (barBeats.some((beat) => notePattern[beat] === 2)) continue;
-      const strongestBeat = barBeats
-        .filter(
-          (beat) =>
-            beatFeatures[beat].energy > Math.max(0.002, energyFloor * 0.72),
-        )
-        .sort(
-          (first, second) => intensityPattern[second] - intensityPattern[first],
-        )[0];
-      if (strongestBeat !== undefined) strongestEmptyBars.push(strongestBeat);
-    }
-
-    const remainingAccents = Array.from(
-      { length: Math.max(0, lastPlayableBeat - TRAVEL_BEATS + 1) },
-      (_, index) => index + TRAVEL_BEATS,
-    )
-      .filter(
-        (beat) =>
-          notePattern[beat] !== 2 &&
-          beatFeatures[beat].energy > Math.max(0.002, energyFloor * 0.72),
-      )
-      .sort(
-        (first, second) => intensityPattern[second] - intensityPattern[first],
-      );
-    const promotionOrder = [
-      ...strongestEmptyBars.sort(
-        (first, second) => intensityPattern[second] - intensityPattern[first],
-      ),
-      ...remainingAccents,
-    ];
-    const promoted = new Set<number>();
-    for (const beat of promotionOrder) {
-      if (playableStrongBeats() >= targetStrongBeats) break;
-      if (promoted.has(beat) || notePattern[beat] === 2) continue;
-      const hasNearbyStrongBeat = Array.from(
-        { length: MIN_STRONG_BEAT_GAP * 2 - 1 },
-        (_, index) => beat - MIN_STRONG_BEAT_GAP + 1 + index,
-      ).some(
-        (nearbyBeat) => nearbyBeat !== beat && notePattern[nearbyBeat] === 2,
-      );
-      if (hasNearbyStrongBeat) continue;
-      notePattern[beat] = 2;
-      promoted.add(beat);
-    }
-
-    // Extremely quiet or unusual uploads can leave too few audible candidates.
-    // Fall back to the more energetic half-beat parity so the published maximum
-    // combo remains honest without ever placing adjacent strong notes.
-    if (playableStrongBeats() < targetStrongBeats) {
-      const parityOptions = [0, 1].map((parity) => {
-        const beats = Array.from(
-          { length: Math.max(0, lastPlayableBeat - TRAVEL_BEATS + 1) },
-          (_, index) => index + TRAVEL_BEATS,
-        )
-          .filter(
-            (beat) => (beat - TRAVEL_BEATS) % MIN_STRONG_BEAT_GAP === parity,
-          )
-          .sort(
-            (first, second) =>
-              intensityPattern[second] - intensityPattern[first],
-          )
-          .slice(0, targetStrongBeats);
-        return {
-          beats,
-          energy: beats.reduce(
-            (total, beat) => total + intensityPattern[beat],
-            0,
-          ),
-        };
-      });
-      const fallback =
-        parityOptions[1].energy > parityOptions[0].energy
-          ? parityOptions[1]
-          : parityOptions[0];
-      for (let beat = TRAVEL_BEATS; beat <= lastPlayableBeat; beat += 1) {
-        if (notePattern[beat] === 2) notePattern[beat] = 1;
-      }
-      for (const beat of fallback.beats) notePattern[beat] = 2;
-    }
-  }
-
-  // Never leave the player staring at an empty road for more than one bar.
-  // Quiet passages still use the strongest analysed beat in that window, so
-  // inserted fan sticks stay attached to a real musical accent.
-  let lastStrongBeat = TRAVEL_BEATS - 1;
-  for (let beat = TRAVEL_BEATS; beat <= lastPlayableBeat; beat += 1) {
-    if (notePattern[beat] === 2) {
-      lastStrongBeat = beat;
-      continue;
-    }
-    if (beat - lastStrongBeat < MAX_STRONG_BEAT_GAP) continue;
-
-    const windowStart = Math.max(
-      TRAVEL_BEATS,
-      lastStrongBeat + MIN_STRONG_BEAT_GAP,
-    );
-    const candidates = Array.from(
-      { length: Math.max(0, beat - windowStart + 1) },
-      (_, index) => windowStart + index,
-    )
-      .filter((candidate) =>
-        notePattern.every(
-          (level, otherBeat) =>
-            level !== 2 ||
-            Math.abs(otherBeat - candidate) >= MIN_STRONG_BEAT_GAP,
-        ),
-      )
-      .sort(
-        (first, second) => intensityPattern[second] - intensityPattern[first],
-      );
-    const promotedBeat = candidates[0] ?? beat;
-    notePattern[promotedBeat] = 2;
-    lastStrongBeat = promotedBeat;
-  }
-
-  let lane = 2;
-  let laneDirection: -1 | 1 = 1;
-  const lanePattern = beatTimes.map((time, beat) => {
-    if (
-      beat > 0 &&
-      notePattern[beat] > 0 &&
-      (notePattern[beat] === 2 || beat % 4 === 0)
-    ) {
-      const audioSeed = Math.round(
-        time +
-          beatFeatures[beat].onset * 100_000 +
-          beatFeatures[beat].energy * 10_000,
-      );
-      if (audioSeed % 3 === 0) {
-        laneDirection = laneDirection === 1 ? -1 : 1;
-      }
-      const nextLane = lane + laneDirection;
-      if (nextLane < 0 || nextLane > 4) {
-        laneDirection = laneDirection === 1 ? -1 : 1;
-      }
-      lane = clampLane(lane + laneDirection);
-    }
-    return lane;
-  });
-
-  return { beatTimes, bpm, lanePattern, notePattern, intensityPattern };
-}
-
-type AudioAnalysis = ReturnType<typeof analyzeAudioBuffer>;
-
 function laneCenter(lane: number) {
   return ROAD_LEFT + LANE_WIDTH * lane + LANE_WIDTH / 2;
+}
+
+function roadDepthFromY(y: number) {
+  return Math.max(
+    0,
+    Math.min(1.35, (y - ROAD_HORIZON_Y) / (PLAYER_Y - ROAD_HORIZON_Y)),
+  );
+}
+
+function roadYFromProgress(progress: number) {
+  const clamped = Math.max(0, Math.min(1.35, progress));
+  const depth = Math.pow(clamped, 1.42);
+  return ROAD_HORIZON_Y + (PLAYER_Y - ROAD_HORIZON_Y) * depth;
+}
+
+function laneXAtDepth(lane: number, depth: number) {
+  return ROAD_VANISH_X + (laneCenter(lane) - ROAD_VANISH_X) * depth;
 }
 
 function clampLane(lane: number) {
@@ -1043,56 +545,53 @@ function getConcertTier(fans: number, maxCombo = 0): ConcertTier {
   const concertScore = fans * maxCombo;
   if (concertScore >= STADIUM_SCORE_THRESHOLD) {
     return {
-      name: "星河体育场",
-      place: "五万人全景演唱会",
+      name: "天才学神",
+      place: "知识宇宙已被你一键点亮",
       coins: 1080,
-      color: "#ffe66d",
-      icon: "✦",
+      color: "#f47ead",
+      iconSrc: OUTCOME_ICONS.genius,
     };
   }
   if (concertScore >= 4_500) {
     return {
-      name: "霓虹体育馆",
-      place: "万人应援演唱会",
+      name: "隐形学霸",
+      place: "表面松弛，实力早已藏不住",
       coins: 680,
-      color: "#72f1ff",
-      icon: "★",
+      color: "#23cfb2",
+      iconSrc: OUTCOME_ICONS.hidden,
     };
   }
   if (concertScore >= 2_800) {
     return {
-      name: "城市剧场",
-      place: "千人专场",
+      name: "卷王本王",
+      place: "进度条和行动力同时拉满",
       coins: 420,
-      color: "#ff7ac8",
-      icon: "♪",
+      color: "#45c8ed",
+      iconSrc: OUTCOME_ICONS.grinder,
     };
   }
   if (concertScore >= 1_400) {
     return {
-      name: "星光 Livehouse",
-      place: "百人见面会",
+      name: "知识分子",
+      place: "新的知识点已经稳稳接住",
       coins: 240,
-      color: "#bca7ff",
-      icon: "♫",
+      color: "#7187b2",
+      iconSrc: OUTCOME_ICONS.scholar,
     };
   }
   return {
-    name: "街角快闪",
-    place: "小型惊喜舞台",
+    name: "佛系咸鱼",
+    place: "不慌不忙，也算顺利开学",
     coins: 100,
-    color: "#a8ff78",
-    icon: "♬",
+    color: "#f5a5c3",
+    iconSrc: OUTCOME_ICONS.slacker,
   };
 }
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const earthTourImagesRef = useRef<
-    Partial<Record<EarthTourAsset, HTMLImageElement>>
-  >({});
-  const lueLueLueImagesRef = useRef<
-    Partial<Record<LueLueLueAsset, HTMLImageElement>>
+  const campusImagesRef = useRef<
+    Partial<Record<CampusAsset, HTMLImageElement>>
   >({});
   const animationRef = useRef<number | null>(null);
   const statusRef = useRef<GameStatus>("ready");
@@ -1103,9 +602,12 @@ export default function Home() {
   const maxComboRef = useRef(0);
   const beatRef = useRef(0);
   const nextBeatRef = useRef(0);
-  const beatTimesRef = useRef<number[]>(getBeatTimes(DEFAULT_TRACK));
-  const trackRef = useRef<Track>(DEFAULT_TRACK);
+  const beatTimesRef = useRef<number[]>([
+    ...PRECOMPUTED_CHART.timing.beatTimesMs,
+  ]);
+  const trackRef = useRef<Track>(GAME_TRACK);
   const startTimeRef = useRef(0);
+  const fallbackElapsedRef = useRef(0);
   const lastTimeRef = useRef(0);
   const lastHudRef = useRef(0);
   const entityIdRef = useRef(0);
@@ -1119,18 +621,6 @@ export default function Home() {
   const lowShelfRef = useRef<BiquadFilterNode | null>(null);
   const highShelfRef = useRef<BiquadFilterNode | null>(null);
   const songRef = useRef<HTMLAudioElement | null>(null);
-  const songUrlRef = useRef<string | null>(null);
-  const detectedBeatTimesRef = useRef<number[]>([]);
-  const detectedLanePatternRef = useRef<number[]>(DEFAULT_TRACK.lanePattern);
-  const detectedNotePatternRef = useRef<number[]>(DEFAULT_TRACK.notePattern);
-  const detectedIntensityPatternRef = useRef<number[]>(
-    DEFAULT_TRACK.intensityPattern,
-  );
-  const detectedBpmRef = useRef(96);
-  const songLoadRequestRef = useRef(0);
-  const analysisCacheRef = useRef<
-    Partial<Record<TrackId, { analysis: AudioAnalysis; duration: number }>>
-  >({});
   const mutedRef = useRef(false);
   const beatPulseRef = useRef(0);
   const shakeRef = useRef(0);
@@ -1163,12 +653,7 @@ export default function Home() {
   const [playerName, setPlayerName] = useState("");
   const [songReady, setSongReady] = useState(false);
   const [songLoading, setSongLoading] = useState(false);
-  const [songFileName, setSongFileName] = useState("");
-  const [songTitle, setSongTitle] = useState("未选择歌曲");
   const [songError, setSongError] = useState("");
-  const [detectedBpm, setDetectedBpm] = useState(96);
-  const [songDuration, setSongDuration] = useState(0);
-  const [selectedTrackId, setSelectedTrackId] = useState<TrackId>("earth-tour");
   const [fans, setFans] = useState(STARTING_FANS);
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
@@ -1178,13 +663,15 @@ export default function Home() {
   const [invincibleRemaining, setInvincibleRemaining] = useState(0);
   const [progress, setProgress] = useState(0);
   const [beatIndex, setBeatIndex] = useState(0);
-  const [currentBpm, setCurrentBpm] = useState(DEFAULT_TRACK.bpmAt(0));
+  const [currentBpm, setCurrentBpm] = useState(GAME_TRACK.bpmAt(0));
   const [toneMode, setToneMode] = useState<ToneMode>("normal");
   const [muted, setMuted] = useState(false);
   const [shield, setShield] = useState(false);
   const [bestFans, setBestFans] = useState(0);
   const [bankCoins, setBankCoins] = useState(0);
   const [earnedCoins, setEarnedCoins] = useState(0);
+  const [failureSummary, setFailureSummary] =
+    useState<FailureSummary | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [currentRankEntryId, setCurrentRankEntryId] = useState<string | null>(
     null,
@@ -1205,28 +692,11 @@ export default function Home() {
     key: number;
   } | null>(null);
   const [luckyDialog, setLuckyDialog] = useState<LuckyDialog | null>(null);
-  const selectedTrack = getTrack(selectedTrackId);
-  const leaderboardSongKey = getLeaderboardSongKey(
-    selectedTrackId,
-    selectedTrackId === "custom-upload" ? songTitle : selectedTrack.name,
-  );
+  const songTitle = GAME_TRACK.name;
+  const leaderboardSongKey = LEADERBOARD_SONG_KEY;
   const currentVehicle = getVehicle(vehicleLevel);
-  const currentVehicleName =
-    selectedTrackId === "earth-tour"
-      ? ["应援大巴", "电能巡游车", "怪兽闪电车", "浪漫飞龙"][
-          currentVehicle.level - 1
-        ]
-      : selectedTrackId === "lueluelue"
-        ? ["星芽小巴", "蝶光音浪机车", "蝴蝶巡演车", "TOP 舞台车"][
-            currentVehicle.level - 1
-          ]
-        : currentVehicle.name;
-  const selectedAssetThemeClass =
-    selectedTrackId === "earth-tour"
-      ? "is-earth-tour"
-      : selectedTrackId === "lueluelue"
-        ? "is-lueluelue"
-        : "";
+  const currentVehicleName = currentVehicle.name;
+  const selectedAssetThemeClass = "is-campus-season";
   const currentLeaderboardEntry = currentRankEntryId
     ? leaderboard.find((entry) => entry.playerId === currentRankEntryId)
     : undefined;
@@ -1255,7 +725,7 @@ export default function Home() {
               <span>
                 <strong>{entry.name}</strong>
                 <small>
-                  {entry.concert} · {entry.fans} 粉丝
+                  {entry.concert} · {entry.fans} 知识星
                 </small>
               </span>
               <em>{entry.score} PTS</em>
@@ -1265,7 +735,7 @@ export default function Home() {
         </div>
       ) : (
         <p className="leaderboard-empty">
-          这首歌还没有成绩，完成第一场演唱会吧。
+          这首歌还没有成绩，来留下第一份开学答卷吧。
         </p>
       )}
     </section>
@@ -1282,19 +752,21 @@ export default function Home() {
   const createCurrentShareCard = useCallback(
     () =>
       createShareCardBlob({
-        nickname: playerName.trim() || "巡演玩家",
+        nickname: playerName.trim() || "校园新生",
         song: songTitle,
         score: fans * maxCombo,
         rank: currentLeaderboardEntry?.rank ?? null,
         fans,
         maxCombo,
         venue: resultTier.name,
+        tierIconSrc: resultTier.iconSrc,
       }),
     [
       currentLeaderboardEntry?.rank,
       fans,
       maxCombo,
       playerName,
+      resultTier.iconSrc,
       resultTier.name,
       songTitle,
     ],
@@ -1319,14 +791,14 @@ export default function Home() {
     try {
       const blob = await createCurrentShareCard();
       if (!blob) throw new Error("Share card unavailable");
-      const file = new File([blob], "fan-bus-result.png", {
+      const file = new File([blob], "campus-season-result.png", {
         type: "image/png",
       });
       const score = fans * maxCombo;
-      const shareText = `${playerName.trim() || "巡演玩家"}在《${songTitle}》拿到 ${score} 分，歌曲榜第 ${currentLeaderboardEntry?.rank ?? "--"} 名！`;
+      const shareText = `${playerName.trim() || "校园新生"}在《${songTitle}》拿到 ${score} 分，解锁称号「${resultTier.name}」，校园榜第 ${currentLeaderboardEntry?.rank ?? "--"} 名！`;
       if (navigator.share) {
         const shareData: ShareData = {
-          title: "应援大巴冲冲冲！巡演成绩",
+          title: "开学冲冲冲！校园成绩",
           text: shareText,
         };
         if (navigator.canShare?.({ files: [file] })) {
@@ -1336,7 +808,7 @@ export default function Home() {
         showToast("分享面板已打开", "cyan");
       } else {
         downloadShareCard(blob, songTitle);
-        showToast("当前浏览器不支持直接分享，已保存成绩卡", "gold");
+        showToast("当前设备未能打开分享面板，已保存成绩卡", "gold");
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
@@ -1350,6 +822,7 @@ export default function Home() {
     fans,
     maxCombo,
     playerName,
+    resultTier.name,
     showToast,
     songTitle,
   ]);
@@ -1546,7 +1019,7 @@ export default function Home() {
     const impactGain = audio.createGain();
     const impactFilter = audio.createBiquadFilter();
     const startFrequency =
-      obstacle === "barrier" ? 125 : obstacle === "speaker" ? 155 : 185;
+      obstacle === "barrier" ? 125 : obstacle === "pothole" ? 155 : 185;
     const peak = obstacle === "barrier" ? 0.075 : 0.055;
 
     impact.type = "triangle";
@@ -1562,208 +1035,111 @@ export default function Home() {
     impact.stop(now + 0.16);
   }, []);
 
-  const installPreparedSong = useCallback(
-    async ({
-      track,
-      title,
-      fileName,
-      sourceUrl,
-      objectUrl,
-      analysis,
-      duration,
-    }: {
-      track: Track;
-      title: string;
-      fileName: string;
-      sourceUrl: string;
-      objectUrl: boolean;
-      analysis: AudioAnalysis;
-      duration: number;
-    }) => {
-      songRef.current?.pause();
-      if (audioRef.current) {
-        await audioRef.current.close();
-        audioRef.current = null;
-      }
-      mediaSourceRef.current = null;
-      lowShelfRef.current = null;
-      highShelfRef.current = null;
-      if (songUrlRef.current) {
-        URL.revokeObjectURL(songUrlRef.current);
-        songUrlRef.current = null;
-      }
+  const loadFixedSong = useCallback(async () => {
+    setSongLoading(true);
+    setSongReady(false);
+    setSongError("");
 
-      const song = new Audio(sourceUrl);
-      song.preload = "auto";
-      song.muted = mutedRef.current;
-      song.playbackRate = 1;
+    songRef.current?.pause();
+    if (audioRef.current) {
+      await audioRef.current.close();
+      audioRef.current = null;
+    }
+    mediaSourceRef.current = null;
+    lowShelfRef.current = null;
+    highShelfRef.current = null;
 
-      songUrlRef.current = objectUrl ? sourceUrl : null;
+    let sourceUrl = DIRECT_AUDIO_URL || GAME_TRACK.audioSrc;
+    let remoteFallbackUsed = false;
+    if (AUDIO_SOURCE_API) {
+      try {
+        const response = await fetch(AUDIO_SOURCE_API, { cache: "no-store" });
+        if (!response.ok) throw new Error("线上歌曲接口不可用");
+        const payload = (await response.json()) as {
+          url?: string;
+          audioId?: string;
+          chartVersion?: string;
+        };
+        if (!payload.url) throw new Error("线上歌曲接口未返回 URL");
+        if (
+          payload.audioId !== PRECOMPUTED_CHART.audio.id ||
+          payload.chartVersion !== PRECOMPUTED_CHART.chartVersion
+        ) {
+          throw new Error("线上主题曲版本不适配本次活动");
+        }
+        sourceUrl = payload.url;
+      } catch {
+        sourceUrl = GAME_TRACK.audioSrc;
+        remoteFallbackUsed = true;
+      }
+    }
+
+    try {
+      const localUrl = new URL(GAME_TRACK.audioSrc, window.location.href).href;
+      const prepareSong = (url: string) =>
+        new Promise<HTMLAudioElement>((resolve, reject) => {
+          const song = new Audio();
+          const cleanup = () => {
+            song.removeEventListener("loadedmetadata", handleReady);
+            song.removeEventListener("canplay", handleReady);
+            song.removeEventListener("error", handleError);
+          };
+          const handleReady = () => {
+            cleanup();
+            const durationMs = Math.round(song.duration * 1000);
+            if (
+              Number.isFinite(durationMs) &&
+              Math.abs(durationMs - PRECOMPUTED_CHART.audio.durationMs) > 750
+            ) {
+              reject(new Error("主题曲版本与本次活动不匹配"));
+              return;
+            }
+            resolve(song);
+          };
+          const handleError = () => {
+            cleanup();
+            reject(new Error("音频文件不可用"));
+          };
+          song.preload = "auto";
+          song.muted = mutedRef.current;
+          song.playbackRate = 1;
+          song.addEventListener("loadedmetadata", handleReady);
+          song.addEventListener("canplay", handleReady);
+          song.addEventListener("error", handleError);
+          song.src = new URL(url, window.location.href).href;
+          song.load();
+        });
+
+      const requestedUrl = new URL(sourceUrl, window.location.href).href;
+      let song: HTMLAudioElement;
+      try {
+        song = await prepareSong(requestedUrl);
+      } catch (error) {
+        if (requestedUrl === localUrl) throw error;
+        remoteFallbackUsed = true;
+        song = await prepareSong(localUrl);
+      }
       songRef.current = song;
-      detectedBeatTimesRef.current = analysis.beatTimes;
-      detectedLanePatternRef.current = analysis.lanePattern;
-      detectedNotePatternRef.current = analysis.notePattern;
-      detectedIntensityPatternRef.current = analysis.intensityPattern;
-      detectedBpmRef.current = analysis.bpm;
-      setSongFileName(fileName);
-      setSongTitle(title);
-      setDetectedBpm(analysis.bpm);
-      setSongDuration(duration);
-      setCurrentBpm(analysis.bpm);
+      trackRef.current = GAME_TRACK;
+      beatTimesRef.current = [...PRECOMPUTED_CHART.timing.beatTimesMs];
+      setCurrentBpm(PRECOMPUTED_CHART.timing.bpm);
       setSongReady(true);
-      showToast(`${track.mapLabel}谱面完成 · ${analysis.bpm} BPM`, "gold");
-    },
-    [showToast],
-  );
-
-  const loadBuiltInTrack = useCallback(
-    async (trackId: Exclude<TrackId, "custom-upload">) => {
-      const track = getTrack(trackId);
-      if (!track.audioSrc) return;
-      const requestId = ++songLoadRequestRef.current;
-      setSelectedTrackId(trackId);
-      setSongLoading(true);
+      showToast(
+        remoteFallbackUsed
+          ? "线上主题曲暂不可用 · 已切换本地主题曲"
+          : "主题曲准备完成 · 可以出发啦",
+        remoteFallbackUsed ? "gold" : "cyan",
+      );
+    } catch (error) {
+      songRef.current = null;
       setSongReady(false);
-      setSongError("");
-      setSongTitle(track.name);
-      setSongFileName("");
-
-      try {
-        const cached = analysisCacheRef.current[trackId];
-        if (cached) {
-          await installPreparedSong({
-            track,
-            title: track.name,
-            fileName: `${track.name}.mp3`,
-            sourceUrl: track.audioSrc,
-            objectUrl: false,
-            analysis: cached.analysis,
-            duration: cached.duration,
-          });
-          return;
-        }
-
-        const response = await fetch(track.audioSrc);
-        if (!response.ok) {
-          throw new Error("内置歌曲读取失败，请刷新页面重试");
-        }
-        const AudioContextClass =
-          window.AudioContext ||
-          (
-            window as typeof window & {
-              webkitAudioContext?: typeof AudioContext;
-            }
-          ).webkitAudioContext;
-        if (!AudioContextClass) {
-          throw new Error("当前浏览器不支持音频节拍分析");
-        }
-        const analysisContext = new AudioContextClass();
-        const decoded = await analysisContext.decodeAudioData(
-          await response.arrayBuffer(),
-        );
-        const analysis = analyzeAudioBuffer(decoded);
-        const duration = decoded.duration;
-        await analysisContext.close();
-        if (requestId !== songLoadRequestRef.current) return;
-
-        analysisCacheRef.current[trackId] = { analysis, duration };
-        await installPreparedSong({
-          track,
-          title: track.name,
-          fileName: `${track.name}.mp3`,
-          sourceUrl: track.audioSrc,
-          objectUrl: false,
-          analysis,
-          duration,
-        });
-      } catch (error) {
-        if (requestId !== songLoadRequestRef.current) return;
-        setSongError(
-          error instanceof Error ? error.message : "歌曲解析失败，请换一首歌曲",
-        );
-        setSongReady(false);
-      } finally {
-        if (requestId === songLoadRequestRef.current) {
-          setSongLoading(false);
-        }
-      }
-    },
-    [installPreparedSong],
-  );
-
-  const handleSongUpload = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      const requestId = ++songLoadRequestRef.current;
-      setSelectedTrackId("custom-upload");
-      setSongLoading(true);
-      setSongReady(false);
-      setSongError("");
-      setSongFileName(file.name);
-      setSongTitle(file.name.replace(/\.[^.]+$/, ""));
-
-      try {
-        if (/\.mgg$/i.test(file.name)) {
-          throw new Error(
-            "MGG 是音乐平台专有格式，请上传 MP3、M4A、WAV 或 AAC",
-          );
-        }
-        const supportedExtension = /\.(mp3|m4a|wav|aac|ogg|flac)$/i.test(
-          file.name,
-        );
-        if (!file.type.startsWith("audio/") && !supportedExtension) {
-          throw new Error("请选择 MP3、M4A、WAV 等音频文件");
-        }
-        if (file.size > 80 * 1024 * 1024) {
-          throw new Error("音频文件请控制在 80MB 以内");
-        }
-        const AudioContextClass =
-          window.AudioContext ||
-          (
-            window as typeof window & {
-              webkitAudioContext?: typeof AudioContext;
-            }
-          ).webkitAudioContext;
-        if (!AudioContextClass) {
-          throw new Error("当前浏览器不支持音频节拍分析");
-        }
-
-        const analysisContext = new AudioContextClass();
-        const decoded = await analysisContext.decodeAudioData(
-          await file.arrayBuffer(),
-        );
-        const analysis = analyzeAudioBuffer(decoded);
-        const duration = decoded.duration;
-        await analysisContext.close();
-        if (requestId !== songLoadRequestRef.current) return;
-        const url = URL.createObjectURL(file);
-        await installPreparedSong({
-          track: getTrack("custom-upload"),
-          title: file.name.replace(/\.[^.]+$/, ""),
-          fileName: file.name,
-          sourceUrl: url,
-          objectUrl: true,
-          analysis,
-          duration,
-        });
-      } catch (error) {
-        if (requestId !== songLoadRequestRef.current) return;
-        const message =
-          error instanceof Error ? error.message : "音频解析失败，请换一个文件";
-        setSongError(message);
-        setSongFileName("");
-        setSongTitle("未选择歌曲");
-        songRef.current = null;
-      } finally {
-        if (requestId === songLoadRequestRef.current) {
-          setSongLoading(false);
-        }
-        event.target.value = "";
-      }
-    },
-    [installPreparedSong],
-  );
+      setSongError(
+        error instanceof Error ? error.message : "歌曲加载失败，请刷新后重试",
+      );
+    } finally {
+      setSongLoading(false);
+    }
+  }, [showToast]);
 
   const playBeat = useCallback((beat: number) => {
     const audio = audioRef.current;
@@ -1940,7 +1316,7 @@ export default function Home() {
         obstacleLane = (obstacleLane + 1) % 5;
       }
       used.add(obstacleLane);
-      const obstacleTypes: ObstacleType[] = ["cone", "speaker", "barrier"];
+      const obstacleTypes: ObstacleType[] = ["cone", "pothole", "barrier"];
       entitiesRef.current.push({
         id: entityIdRef.current++,
         type: "obstacle",
@@ -2006,12 +1382,11 @@ export default function Home() {
   const drawGame = useCallback(
     (ctx: CanvasRenderingContext2D, elapsed: number) => {
       const pulse = beatPulseRef.current;
-      const activeTrack = trackRef.current;
-      const palette = MAP_PALETTES[activeTrack.mapTheme];
-      const visualSpeed = 180 + activeTrack.bpmAt(beatRef.current) * 1.2;
-      const roadOffset = ((elapsed / 1000) * visualSpeed) % 92;
+      const visualSpeed = 180 + GAME_TRACK.bpmAt(beatRef.current) * 1.2;
+      const roadOffset = ((elapsed / 1_000) * visualSpeed) % 92;
       const shakeX = shakeRef.current > 0 ? (Math.random() - 0.5) * 12 : 0;
       const shakeY = shakeRef.current > 0 ? (Math.random() - 0.5) * 8 : 0;
+      const images = campusImagesRef.current;
 
       ctx.save();
       ctx.translate(shakeX, shakeY);
@@ -2021,72 +1396,27 @@ export default function Home() {
         ctx.scale(scale, scale);
         ctx.translate(-GAME_WIDTH / 2, -GAME_HEIGHT / 2);
       }
+
       ctx.clearRect(-16, -16, GAME_WIDTH + 32, GAME_HEIGHT + 32);
-      ctx.fillStyle = palette.sky;
+      ctx.fillStyle = MAP_PALETTE.sky;
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      const earthTourImages = earthTourImagesRef.current;
-      const lueLueLueImages = lueLueLueImagesRef.current;
-      const isEarthTour = activeTrack.id === "earth-tour";
-      const isLueLueLue = activeTrack.id === "lueluelue";
-      const cityImage = earthTourImages.city;
-      if (isEarthTour && cityImage?.complete && cityImage.naturalWidth) {
+      if (images.road?.complete && images.road.naturalWidth) {
         const coverScale = Math.max(
-          GAME_WIDTH / cityImage.naturalWidth,
-          GAME_HEIGHT / cityImage.naturalHeight,
+          GAME_WIDTH / images.road.naturalWidth,
+          GAME_HEIGHT / images.road.naturalHeight,
         );
-        const cityWidth = cityImage.naturalWidth * coverScale;
-        const cityHeight = cityImage.naturalHeight * coverScale;
-        ctx.globalAlpha = 0.96;
+        const width = images.road.naturalWidth * coverScale;
+        const height = images.road.naturalHeight * coverScale;
         ctx.drawImage(
-          cityImage,
-          (GAME_WIDTH - cityWidth) / 2,
-          (GAME_HEIGHT - cityHeight) / 2,
-          cityWidth,
-          cityHeight,
-        );
-        ctx.globalAlpha = 1;
-      } else if (
-        isLueLueLue &&
-        lueLueLueImages.concertRoad?.complete &&
-        lueLueLueImages.concertRoad.naturalWidth
-      ) {
-        const concertRoadImage = lueLueLueImages.concertRoad;
-        const coverScale = Math.max(
-          GAME_WIDTH / concertRoadImage.naturalWidth,
-          GAME_HEIGHT / concertRoadImage.naturalHeight,
-        );
-        const sourceWidth = Math.min(
-          concertRoadImage.naturalWidth,
-          GAME_WIDTH / coverScale,
-        );
-        const sourceHeight = Math.min(
-          concertRoadImage.naturalHeight,
-          GAME_HEIGHT / coverScale,
-        );
-        const sourceX = 0;
-        const sourceY = Math.max(
-          0,
-          (concertRoadImage.naturalHeight - sourceHeight) / 2,
-        );
-        ctx.drawImage(
-          concertRoadImage,
-          sourceX,
-          sourceY,
-          sourceWidth,
-          sourceHeight,
-          0,
-          0,
-          GAME_WIDTH,
-          GAME_HEIGHT,
+          images.road,
+          (GAME_WIDTH - width) / 2,
+          (GAME_HEIGHT - height) / 2,
+          width,
+          height,
         );
       }
 
-      // Pixel city and sidewalks.
-      ctx.fillStyle = isEarthTour
-        ? "rgba(217, 55, 134, 0.58)"
-        : isLueLueLue
-          ? "rgba(132, 104, 177, 0.28)"
-          : palette.sidewalk;
+      ctx.fillStyle = "rgba(35, 207, 178, 0.1)";
       ctx.fillRect(0, 0, ROAD_LEFT, GAME_HEIGHT);
       ctx.fillRect(
         ROAD_LEFT + ROAD_WIDTH,
@@ -2094,211 +1424,61 @@ export default function Home() {
         GAME_WIDTH - ROAD_LEFT - ROAD_WIDTH,
         GAME_HEIGHT,
       );
-      if (!isEarthTour && !isLueLueLue)
-        for (let y = -92 + roadOffset; y < GAME_HEIGHT + 92; y += 92) {
-          ctx.fillStyle = palette.building;
-          ctx.fillRect(5, y, 31, 78);
-          ctx.fillRect(444, y, 31, 78);
-          ctx.fillStyle = y % 184 < 10 ? palette.windowA : palette.windowB;
-          ctx.fillRect(10, y + 12, 10, 15);
-          ctx.fillRect(459, y + 36, 10, 15);
-          ctx.fillStyle = "#ffe66d";
-          ctx.fillRect(24, y + 45, 6, 12);
-          ctx.fillRect(447, y + 9, 6, 12);
-          if (activeTrack.mapTheme === "illusion-city") {
-            ctx.fillStyle = "#ff623f";
-            ctx.fillRect(15, y + 61, 16, 8 + pulse * 5);
-            ctx.fillStyle = "#ffb23f";
-            ctx.fillRect(20, y + 55, 6, 9 + pulse * 4);
-          } else if (activeTrack.mapTheme === "candy-blocks") {
-            ctx.fillStyle = "#ff73bd";
-            ctx.fillRect(7, y + 55, 12, 12);
-            ctx.fillStyle = "#72f1ff";
-            ctx.fillRect(22, y + 55, 12, 12);
-          } else if (activeTrack.mapTheme === "earth-orbit") {
-            ctx.fillStyle = "rgba(114, 241, 255, 0.7)";
-            ctx.fillRect(15, y + 61, 3, 3);
-            ctx.fillRect(28, y + 30, 3, 3);
-            ctx.strokeStyle = "rgba(188, 167, 255, 0.5)";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(458, y + 63, 10, 0, Math.PI * 2);
-            ctx.stroke();
-          }
-        }
-      if (isEarthTour) {
-        for (
-          let y = -120 + roadOffset * 1.35;
-          y < GAME_HEIGHT + 120;
-          y += 150
-        ) {
-          ctx.save();
-          ctx.globalAlpha = 0.74;
-          if (earthTourImages.magnetCrystal) {
-            drawContainedImage(
-              ctx,
-              earthTourImages.magnetCrystal,
-              5,
-              y,
-              32,
-              42,
-            );
-          }
-          if (earthTourImages.dish) {
-            ctx.translate(GAME_WIDTH, 0);
-            ctx.scale(-1, 1);
-            drawContainedImage(ctx, earthTourImages.dish, 5, y + 62, 34, 34);
-          }
-          ctx.restore();
-          ctx.strokeStyle = "rgba(255, 220, 105, 0.82)";
-          ctx.lineWidth = 3;
-          for (const [x, offset] of [
-            [14, 63],
-            [466, 15],
-          ]) {
-            const direction = x < GAME_WIDTH / 2 ? 1 : -1;
-            ctx.beginPath();
-            ctx.moveTo(x, y + offset);
-            ctx.lineTo(x + 9 * direction, y + offset - 8);
-            ctx.lineTo(x + 6 * direction, y + offset + 7);
-            ctx.lineTo(x + 17 * direction, y + offset - 1);
-            ctx.stroke();
-          }
-        }
-      }
-      if (isLueLueLue) {
-        for (let y = -96 + roadOffset * 1.18; y < GAME_HEIGHT + 96; y += 112) {
-          ctx.save();
-          ctx.lineCap = "round";
-          ctx.lineJoin = "round";
-          ctx.lineWidth = 3;
-          for (const [x, mirror] of [
-            [10, 1],
-            [470, -1],
-          ] as const) {
-            ctx.strokeStyle =
-              Math.floor((y + 96) / 112) % 2 === 0
-                ? "rgba(113, 244, 205, 0.84)"
-                : "rgba(255, 230, 109, 0.82)";
-            ctx.beginPath();
-            ctx.moveTo(x, y + 4);
-            ctx.lineTo(x + 12 * mirror, y - 9);
-            ctx.lineTo(x + 8 * mirror, y + 7);
-            ctx.lineTo(x + 25 * mirror, y - 4);
-            ctx.stroke();
-
-            ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
-            ctx.font = '900 17px "Arial Black", sans-serif';
-            ctx.textAlign = "center";
-            ctx.fillText(
-              Math.floor((y + 96) / 112) % 2 === 0 ? "♪" : "★",
-              x + 17 * mirror,
-              y + 36,
-            );
-          }
-          ctx.restore();
-        }
-      }
-
-      // Neon road.
-      ctx.fillStyle = isEarthTour
-        ? "rgba(67, 33, 52, 0.9)"
-        : isLueLueLue
-          ? "rgba(139, 139, 147, 0.82)"
-          : palette.road;
+      ctx.fillStyle = "rgba(113, 135, 178, 0.2)";
       ctx.fillRect(ROAD_LEFT, 0, ROAD_WIDTH, GAME_HEIGHT);
-      ctx.fillStyle = isLueLueLue ? "#15131c" : "#2a245b";
+      ctx.fillStyle = "rgba(23, 34, 58, 0.72)";
       ctx.fillRect(ROAD_LEFT, 0, 5, GAME_HEIGHT);
       ctx.fillRect(ROAD_LEFT + ROAD_WIDTH - 5, 0, 5, GAME_HEIGHT);
-      if (isLueLueLue) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.fillRect(ROAD_LEFT + 5, 0, 4, GAME_HEIGHT);
-        ctx.fillRect(ROAD_LEFT + ROAD_WIDTH - 9, 0, 4, GAME_HEIGHT);
-        ctx.strokeStyle = "rgba(83, 78, 94, 0.34)";
-        ctx.lineWidth = 1;
-        for (let y = -28 + roadOffset * 0.7; y < GAME_HEIGHT + 28; y += 34) {
-          ctx.beginPath();
-          ctx.moveTo(ROAD_LEFT + 12, y);
-          ctx.lineTo(ROAD_LEFT + ROAD_WIDTH - 12, y + 4);
-          ctx.stroke();
-        }
-      }
       ctx.globalAlpha = 0.34 + pulse * 0.5;
-      ctx.fillStyle = palette.edgeLeft;
+      ctx.fillStyle = MAP_PALETTE.edgeLeft;
       ctx.fillRect(ROAD_LEFT + 5, 0, 2, GAME_HEIGHT);
-      ctx.fillStyle = palette.edgeRight;
+      ctx.fillStyle = MAP_PALETTE.edgeRight;
       ctx.fillRect(ROAD_LEFT + ROAD_WIDTH - 7, 0, 2, GAME_HEIGHT);
       ctx.globalAlpha = 1;
 
       for (let lane = 1; lane < 5; lane += 1) {
         const x = ROAD_LEFT + lane * LANE_WIDTH;
         for (let y = -60 + roadOffset; y < GAME_HEIGHT; y += 92) {
-          ctx.fillStyle = isLueLueLue
-            ? `rgba(255, 255, 255, ${0.5 + pulse * 0.18})`
-            : `rgba(225, 231, 255, ${0.18 + pulse * 0.14})`;
-          ctx.fillRect(
-            Math.round(x - (isLueLueLue ? 1.5 : 2)),
-            Math.round(y),
-            isLueLueLue ? 3 : 4,
-            45,
-          );
+          ctx.fillStyle = `rgba(255, 245, 232, ${0.44 + pulse * 0.2})`;
+          ctx.fillRect(Math.round(x - 2), Math.round(y), 4, 45);
         }
       }
 
-      // Beat hit line.
-      ctx.fillStyle = `rgba(255, 230, 109, ${0.06 + pulse * 0.22})`;
-      ctx.fillRect(ROAD_LEFT + 7, PLAYER_Y - 4, ROAD_WIDTH - 14, 8);
+      ctx.fillStyle = `rgba(255, 216, 77, ${0.08 + pulse * 0.24})`;
+      ctx.fillRect(ROAD_LEFT + 7, PLAYER_Y - 5, ROAD_WIDTH - 14, 10);
       ctx.fillStyle = `rgba(255, 255, 255, ${pulse * 0.65})`;
       for (let lane = 0; lane < 5; lane += 1) {
         ctx.fillRect(laneCenter(lane) - 18, PLAYER_Y - 6, 36, 3);
       }
 
-      // Speed lines.
-      ctx.fillStyle = "rgba(114, 241, 255, 0.22)";
-      for (let i = 0; i < 8; i += 1) {
+      ctx.fillStyle = "rgba(69, 200, 237, 0.22)";
+      for (let index = 0; index < 8; index += 1) {
         const x =
           ROAD_LEFT +
           18 +
-          ((i * 83 + beatRef.current * 17) % (ROAD_WIDTH - 36));
-        const y = (roadOffset * 2 + i * 113) % GAME_HEIGHT;
-        ctx.fillRect(x, y, 2, 18 + (i % 3) * 8);
+          ((index * 83 + beatRef.current * 17) % (ROAD_WIDTH - 36));
+        const y = (roadOffset * 2 + index * 113) % GAME_HEIGHT;
+        ctx.fillRect(x, y, 2, 18 + (index % 3) * 8);
       }
 
-      // Pedestrian crossing event.
       const pedestrian = pedestrianRef.current;
       if (pedestrian) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.62)";
+        ctx.fillStyle = "rgba(255, 255, 255, 0.68)";
         for (let x = ROAD_LEFT + 10; x < ROAD_LEFT + ROAD_WIDTH - 10; x += 34) {
           ctx.fillRect(x, pedestrian.y - 42, 21, 8);
           ctx.fillRect(x, pedestrian.y + 36, 21, 8);
         }
-        ctx.fillStyle = "rgba(255, 230, 109, 0.12)";
+        ctx.fillStyle = "rgba(255, 216, 77, 0.13)";
         ctx.fillRect(ROAD_LEFT + 7, pedestrian.y - 48, ROAD_WIDTH - 14, 96);
-
-        ctx.save();
-        ctx.translate(Math.round(pedestrian.x), pedestrian.y);
-        if (pedestrian.direction === -1) ctx.scale(-1, 1);
-        ctx.fillStyle = "#d9d3f5";
-        ctx.fillRect(-10, -27, 18, 19);
-        ctx.fillStyle = "#f2d0b4";
-        ctx.fillRect(-8, -18, 15, 15);
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(-5, -17, 4, 4);
-        ctx.fillStyle = "#a178ff";
-        ctx.fillRect(-12, -6, 23, 27);
-        ctx.fillStyle = "#6944c4";
-        ctx.fillRect(-16, 13, 31, 11);
-        ctx.fillStyle = "#f2d0b4";
-        ctx.fillRect(10, -2, 7, 18);
-        ctx.fillStyle = "#ffe66d";
-        ctx.fillRect(15, 8, 4, 32);
-        ctx.fillStyle = "#332757";
-        ctx.fillRect(-10, 24, 7, 11);
-        ctx.fillRect(6, 24, 7, 11);
-        ctx.restore();
+        if (images.grandma?.complete && images.grandma.naturalWidth) {
+          ctx.save();
+          ctx.translate(Math.round(pedestrian.x), pedestrian.y);
+          if (pedestrian.direction === -1) ctx.scale(-1, 1);
+          drawContainedImage(ctx, images.grandma, -30, -48, 60, 96);
+          ctx.restore();
+        }
       }
 
-      // Entities.
       for (const entity of entitiesRef.current) {
         const x = laneCenter(entity.lane);
         const wobble = Math.sin(elapsed / 160 + entity.wobble) * 3;
@@ -2310,310 +1490,69 @@ export default function Home() {
           if (timingDistance < 260) {
             const ringScale = 1 + timingDistance / 520;
             ctx.strokeStyle =
-              timingDistance < 110 ? "#ffe66d" : "rgba(114, 241, 255, 0.82)";
+              timingDistance < 110 ? "#ffd84d" : "rgba(69, 200, 237, 0.86)";
             ctx.lineWidth = timingDistance < 110 ? 5 : 3;
             ctx.beginPath();
             ctx.arc(0, -5, 29 * ringScale, 0, Math.PI * 2);
             ctx.stroke();
-            ctx.fillStyle = timingDistance < 110 ? "#ffe66d" : "#72f1ff";
-            ctx.font = "bold 9px monospace";
-            ctx.textAlign = "center";
-            ctx.fillText(timingDistance < 110 ? "HIT!" : "SPACE", 0, -38);
           }
-          if (isLueLueLue && lueLueLueImages.lightStick) {
-            ctx.shadowColor = "#c987ff";
-            ctx.shadowBlur = 14;
-            drawContainedImage(
-              ctx,
-              lueLueLueImages.lightStick,
-              -19,
-              -34,
-              38,
-              58,
-            );
-            ctx.shadowBlur = 0;
-          } else if (isEarthTour && earthTourImages.lightStick) {
-            ctx.shadowColor = "#ff4fa3";
-            ctx.shadowBlur = 11;
-            drawContainedImage(
-              ctx,
-              earthTourImages.lightStick,
-              -20,
-              -31,
-              40,
-              52,
-            );
-            ctx.shadowBlur = 0;
-          } else {
-            ctx.shadowColor = "#72f1ff";
+          if (images.knowledgeStar?.complete && images.knowledgeStar.naturalWidth) {
+            ctx.rotate(elapsed / 2_600 + entity.wobble * 0.05);
+            ctx.shadowColor = "#fff5e8";
             ctx.shadowBlur = 13;
-            ctx.fillStyle = "#72f1ff";
-            ctx.fillRect(-6, -21, 12, 26);
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(-3, -18, 6, 18);
+            drawContainedImage(ctx, images.knowledgeStar, -23, -28, 46, 46);
             ctx.shadowBlur = 0;
-            ctx.fillStyle = "#ff4fa3";
-            ctx.fillRect(-8, 5, 16, 9);
-            ctx.fillStyle = "#ffe66d";
-            ctx.fillRect(-4, 8, 8, 3);
-            ctx.fillStyle = "rgba(114, 241, 255, 0.25)";
-            ctx.fillRect(-13, -26, 26, 35);
           }
         } else if (
-          isLueLueLue &&
           entity.type === "lucky" &&
-          lueLueLueImages.luckyBag
+          images.mysterySchoolbag?.complete &&
+          images.mysterySchoolbag.naturalWidth
         ) {
-          ctx.shadowColor = "#c987ff";
-          ctx.shadowBlur = 16 + pulse * 8;
-          drawContainedImage(ctx, lueLueLueImages.luckyBag, -34, -38, 68, 76);
+          ctx.shadowColor = "#f47ead";
+          ctx.shadowBlur = 14 + pulse * 7;
+          drawContainedImage(ctx, images.mysterySchoolbag, -35, -38, 70, 76);
           ctx.shadowBlur = 0;
         } else if (
-          isEarthTour &&
-          entity.type === "lucky" &&
-          earthTourImages.luckyBag
-        ) {
-          ctx.shadowColor = "#ff4fa3";
-          ctx.shadowBlur = 16 + pulse * 8;
-          drawContainedImage(ctx, earthTourImages.luckyBag, -34, -38, 68, 76);
-          ctx.shadowBlur = 0;
-        } else if (entity.type === "lucky") {
-          ctx.shadowColor = "#ffe66d";
-          ctx.shadowBlur = 15;
-          ctx.fillStyle = "#8c5bff";
-          ctx.fillRect(-18, -17, 36, 34);
-          ctx.fillStyle = "#c9a9ff";
-          ctx.fillRect(-12, -22, 24, 7);
-          ctx.fillStyle = "#ffe66d";
-          ctx.fillRect(-4, -9, 8, 14);
-          ctx.fillRect(-4, 8, 8, 5);
-          ctx.shadowBlur = 0;
-          ctx.strokeStyle = "#fff2a8";
-          ctx.lineWidth = 3;
-          ctx.strokeRect(-18, -17, 36, 34);
-        } else if (
-          isLueLueLue &&
           entity.type === "magnet" &&
-          lueLueLueImages.magnet
+          images.magnet?.complete &&
+          images.magnet.naturalWidth
         ) {
-          ctx.shadowColor = "#72f1cf";
-          ctx.shadowBlur = 17 + pulse * 9;
-          drawContainedImage(ctx, lueLueLueImages.magnet, -35, -35, 70, 70);
+          ctx.shadowColor = "#23cfb2";
+          ctx.shadowBlur = 17 + pulse * 8;
+          drawContainedImage(ctx, images.magnet, -35, -35, 70, 70);
           ctx.shadowBlur = 0;
         } else if (
-          isEarthTour &&
-          entity.type === "magnet" &&
-          earthTourImages.magnetCrystal
-        ) {
-          ctx.shadowColor = "#ff4fa3";
-          ctx.shadowBlur = 16 + pulse * 10;
-          drawContainedImage(
-            ctx,
-            earthTourImages.magnetCrystal,
-            -35,
-            -35,
-            70,
-            70,
-          );
-          ctx.shadowBlur = 0;
-        } else if (entity.type === "magnet") {
-          ctx.shadowColor = "#72f1ff";
-          ctx.shadowBlur = 18;
-          ctx.fillStyle = "#16123c";
-          ctx.fillRect(-23, -25, 46, 50);
-          ctx.strokeStyle = "#72f1ff";
-          ctx.lineWidth = 7;
-          ctx.lineCap = "square";
-          ctx.beginPath();
-          ctx.moveTo(-13, -11);
-          ctx.lineTo(-13, 5);
-          ctx.quadraticCurveTo(0, 20, 13, 5);
-          ctx.lineTo(13, -11);
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-          ctx.fillStyle = "#ffe66d";
-          ctx.fillRect(-18, -18, 10, 9);
-          ctx.fillStyle = "#ff4fa3";
-          ctx.fillRect(8, -18, 10, 9);
-          ctx.strokeStyle = "#bbaaff";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(-23, -25, 46, 50);
-        } else if (
-          isLueLueLue &&
           entity.type === "invincible" &&
-          lueLueLueImages.invincible
+          images.lightning?.complete &&
+          images.lightning.naturalWidth
         ) {
           ctx.rotate(-0.12);
-          ctx.shadowColor = "#ffe66d";
-          ctx.shadowBlur = 18 + pulse * 9;
-          drawContainedImage(ctx, lueLueLueImages.invincible, -31, -38, 62, 76);
-          ctx.shadowBlur = 0;
-        } else if (
-          isEarthTour &&
-          entity.type === "invincible" &&
-          earthTourImages.hundredThousandVolts
-        ) {
-          ctx.rotate(-0.22);
-          ctx.shadowColor = "#ffe66d";
+          ctx.shadowColor = "#ffd84d";
           ctx.shadowBlur = 18 + pulse * 8;
-          drawContainedImage(
-            ctx,
-            earthTourImages.hundredThousandVolts,
-            -29,
-            -38,
-            58,
-            76,
-          );
+          drawContainedImage(ctx, images.lightning, -31, -38, 62, 76);
           ctx.shadowBlur = 0;
-        } else if (entity.type === "invincible") {
-          ctx.shadowColor = "#ffe66d";
-          ctx.shadowBlur = 19;
-          ctx.fillStyle = "#ff4fa3";
-          ctx.beginPath();
-          ctx.moveTo(0, -29);
-          ctx.lineTo(25, -15);
-          ctx.lineTo(20, 17);
-          ctx.lineTo(0, 29);
-          ctx.lineTo(-20, 17);
-          ctx.lineTo(-25, -15);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = "#5a3cc4";
-          ctx.beginPath();
-          ctx.moveTo(0, -21);
-          ctx.lineTo(17, -10);
-          ctx.lineTo(13, 12);
-          ctx.lineTo(0, 21);
-          ctx.lineTo(-13, 12);
-          ctx.lineTo(-17, -10);
-          ctx.closePath();
-          ctx.fill();
-          ctx.shadowBlur = 0;
-          ctx.fillStyle = "#ffe66d";
-          ctx.font = "bold 22px monospace";
-          ctx.textAlign = "center";
-          ctx.fillText("★", 0, 8);
         } else if (
-          isLueLueLue &&
           entity.obstacle === "cone" &&
-          lueLueLueImages.chainedMine
+          images.cone?.complete &&
+          images.cone.naturalWidth
         ) {
-          ctx.shadowColor = "#6dffc9";
-          ctx.shadowBlur = 8 + pulse * 5;
-          drawContainedImage(
-            ctx,
-            lueLueLueImages.chainedMine,
-            -34,
-            -34,
-            68,
-            68,
-          );
-          ctx.shadowBlur = 0;
+          drawContainedImage(ctx, images.cone, -34, -34, 68, 68);
         } else if (
-          isLueLueLue &&
-          entity.obstacle === "speaker" &&
-          lueLueLueImages.brokenSpeakers
+          entity.obstacle === "pothole" &&
+          images.pothole?.complete &&
+          images.pothole.naturalWidth
         ) {
-          ctx.shadowColor = "#c987ff";
-          ctx.shadowBlur = 10 + pulse * 6;
-          drawContainedImage(
-            ctx,
-            lueLueLueImages.brokenSpeakers,
-            -37,
-            -37,
-            74,
-            74,
-          );
-          ctx.shadowBlur = 0;
+          drawContainedImage(ctx, images.pothole, -37, -37, 74, 74);
         } else if (
-          isLueLueLue &&
           entity.obstacle === "barrier" &&
-          lueLueLueImages.electricBarrier
+          images.barrier?.complete &&
+          images.barrier.naturalWidth
         ) {
-          drawContainedImage(
-            ctx,
-            lueLueLueImages.electricBarrier,
-            -40,
-            -33,
-            80,
-            66,
-          );
-        } else if (
-          isEarthTour &&
-          entity.obstacle === "cone" &&
-          earthTourImages.dish
-        ) {
-          drawContainedImage(ctx, earthTourImages.dish, -35, -33, 70, 66);
-        } else if (
-          isEarthTour &&
-          entity.obstacle === "speaker" &&
-          earthTourImages.crystalObstacle
-        ) {
-          ctx.shadowColor = "#ff4fa3";
-          ctx.shadowBlur = 12 + pulse * 7;
-          drawContainedImage(
-            ctx,
-            earthTourImages.crystalObstacle,
-            -39,
-            -38,
-            78,
-            76,
-          );
-          ctx.shadowBlur = 0;
-        } else if (
-          isEarthTour &&
-          entity.obstacle === "barrier" &&
-          earthTourImages.dish
-        ) {
-          ctx.rotate(-0.18);
-          drawContainedImage(ctx, earthTourImages.dish, -38, -38, 76, 76);
-        } else if (entity.obstacle === "cone") {
-          ctx.fillStyle = "rgba(255, 86, 94, 0.2)";
-          ctx.fillRect(-23, -22, 46, 44);
-          ctx.fillStyle = "#ff6b4a";
-          ctx.beginPath();
-          ctx.moveTo(0, -23);
-          ctx.lineTo(18, 16);
-          ctx.lineTo(-18, 16);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = "#fff4d8";
-          ctx.fillRect(-11, -1, 22, 7);
-          ctx.fillStyle = "#ff9d4d";
-          ctx.fillRect(-24, 16, 48, 8);
-        } else if (entity.obstacle === "speaker") {
-          ctx.fillStyle = "#35284e";
-          ctx.fillRect(-24, -29, 48, 58);
-          ctx.strokeStyle = "#ff4fa3";
-          ctx.lineWidth = 3;
-          ctx.strokeRect(-24, -29, 48, 58);
-          ctx.fillStyle = "#0c0c1c";
-          ctx.beginPath();
-          ctx.arc(0, 11, 13, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = "#72f1ff";
-          ctx.beginPath();
-          ctx.arc(0, 11, 6 + pulse * 3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = "#ffe66d";
-          ctx.fillRect(-5, -19, 10, 10);
-        } else {
-          ctx.fillStyle = "#f7f1ff";
-          ctx.fillRect(-31, -20, 62, 12);
-          ctx.fillRect(-31, 4, 62, 12);
-          ctx.fillStyle = "#ff526f";
-          for (let i = -28; i < 29; i += 20) {
-            ctx.fillRect(i, -20, 10, 12);
-            ctx.fillRect(i + 10, 4, 10, 12);
-          }
-          ctx.fillStyle = "#f5a623";
-          ctx.fillRect(-25, 16, 8, 14);
-          ctx.fillRect(17, 16, 8, 14);
+          drawContainedImage(ctx, images.barrier, -40, -33, 80, 66);
         }
         ctx.restore();
       }
 
-      // Bus shadow and body.
       const busX = busXRef.current;
       const busY = PLAYER_Y - busBounceRef.current * 18;
       const vehicle = getVehicle(vehicleLevelRef.current);
@@ -2621,129 +1560,63 @@ export default function Home() {
       ctx.save();
       ctx.translate(Math.round(busX), Math.round(busY));
       if (elapsed < magnetUntilRef.current) {
-        ctx.save();
-        ctx.strokeStyle = `rgba(114, 241, 255, ${0.38 + pulse * 0.3})`;
+        ctx.strokeStyle = `rgba(69, 200, 237, ${0.4 + pulse * 0.3})`;
         ctx.lineWidth = 3;
         ctx.setLineDash([9, 7]);
         ctx.beginPath();
         ctx.arc(0, 0, MAGNET_RADIUS + pulse * 5, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.strokeStyle = "rgba(255, 230, 109, 0.34)";
-        ctx.lineWidth = 2;
-        for (const fan of entitiesRef.current) {
-          if (fan.type !== "fan" || fan.handled) continue;
-          const fanX = laneCenter(fan.lane) - busX;
-          const fanY = fan.y - busY;
-          if (Math.hypot(fanX, fanY) > MAGNET_RADIUS) continue;
-          ctx.beginPath();
-          ctx.moveTo(0, -8);
-          ctx.lineTo(fanX, fanY);
-          ctx.stroke();
-        }
-        ctx.restore();
       }
       if (elapsed < invincibleUntilRef.current) {
-        ctx.save();
-        ctx.lineJoin = "round";
-        ["#fff7bd", "#ffe66d", "#ff4fa3"].forEach((color, index) => {
-          const radius = 49 + index * 9 + pulse * 5;
-          const rotation = elapsed / 2400 + index * 0.45;
+        ["#fff5e8", "#ffd84d", "#f47ead"].forEach((color, index) => {
           ctx.strokeStyle = color;
-          ctx.globalAlpha = 0.92 - index * 0.16;
+          ctx.globalAlpha = 0.9 - index * 0.16;
           ctx.lineWidth = 5 - index;
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 13;
           ctx.beginPath();
-          for (let point = 0; point <= 12; point += 1) {
-            const angle = (point / 12) * Math.PI * 2 + rotation;
-            const jaggedRadius = point % 2 === 0 ? radius : radius - 12;
-            const x = Math.cos(angle) * jaggedRadius;
-            const y = Math.sin(angle) * jaggedRadius;
-            if (point === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          }
+          ctx.arc(0, 0, 48 + index * 9 + pulse * 5, 0, Math.PI * 2);
           ctx.stroke();
         });
-        ctx.restore();
+        ctx.globalAlpha = 1;
       }
       ctx.scale(busScale, busScale);
-      ctx.fillStyle = "rgba(0,0,0,0.38)";
-      ctx.fillRect(-27, 45, 54, 14);
+      ctx.fillStyle = "rgba(23, 34, 58, 0.3)";
+      ctx.fillRect(-27, 45, 54, 12);
       if (shieldRef.current) {
-        ctx.strokeStyle = `rgba(114, 241, 255, ${0.55 + pulse * 0.35})`;
+        ctx.strokeStyle = `rgba(69, 200, 237, ${0.58 + pulse * 0.32})`;
         ctx.lineWidth = 5;
         ctx.beginPath();
         ctx.arc(0, 4, 48 + pulse * 4, 0, Math.PI * 2);
         ctx.stroke();
       }
-      const evolvedVehicleImage =
-        isLueLueLue && vehicle.level === 2
-          ? lueLueLueImages.levelTwoScooter
-          : isLueLueLue && vehicle.level === 3
-            ? lueLueLueImages.levelThreeCar
-            : isLueLueLue && vehicle.level >= 4
-              ? lueLueLueImages.levelFourStageTruck
-              : isEarthTour && vehicle.level === 2
-                ? earthTourImages.buggy
-                : isEarthTour && vehicle.level === 3
-                  ? earthTourImages.monsterCar
-                  : isEarthTour && vehicle.level >= 4
-                    ? earthTourImages.dragon
-                    : undefined;
-      if (evolvedVehicleImage) {
-        const bounds = isLueLueLue
-          ? { x: -40, y: -65, width: 80, height: 126 }
-          : vehicle.level >= 4
-            ? { x: -43, y: -60, width: 86, height: 116 }
-            : { x: -47, y: -54, width: 94, height: 108 };
+      const vehicleImage =
+        vehicle.level === 1
+          ? images.bicycle
+          : vehicle.level === 2
+            ? images.motorcycle
+            : vehicle.level === 3
+              ? images.car
+              : images.schoolBus;
+      if (vehicleImage?.complete && vehicleImage.naturalWidth) {
+        const bounds =
+          vehicle.level === 1
+            ? { x: -35, y: -64, width: 70, height: 126 }
+            : vehicle.level === 2
+              ? { x: -40, y: -65, width: 80, height: 128 }
+              : vehicle.level === 3
+                ? { x: -41, y: -59, width: 82, height: 118 }
+                : { x: -42, y: -63, width: 84, height: 126 };
         drawContainedImage(
           ctx,
-          evolvedVehicleImage,
+          vehicleImage,
           bounds.x,
           bounds.y,
           bounds.width,
           bounds.height,
         );
-      } else {
-        ctx.fillStyle = "#121225";
-        ctx.fillRect(-30, -37, 7, 24);
-        ctx.fillRect(23, -37, 7, 24);
-        ctx.fillRect(-30, 21, 7, 24);
-        ctx.fillRect(23, 21, 7, 24);
-        ctx.fillStyle = vehicle.primary;
-        ctx.fillRect(-26, -52, 52, 105);
-        ctx.fillStyle = vehicle.secondary;
-        ctx.fillRect(-21, -46, 42, 92);
-        ctx.fillStyle = "#2c225e";
-        ctx.fillRect(-21, -38, 42, 29);
-        ctx.fillStyle = "#72f1ff";
-        ctx.fillRect(-17, -34, 14, 18);
-        ctx.fillRect(3, -34, 14, 18);
-        ctx.fillStyle = "#ffd5aa";
-        ctx.fillRect(-13, -29, 6, 7);
-        ctx.fillRect(7, -29, 6, 7);
-        ctx.fillStyle = "#201740";
-        ctx.fillRect(-12, -27, 2, 2);
-        ctx.fillRect(8, -27, 2, 2);
-        ctx.fillStyle = "#ffe66d";
-        ctx.font = "bold 23px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("★", 0, 24);
-        ctx.fillStyle = "#fff7bd";
-        ctx.fillRect(-22, 40, 14, 7);
-        ctx.fillRect(8, 40, 14, 7);
-        ctx.fillStyle = "#ff285f";
-        ctx.fillRect(-20, -50, 12, 5);
-        ctx.fillRect(8, -50, 12, 5);
-        for (let light = 0; light < vehicle.level; light += 1) {
-          ctx.fillStyle = light % 2 === 0 ? "#72f1ff" : "#ffe66d";
-          ctx.fillRect(-22 + light * 12, -59, 8, 6);
-        }
       }
       ctx.restore();
 
-      // Particles and score text.
       for (const particle of particlesRef.current) {
         ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
         ctx.fillStyle = particle.color;
@@ -2759,7 +1632,7 @@ export default function Home() {
       ctx.font = "bold 18px monospace";
       for (const item of floatTextRef.current) {
         ctx.globalAlpha = Math.max(0, item.life / item.maxLife);
-        ctx.fillStyle = "#0b0920";
+        ctx.fillStyle = "#17223a";
         ctx.fillText(item.text, item.x + 2, item.y + 2);
         ctx.fillStyle = item.color;
         ctx.fillText(item.text, item.x, item.y);
@@ -2767,11 +1640,11 @@ export default function Home() {
       ctx.globalAlpha = 1;
 
       if (hitFlashRef.current > 0) {
-        ctx.fillStyle = `rgba(255, 40, 95, ${hitFlashRef.current * 0.38})`;
+        ctx.fillStyle = `rgba(244, 126, 173, ${hitFlashRef.current * 0.36})`;
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       }
       if (collectFlashRef.current > 0) {
-        ctx.fillStyle = `rgba(114, 241, 255, ${collectFlashRef.current * 0.16})`;
+        ctx.fillStyle = `rgba(69, 200, 237, ${collectFlashRef.current * 0.16})`;
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       }
       ctx.restore();
@@ -2779,10 +1652,26 @@ export default function Home() {
     [],
   );
 
+  const stopJoystick = useCallback(() => {
+    if (joystickRepeatRef.current !== null) {
+      window.clearInterval(joystickRepeatRef.current);
+      joystickRepeatRef.current = null;
+    }
+    joystickPointerRef.current = null;
+    joystickDirectionRef.current = 0;
+    setJoystickOffset(0);
+  }, []);
+
   const finishGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
     statusRef.current = "finished";
     setStatus("finished");
+    if (animationRef.current) {
+      window.cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    stopJoystick();
+    setFailureSummary(null);
     setShareCardOpen(false);
     setProgress(100);
 
@@ -2816,14 +1705,11 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           playerId,
-          name: playerNameRef.current.trim() || "巡演玩家",
+          name: playerNameRef.current.trim() || "校园新生",
           fans: fansRef.current,
           maxCombo: maxComboRef.current,
           song: trackRef.current.name,
-          songKey: getLeaderboardSongKey(
-            trackRef.current.id,
-            trackRef.current.name,
-          ),
+          songKey: LEADERBOARD_SONG_KEY,
         }),
       })
         .then(async (response) => {
@@ -2857,19 +1743,44 @@ export default function Home() {
     setMagnetRemaining(0);
     setInvincibleRemaining(0);
     resetSongTone();
-  }, [addBurst, resetSongTone, showToast]);
+  }, [addBurst, resetSongTone, showToast, stopJoystick]);
 
   const failGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
+    const totalDuration =
+      beatTimesRef.current[trackRef.current.totalBeats] ??
+      PRECOMPUTED_CHART.audio.durationMs;
+    const failureProgress = Math.min(
+      100,
+      Math.max(0, (fallbackElapsedRef.current / totalDuration) * 100),
+    );
+
     statusRef.current = "failed";
     setStatus("failed");
+    if (animationRef.current) {
+      window.cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    stopJoystick();
+    setFailureSummary({
+      reason: "pedestrian-collision",
+      fans: fansRef.current,
+      maxCombo: maxComboRef.current,
+      progress: failureProgress,
+    });
     setEarnedCoins(0);
+    setFans(fansRef.current);
+    setCombo(comboRef.current);
+    setMaxCombo(maxComboRef.current);
     setCurrentRankEntryId(null);
     setLeaderboardSyncing(false);
     setShareCardOpen(false);
-    setProgress(100);
+    setProgress(failureProgress);
+    setNoteJudgement(null);
+    setLuckyDialog(null);
     shakeRef.current = 0.7;
     hitFlashRef.current = 1;
+    pedestrianRef.current = null;
     navigator.vibrate?.([110, 55, 150]);
     addBurst(busXRef.current, PLAYER_Y - 8, "#ffe66d", 34);
     if (songRef.current) {
@@ -2895,7 +1806,7 @@ export default function Home() {
       brake.start(now);
       brake.stop(now + 0.46);
     }
-  }, [addBurst, resetSongTone]);
+  }, [addBurst, resetSongTone, stopJoystick]);
 
   const gameLoop = useCallback(
     function gameLoopFrame(now: number) {
@@ -2909,6 +1820,7 @@ export default function Home() {
         songRef.current && !songRef.current.paused
           ? songRef.current.currentTime * 1000
           : now - startTimeRef.current;
+      fallbackElapsedRef.current = elapsed;
       const track = trackRef.current;
       const beatTimes = beatTimesRef.current;
 
@@ -3048,7 +1960,7 @@ export default function Home() {
             if (perfectCountRef.current % 8 === 0 && !shieldRef.current) {
               shieldRef.current = true;
               setShield(true);
-              showToast("8 次 PERFECT！获得应援护盾", "gold");
+              showToast("8 次 PERFECT！获得校园护盾", "gold");
             }
             continue;
           }
@@ -3091,6 +2003,7 @@ export default function Home() {
           entitiesRef.current = entitiesRef.current.filter(
             (item) => item.id !== entity.id,
           );
+          stopJoystick();
           statusRef.current = "lucky";
           setStatus("lucky");
           setLuckyDialog({ phase: "choice" });
@@ -3108,7 +2021,7 @@ export default function Home() {
           busBounceRef.current = 1.15;
           addBurst(x, PLAYER_Y - 10, "#72f1ff", 30);
           addFloatText(x, PLAYER_Y - 66, "磁铁 5 秒", "#72f1ff");
-          showToast("获得磁铁！5 秒内附近应援棒自动 PERFECT", "cyan");
+          showToast("获得磁铁！5 秒内附近知识星自动 PERFECT", "cyan");
           navigator.vibrate?.([24, 15, 32]);
         } else if (entity.type === "invincible") {
           entity.handled = true;
@@ -3119,7 +2032,7 @@ export default function Home() {
           screenPunchRef.current = 1.1;
           addBurst(x, PLAYER_Y - 10, "#ffe66d", 34);
           addFloatText(x, PLAYER_Y - 66, "无敌 5 秒", "#ffe66d");
-          showToast("十万伏特！5 秒内电光无敌", "gold");
+          showToast("元气闪电！5 秒内无视所有障碍", "gold");
           navigator.vibrate?.([30, 16, 45]);
         } else {
           entity.handled = true;
@@ -3135,7 +2048,7 @@ export default function Home() {
           const baseLoss =
             entity.obstacle === "barrier"
               ? 10
-              : entity.obstacle === "speaker"
+              : entity.obstacle === "pothole"
                 ? 7
                 : 4;
           const loss = shieldRef.current ? Math.ceil(baseLoss / 2) : baseLoss;
@@ -3154,14 +2067,14 @@ export default function Home() {
           triggerHaptic(
             entity.obstacle === "barrier"
               ? [85, 35, 120]
-              : entity.obstacle === "speaker"
+              : entity.obstacle === "pothole"
                 ? [65, 30, 95]
                 : [45, 24, 70],
           );
           playObstacleImpact(entity.obstacle ?? "cone");
           triggerDamageVariation();
           addBurst(x, PLAYER_Y, "#ff375f", 17);
-          addFloatText(x, PLAYER_Y - 58, `-${actualLoss} 粉丝`, "#ff526f");
+          addFloatText(x, PLAYER_Y - 58, `-${actualLoss} 知识星`, "#ff526f");
           showToast(
             `掉粉 -${actualLoss} · 音色变${toneModeRef.current === "thick" ? "厚" : "细"} 8 拍`,
             "danger",
@@ -3277,6 +2190,7 @@ export default function Home() {
       showJudgement,
       showToast,
       spawnBeat,
+      stopJoystick,
       triggerDamageVariation,
     ],
   );
@@ -3356,8 +2270,8 @@ export default function Home() {
       PLAYER_Y - 64,
       fanGained
         ? quality === "PERFECT"
-          ? "点上了! +1"
-          : "+1 FAN"
+          ? "收到了! +1"
+          : "+1 STAR"
         : `满载 ${capacity}`,
       quality === "PERFECT" ? "#ffe66d" : "#ffffff",
     );
@@ -3374,7 +2288,7 @@ export default function Home() {
     ) {
       shieldRef.current = true;
       setShield(true);
-      showToast("8 次 PERFECT！获得应援护盾", "gold");
+      showToast("8 次 PERFECT！获得校园护盾", "gold");
     }
   }, [
     addBurst,
@@ -3388,16 +2302,16 @@ export default function Home() {
 
   const startGame = useCallback(async () => {
     const song = songRef.current;
-    const analysedBeats = detectedBeatTimesRef.current;
     if (!playerNameRef.current.trim()) {
       showToast("请先填写排行榜昵称", "pink");
       return;
     }
-    if (!songReady || !song || analysedBeats.length < 12) {
-      showToast("请先选择一首歌曲", "pink");
+    if (!songReady || !song) {
+      showToast("歌曲仍在准备中，请稍候", "pink");
       return;
     }
     triggerHaptic(1);
+    stopJoystick();
     if (animationRef.current) {
       window.cancelAnimationFrame(animationRef.current);
     }
@@ -3413,7 +2327,9 @@ export default function Home() {
       highShelfRef.current = null;
     }
     const audio = audioRef.current;
-    if (audio && !mediaSourceRef.current) {
+    const songOrigin = new URL(song.src, window.location.href).origin;
+    const isCrossOriginSong = songOrigin !== window.location.origin;
+    if (audio && !mediaSourceRef.current && !isCrossOriginSong) {
       const mediaSource = audio.createMediaElementSource(song);
       const lowShelf = audio.createBiquadFilter();
       const highShelf = audio.createBiquadFilter();
@@ -3432,24 +2348,11 @@ export default function Home() {
       highShelfRef.current = highShelf;
     }
 
-    const totalBeats = analysedBeats.length - 1;
-    const runtimeTrack: Track = {
-      ...selectedTrack,
-      name: songTitle,
-      english: songTitle,
-      totalBeats,
-      grannyBeats: getPedestrianBeats(totalBeats),
-      tempoLabel: `${detectedBpmRef.current} BPM`,
-      bpmAt: () => detectedBpmRef.current,
-      lanePattern: detectedLanePatternRef.current,
-      notePattern: detectedNotePatternRef.current,
-      intensityPattern: detectedIntensityPatternRef.current,
-    };
-    trackRef.current = runtimeTrack;
-    beatTimesRef.current = analysedBeats;
-    window.localStorage.setItem("fan-bus-track", runtimeTrack.id);
+    trackRef.current = GAME_TRACK;
+    beatTimesRef.current = [...PRECOMPUTED_CHART.timing.beatTimesMs];
     statusRef.current = "playing";
     setStatus("playing");
+    setFailureSummary(null);
     laneRef.current = 2;
     busXRef.current = laneCenter(2);
     vehicleLevelRef.current = 1;
@@ -3478,6 +2381,7 @@ export default function Home() {
     collectFlashRef.current = 0;
     busBounceRef.current = 0;
     screenPunchRef.current = 0;
+    fallbackElapsedRef.current = 0;
     setFans(STARTING_FANS);
     setVehicleLevel(1);
     setCombo(0);
@@ -3487,7 +2391,7 @@ export default function Home() {
     setInvincibleRemaining(0);
     setProgress(0);
     setShield(false);
-    setCurrentBpm(detectedBpmRef.current);
+    setCurrentBpm(PRECOMPUTED_CHART.timing.bpm);
     setToast(null);
     setNoteJudgement(null);
     setLuckyDialog(null);
@@ -3501,28 +2405,30 @@ export default function Home() {
     song.currentTime = 0;
     song.playbackRate = 1;
     song.muted = mutedRef.current;
-    try {
-      await audio?.resume();
-      await song.play();
-    } catch {
-      statusRef.current = "ready";
-      setStatus("ready");
-      setSongError("浏览器未能播放该音频，请重新导入后再试");
-      showToast("音频播放失败", "danger");
-      return;
-    }
-
+    const resumePromise = audio?.resume() ?? Promise.resolve();
+    const playPromise = song.play();
     const now = performance.now();
     startTimeRef.current = now;
     lastTimeRef.current = now;
     lastHudRef.current = 0;
     animationRef.current = window.requestAnimationFrame(gameLoop);
-  }, [gameLoop, resetSongTone, selectedTrack, showToast, songReady, songTitle]);
+    try {
+      await Promise.all([resumePromise, playPromise]);
+    } catch {
+      song.pause();
+      song.muted = true;
+      mutedRef.current = true;
+      setMuted(true);
+      setSongError("主题曲暂时无法播放，已自动切换到静音节奏模式");
+      showToast("主题曲暂时无法播放 · 已启用静音节奏模式", "gold");
+    }
+  }, [gameLoop, resetSongTone, showToast, songReady, stopJoystick]);
 
   const pauseGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
     statusRef.current = "paused";
     setStatus("paused");
+    stopJoystick();
     if (animationRef.current) {
       window.cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
@@ -3530,21 +2436,27 @@ export default function Home() {
     songRef.current?.pause();
     void audioRef.current?.suspend();
     setNoteJudgement(null);
-  }, []);
+  }, [stopJoystick]);
 
   const resumeGame = useCallback(async () => {
     if (statusRef.current !== "paused" || !songRef.current) return;
+    const song = songRef.current;
     statusRef.current = "playing";
     setStatus("playing");
+    const resumePromise = audioRef.current?.resume() ?? Promise.resolve();
+    const playPromise = song.play();
+    const now = performance.now();
+    startTimeRef.current = now - fallbackElapsedRef.current;
+    lastTimeRef.current = now;
+    animationRef.current = window.requestAnimationFrame(gameLoop);
     try {
-      await audioRef.current?.resume();
-      await songRef.current.play();
-      lastTimeRef.current = performance.now();
-      animationRef.current = window.requestAnimationFrame(gameLoop);
+      await Promise.all([resumePromise, playPromise]);
     } catch {
-      statusRef.current = "paused";
-      setStatus("paused");
-      showToast("歌曲继续播放失败，请重新发车", "danger");
+      song.pause();
+      song.muted = true;
+      mutedRef.current = true;
+      setMuted(true);
+      showToast("主题曲暂时无法继续 · 已启用静音节奏模式", "gold");
     }
   }, [gameLoop, showToast]);
 
@@ -3566,7 +2478,7 @@ export default function Home() {
       addFloatText(
         busXRef.current,
         PLAYER_Y - 64,
-        doubledFans > capacity ? `翻倍！上限 ${capacity}` : "粉丝 ×2!",
+        doubledFans > capacity ? `翻倍！上限 ${capacity}` : "知识星 ×2!",
         "#ffe66d",
       );
       addBurst(busXRef.current, PLAYER_Y - 10, "#ffe66d", 28);
@@ -3585,7 +2497,7 @@ export default function Home() {
       fansRef.current = Math.max(1, Math.floor(before / 2));
       comboRef.current = 0;
       setCombo(0);
-      addFloatText(busXRef.current, PLAYER_Y - 64, "粉丝 ÷2", "#ff7ac8");
+      addFloatText(busXRef.current, PLAYER_Y - 64, "知识星 ÷2", "#ff7ac8");
       addBurst(busXRef.current, PLAYER_Y - 10, "#ff7ac8", 22);
       hitFlashRef.current = 0.7;
       shakeRef.current = 0.22;
@@ -3604,18 +2516,24 @@ export default function Home() {
 
   const continueLuckyGame = useCallback(async () => {
     if (statusRef.current !== "lucky" || !songRef.current) return;
+    const song = songRef.current;
     statusRef.current = "playing";
     setStatus("playing");
+    setLuckyDialog(null);
+    const resumePromise = audioRef.current?.resume() ?? Promise.resolve();
+    const playPromise = song.play();
+    const now = performance.now();
+    startTimeRef.current = now - fallbackElapsedRef.current;
+    lastTimeRef.current = now;
+    animationRef.current = window.requestAnimationFrame(gameLoop);
     try {
-      await audioRef.current?.resume();
-      await songRef.current.play();
-      setLuckyDialog(null);
-      lastTimeRef.current = performance.now();
-      animationRef.current = window.requestAnimationFrame(gameLoop);
+      await Promise.all([resumePromise, playPromise]);
     } catch {
-      statusRef.current = "lucky";
-      setStatus("lucky");
-      showToast("歌曲继续播放失败，请重新发车", "danger");
+      song.pause();
+      song.muted = true;
+      mutedRef.current = true;
+      setMuted(true);
+      showToast("主题曲暂时无法继续 · 已启用静音节奏模式", "gold");
     }
   }, [gameLoop, showToast]);
 
@@ -3629,16 +2547,6 @@ export default function Home() {
     },
     [addBurst],
   );
-
-  const stopJoystick = useCallback(() => {
-    if (joystickRepeatRef.current !== null) {
-      window.clearInterval(joystickRepeatRef.current);
-      joystickRepeatRef.current = null;
-    }
-    joystickPointerRef.current = null;
-    joystickDirectionRef.current = 0;
-    setJoystickOffset(0);
-  }, []);
 
   const steerWithJoystick = useCallback(
     (direction: -1 | 0 | 1) => {
@@ -3680,7 +2588,7 @@ export default function Home() {
     [steerWithJoystick],
   );
 
-  const returnToSongSelect = useCallback(() => {
+  const returnToStart = useCallback(() => {
     if (animationRef.current) {
       window.cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
@@ -3692,7 +2600,7 @@ export default function Home() {
     resetSongTone();
     statusRef.current = "ready";
     setStatus("ready");
-    setReadyPage("songs");
+    setReadyPage("start");
     laneRef.current = 2;
     busXRef.current = laneCenter(2);
     vehicleLevelRef.current = 1;
@@ -3721,6 +2629,7 @@ export default function Home() {
     setLeaderboardSyncing(false);
     setShareCardOpen(false);
     setShareBusy(false);
+    setFailureSummary(null);
     entitiesRef.current = [];
     lastObstacleTargetBeatRef.current = -Infinity;
     pedestrianRef.current = null;
@@ -3734,16 +2643,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    void loadBuiltInTrack("earth-tour");
-  }, [loadBuiltInTrack]);
+    void loadFixedSong();
+  }, [loadFixedSong]);
 
   useEffect(() => {
-    if (selectedTrackId === "custom-upload" && !songReady) {
-      setLeaderboard([]);
-      setCurrentRankEntryId(null);
-      return;
-    }
-
     let cancelled = false;
     setCurrentRankEntryId(null);
     void fetch(
@@ -3765,7 +2668,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [leaderboardSongKey, selectedTrackId, songReady]);
+  }, [leaderboardSongKey]);
 
   useEffect(() => {
     const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
@@ -3774,8 +2677,9 @@ export default function Home() {
     );
     const storedPlayerName =
       window.localStorage.getItem("fan-bus-player-name") || "";
-    const savedPlayerName =
-      storedPlayerName === "巡演玩家" ? "" : storedPlayerName;
+    const savedPlayerName = ["巡演玩家", "校园新生"].includes(storedPlayerName)
+      ? ""
+      : storedPlayerName;
     let savedPlayerId = window.localStorage.getItem("fan-bus-player-id");
     if (!savedPlayerId) {
       savedPlayerId =
@@ -3843,7 +2747,7 @@ export default function Home() {
           statusRef.current === "ready" &&
           (readyPage === "home" || readyPage === "rules")
         ) {
-          setReadyPage("songs");
+          setReadyPage("start");
         } else {
           void startGame();
         }
@@ -3857,28 +2761,17 @@ export default function Home() {
   }, [hitNote, move, pauseGame, readyPage, resumeGame, startGame, toggleMute]);
 
   useEffect(() => {
-    (
-      Object.entries(EARTH_TOUR_ASSETS) as Array<[EarthTourAsset, string]>
-    ).forEach(([key, src]) => {
-      const image = new Image();
-      image.src = src;
-      image.onload = () => {
-        earthTourImagesRef.current[key] = image;
-        const context = canvasRef.current?.getContext("2d");
-        if (context && statusRef.current !== "playing") drawGame(context, 0);
-      };
-    });
-    (
-      Object.entries(LUELUELUE_ASSETS) as Array<[LueLueLueAsset, string]>
-    ).forEach(([key, src]) => {
-      const image = new Image();
-      image.src = src;
-      image.onload = () => {
-        lueLueLueImagesRef.current[key] = image;
-        const context = canvasRef.current?.getContext("2d");
-        if (context && statusRef.current !== "playing") drawGame(context, 0);
-      };
-    });
+    (Object.entries(CAMPUS_ASSETS) as Array<[CampusAsset, string]>).forEach(
+      ([key, src]) => {
+        const image = new Image();
+        image.src = src;
+        image.onload = () => {
+          campusImagesRef.current[key] = image;
+          const context = canvasRef.current?.getContext("2d");
+          if (context && statusRef.current !== "playing") drawGame(context, 0);
+        };
+      },
+    );
   }, [drawGame]);
 
   useEffect(() => {
@@ -3899,10 +2792,6 @@ export default function Home() {
       if (songRef.current) {
         songRef.current.pause();
         songRef.current = null;
-      }
-      if (songUrlRef.current) {
-        URL.revokeObjectURL(songUrlRef.current);
-        songUrlRef.current = null;
       }
       if (toastTimerRef.current) {
         window.clearTimeout(toastTimerRef.current);
@@ -3929,22 +2818,22 @@ export default function Home() {
           <div className="home-glow home-glow-cyan" aria-hidden="true" />
 
           <header className="home-nav">
-            <div className="home-mark" aria-label="应援大巴冲冲冲">
-              <span aria-hidden="true">★</span>
+            <div className="home-mark" aria-label="开学冲冲冲">
+              <img src={UI_ICONS.pencil} alt="" aria-hidden="true" />
               <div>
-                <small>FAN BUS</small>
-                <strong>RHYTHM TOUR</strong>
+                <small>BACK TO SCHOOL</small>
+                <strong>RHYTHM RUSH</strong>
               </div>
             </div>
             <div className="home-records" aria-label="游戏记录">
               <span>
                 <small>BEST</small>
-                <strong>{bestFans}</strong> 粉丝
+                <strong>{bestFans}</strong> 知识星
               </span>
               <i aria-hidden="true" />
               <span>
                 <small>BANK</small>
-                <strong>{bankCoins}</strong> 金币
+                <strong>{bankCoins}</strong> 活力币
               </span>
               <button
                 className={`home-sound-button ${muted ? "is-muted" : ""}`}
@@ -3960,24 +2849,24 @@ export default function Home() {
           <div className="home-hero">
             <div className="home-copy">
               <p className="home-eyebrow">
-                <span>NEW TOUR OPEN</span>
+                <span>OPENING SEASON</span>
                 <i aria-hidden="true" />
-                跟着节拍，一路涨粉
+                踩准节拍，发现校园宝藏
               </p>
               <h1 id="home-title">
-                <span>应援大巴</span>
+                <span>开学季</span>
                 <strong>冲冲冲！</strong>
               </h1>
               <p className="home-lead">
-                驾驶明星大巴穿过霓虹城市，踩准强拍收集应援棒，
-                把一路加入的粉丝安全送到今晚的演唱会。
+                从自行车一路升级到校车大巴，踩准强拍收集知识星，
+                穿过蓝绿粉校园，解锁你的隐藏开学人设。
               </p>
               <div className="home-tags" aria-label="游戏特色">
                 <span>
-                  <b>03</b> 首巡演歌曲
+                  <b>01</b> 首校园主题曲
                 </span>
                 <span>
-                  <b>∞</b> 自动卡点谱面
+                  <b>04</b> 级载具进化
                 </span>
                 <span>
                   <b>TOP 8</b> 歌曲排行榜
@@ -3986,18 +2875,22 @@ export default function Home() {
               <div className="home-actions">
                 <button
                   className="home-start-button"
-                  onClick={() => setReadyPage("songs")}
+                  onClick={() => setReadyPage("start")}
                   autoFocus
                 >
-                  <span>开始游戏</span>
-                  <i className="home-play-icon" aria-hidden="true" />
+                  <span>走进校园</span>
+                  <img
+                    className="home-play-icon"
+                    src={UI_ICONS.play}
+                    alt=""
+                    aria-hidden="true"
+                  />
                 </button>
                 <button
                   className="home-rules-button"
                   onClick={() => setReadyPage("rules")}
                 >
                   查看玩法
-                  <span aria-hidden="true">↗</span>
                 </button>
               </div>
               <p className="home-key-hint">
@@ -4010,17 +2903,17 @@ export default function Home() {
               <div className="home-art">
                 <span className="home-live-badge">
                   <i />
-                  TOUR LIVE
+                  CAMPUS OPEN
                 </span>
                 <div className="home-art-stats">
                   <span>
                     <small>MISSION</small>
-                    接上全城应援
+                    收集沿途知识星
                   </span>
                   <b>→</b>
                   <span>
                     <small>DESTINATION</small>
-                    演唱会现场
+                    解锁隐藏学霸称号
                   </span>
                 </div>
               </div>
@@ -4028,8 +2921,8 @@ export default function Home() {
                 <span className="home-track-number">01</span>
                 <div>
                   <small>FEATURED TRACK</small>
-                  <strong>昨晚我环游了地球</strong>
-                  <em>GALACTIC LOVE TOUR</em>
+                  <strong>恭喜你发现了宝藏</strong>
+                  <em>TF家族 · 开学季主题曲 01:26</em>
                 </div>
                 <span className="home-equalizer">
                   <i />
@@ -4047,7 +2940,7 @@ export default function Home() {
             <i />
             <span>SPACE 击打节拍</span>
             <i />
-            <span>安全送达演唱会</span>
+            <span>礼让行人 · 安全到校</span>
           </footer>
         </section>
       ) : (
@@ -4055,28 +2948,28 @@ export default function Home() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-kicker">
-            <small>PIXEL TOUR</small>
+            <small>CAMPUS RUSH</small>
             <strong>
               {status === "playing" || status === "paused" || status === "lucky"
                 ? currentBpm
                 : songReady
-                  ? detectedBpm
+                  ? PRECOMPUTED_CHART.timing.bpm
                   : "--"}
               <i>BPM</i>
             </strong>
           </span>
           <span className="brand-title">
-            <span>应援大巴</span>
+            <span>开学季</span>
             <em>冲冲冲！</em>
           </span>
         </div>
         <div className="meta-strip" aria-label="游戏记录">
           <span>
             <small>BEST</small>
-            {bestFans} 粉丝
+            {bestFans} 知识星
           </span>
           <span>
-            <small>BANK</small>
+            <small>ENERGY</small>
             <b className="coin-dot">●</b> {bankCoins}
           </span>
           <button
@@ -4097,8 +2990,8 @@ export default function Home() {
               {status === "playing" || status === "paused" || status === "lucky"
                 ? songTitle
                 : readyPage === "rules"
-                  ? `默认巡演 · ${selectedTrack.name}`
-                  : "SELECT A TRACK"}
+                  ? `校园路线 · ${GAME_TRACK.name}`
+                  : "READY TO GO"}
             </div>
             <div className="cabinet-tools">
               <button
@@ -4110,7 +3003,12 @@ export default function Home() {
                 aria-label={status === "paused" ? "继续游戏" : "暂停游戏"}
                 aria-pressed={status === "paused"}
               >
-                {status === "paused" ? "▶ CONTINUE" : "Ⅱ PAUSE"}
+                <img
+                  src={status === "paused" ? UI_ICONS.play : UI_ICONS.pause}
+                  alt=""
+                  aria-hidden="true"
+                />
+                {status === "paused" ? "CONTINUE" : "PAUSE"}
               </button>
               <div className="bpm-bars" aria-hidden="true">
                 {[0, 1, 2, 3].map((bar) => (
@@ -4129,7 +3027,7 @@ export default function Home() {
 
           <div className="hud">
             <div className="hud-block">
-              <span>FANS / CAP</span>
+              <span>STARS / CAP</span>
               <strong className="fans-count">
                 {String(fans).padStart(3, "0")}
                 <small>/{currentVehicle.capacity}</small>
@@ -4139,126 +3037,49 @@ export default function Home() {
               <span>BEAT COMBO</span>
               <strong>×{combo}</strong>
             </div>
-            <>
-              <div className="road-legend" aria-label="道路元素说明">
-                <div className="powerup-legend-item road-legend-item">
-                  <i
-                    className={`road-icon is-light-stick ${selectedAssetThemeClass}`}
-                    aria-hidden="true"
-                  />
-                  <span>
-                    <strong>应援棒</strong>
-                    <small>命中后粉丝 +1</small>
-                  </span>
-                </div>
-                <div className="powerup-legend-item road-legend-item">
-                  <i
-                    className={`road-icon is-dish ${selectedAssetThemeClass}`}
-                    aria-hidden="true"
-                  />
-                  <span>
-                    <strong>障碍物</strong>
-                    <small>障碍 · 注意换道</small>
-                  </span>
-                </div>
-                <div className="powerup-legend-item road-legend-item">
-                  <i
-                    className={`road-icon is-crystal ${selectedAssetThemeClass}`}
-                    aria-hidden="true"
-                  />
-                  <span>
-                    <strong>障碍物</strong>
-                    <small>障碍 · 及时避让</small>
-                  </span>
-                </div>
+            <div className="vehicle-run-card" aria-label="当前车辆升级任务">
+              <div className="vehicle-level-badge">
+                <small>RIDE</small>
+                <strong>LV.{currentVehicle.level}</strong>
+              </div>
+              <div className="vehicle-task-copy">
+                <strong>
+                  {currentVehicleName}
+                  <span>上限 {currentVehicle.capacity}</span>
+                </strong>
+                <small>{currentVehicle.task}</small>
               </div>
               <div
-                className={`music-state ${toneMode !== "normal" ? `is-variation is-${toneMode}` : ""}`}
+                className="vehicle-task-meter"
+                aria-label={`升级任务进度 ${vehicleTaskProgress}%`}
               >
-                <strong>{songReady ? currentBpm : "--"} BPM</strong>
-                <span>
-                  {status === "lucky"
-                    ? "锦囊抉择中 · TEMPO HOLD"
-                    : status === "paused"
-                      ? "已暂停 · P / ESC 继续"
-                      : toneMode !== "normal"
-                        ? `${toneMode === "thick" ? "厚" : "细"}音色中 · TEMPO LOCK`
-                        : shield
-                          ? "护盾减伤 READY"
-                          : "对准点子按 HIT"}
-                </span>
-              </div>
-            </>
-          </div>
-
-          <div className="vehicle-upgrade-strip" aria-label="车辆升级任务">
-            <div className="vehicle-level-badge">
-              <small>BUS</small>
-              <strong>LV.{currentVehicle.level}</strong>
-            </div>
-            <div className="vehicle-task-copy">
-              <strong>
-                {currentVehicleName}
-                <span>载客上限 {currentVehicle.capacity}</span>
-              </strong>
-              <small>{currentVehicle.task}</small>
-            </div>
-            <div className="powerup-legend" aria-label="道具图标说明">
-              <div className="powerup-legend-item">
-                <i
-                  className={`legend-icon is-lucky ${selectedAssetThemeClass}`}
-                  aria-hidden="true"
-                >
-                  {selectedAssetThemeClass ? "" : "?"}
-                </i>
-                <span>
-                  <strong>锦囊</strong>
-                  <small>粉丝随机翻倍或减半</small>
-                </span>
-              </div>
-              <div className="powerup-legend-item">
-                <i
-                  className={`legend-icon is-magnet ${selectedAssetThemeClass}`}
-                  aria-hidden="true"
-                />
-                <span>
-                  <strong>吸铁石</strong>
-                  <small>自动吸取附近应援棒</small>
-                </span>
-              </div>
-              <div className="powerup-legend-item">
-                <i
-                  className={`legend-icon is-invincible ${selectedAssetThemeClass}`}
-                  aria-hidden="true"
-                >
-                  {selectedAssetThemeClass ? "" : "★"}
-                </i>
-                <span>
-                  <strong>
-                    {selectedTrackId === "earth-tour"
-                      ? "十万伏特"
-                      : selectedTrackId === "lueluelue"
-                        ? "无敌闪电"
-                        : "无敌"}
-                  </strong>
-                  <small>5 秒内无视所有障碍</small>
-                </span>
+                <span style={{ width: `${vehicleTaskProgress}%` }} />
+                <b>
+                  {currentVehicle.requirement ? `${vehicleTaskProgress}%` : "MAX"}
+                </b>
               </div>
             </div>
             <div
-              className="vehicle-task-meter"
-              aria-label={`升级任务进度 ${vehicleTaskProgress}%`}
+              className={`music-state ${toneMode !== "normal" ? `is-variation is-${toneMode}` : ""}`}
             >
-              <span style={{ width: `${vehicleTaskProgress}%` }} />
-              <b>
-                {currentVehicle.requirement ? `${vehicleTaskProgress}%` : "MAX"}
-              </b>
+              <strong>{songReady ? currentBpm : "--"} BPM</strong>
+              <span>
+                {status === "lucky"
+                  ? "锦囊选择中"
+                  : status === "paused"
+                    ? "已暂停"
+                    : toneMode !== "normal"
+                      ? `${toneMode === "thick" ? "厚" : "细"}音色中`
+                      : shield
+                        ? "护盾已就绪"
+                        : "按 HIT 收集"}
+              </span>
             </div>
           </div>
 
           <div
             className="progress-track"
-            aria-label={`巡演进度 ${Math.round(progress)}%`}
+            aria-label={`校园进度 ${Math.round(progress)}%`}
           >
             <span style={{ width: `${progress}%` }} />
           </div>
@@ -4278,24 +3099,9 @@ export default function Home() {
               <div className="powerup-hud" aria-live="polite">
                 {magnetRemaining > 0 && (
                   <div className="powerup-chip is-magnet">
-                    <i
-                      className={`powerup-icon ${
-                        selectedTrackId === "earth-tour"
-                          ? "earth-crystal-icon"
-                          : selectedTrackId === "lueluelue"
-                            ? "lueluelue-magnet-icon"
-                            : ""
-                      }`}
-                      aria-hidden="true"
-                    />
+                    <img src={CAMPUS_ASSETS.magnet} alt="" aria-hidden="true" />
                     <span>
-                      <small>
-                        {selectedTrackId === "earth-tour"
-                          ? "水晶吸铁石"
-                          : selectedTrackId === "lueluelue"
-                            ? "蝶光吸铁石"
-                            : "吸铁石"}
-                      </small>
+                      <small>校园磁铁</small>
                       <strong>{(magnetRemaining / 1000).toFixed(1)}s</strong>
                     </span>
                     <b>
@@ -4312,24 +3118,13 @@ export default function Home() {
                 )}
                 {invincibleRemaining > 0 && (
                   <div className="powerup-chip is-invincible">
-                    <i
-                      className={`powerup-icon ${
-                        selectedTrackId === "earth-tour"
-                          ? "hundred-volts-icon"
-                          : selectedTrackId === "lueluelue"
-                            ? "lueluelue-invincible-icon"
-                            : ""
-                      }`}
+                    <img
+                      src={CAMPUS_ASSETS.lightning}
+                      alt=""
                       aria-hidden="true"
                     />
                     <span>
-                      <small>
-                        {selectedTrackId === "earth-tour"
-                          ? "十万伏特"
-                          : selectedTrackId === "lueluelue"
-                            ? "无敌闪电"
-                            : "无敌模式"}
-                      </small>
+                      <small>元气闪电</small>
                       <strong>
                         {(invincibleRemaining / 1000).toFixed(1)}s
                       </strong>
@@ -4372,160 +3167,96 @@ export default function Home() {
             {status === "ready" && readyPage === "rules" && (
               <div className="game-overlay rules-overlay">
                 <p className="overlay-kicker">
-                  TONIGHT&apos;S STORY / TOUR CALL
+                  FIRST DAY / CAMPUS CALL
                 </p>
-                <div className="rules-logo" aria-hidden="true">
-                  ★
-                </div>
+                <img
+                  className="rules-logo"
+                  src={UI_ICONS.pencil}
+                  alt=""
+                  aria-hidden="true"
+                />
                 <h1 className="story-title">
-                  <span>应援大巴</span>
+                  <span>开学季</span>
                   <em>冲冲冲！</em>
                 </h1>
                 <p className="rules-lead">
-                  今晚，明星已经登上大巴，但车上的粉丝还是 0。
-                  穿过霓虹城市，把一路加入的粉丝
-                  <strong>安全送到演唱会</strong>！
+                  开学第一天，从一辆校园自行车出发。
+                  踩准节拍收集沿路知识星，躲开障碍并
+                  <strong>安全抵达校园</strong>！
                 </p>
-                <div className="rules-grid story-route" aria-label="巡演故事">
+                <div className="rules-grid story-route" aria-label="校园路线">
                   <div>
                     <b>01</b>
                     <span>
-                      <strong>空车出发</strong>
-                      粉丝数从 0 开始，等待你沿途召集今晚的应援队。
+                      <strong>自行车出发</strong>
+                      知识星从 0 开始，沿校园道路左右换道寻找宝藏。
                     </span>
                   </div>
                   <div>
                     <b>02</b>
                     <span>
-                      <strong>收集应援棒</strong>
-                      应援棒到达黄色判定线时按 <em>HIT</em> 吸粉；命中 1
-                      根，粉丝 +1。
+                      <strong>收集知识星</strong>
+                      知识星到达黄色判定线时按 <em>HIT</em>；每次命中
+                      都会增加 1 颗知识星。
                     </span>
                   </div>
                   <div>
                     <b>03</b>
                     <span>
-                      <strong>点亮更大舞台</strong>
-                      把更多粉丝安全送达，解锁更大的演唱会场馆。
+                      <strong>升级校园载具</strong>
+                      从自行车、摩托车、小轿车一路升级到校车大巴。
                     </span>
                   </div>
                 </div>
                 <div className="story-mission">
-                  <span>TONIGHT&apos;S GOAL</span>
-                  <strong>让每一位粉丝准时抵达现场</strong>
-                  <small>道路安全第一，遇到行人必须停车礼让。</small>
+                  <span>FIRST DAY GOAL</span>
+                  <strong>解锁你的隐藏开学人设</strong>
+                  <small>校园安全第一，遇到过马路的老奶奶必须礼让。</small>
                 </div>
                 <button
                   className="primary-button rules-start-button"
-                  onClick={() => setReadyPage("songs")}
+                  onClick={() => setReadyPage("start")}
                 >
-                  开始巡演 · 进入选歌
+                  <img src={UI_ICONS.play} alt="" aria-hidden="true" />
+                  准备开学 · 前往出发页
                 </button>
               </div>
             )}
 
-            {status === "ready" && readyPage === "songs" && (
-              <div className="game-overlay intro-overlay">
+            {status === "ready" && readyPage === "start" && (
+              <div className="game-overlay intro-overlay single-track-overlay">
                 <div className="song-select-title">
-                  <p className="overlay-kicker">SONG SELECT</p>
-                  <h1>选歌</h1>
-                  <span>每首歌都有独立卡点、换道路线与道路主题</span>
+                  <p className="overlay-kicker">READY TO GO</p>
+                  <h1>准备出发</h1>
+                  <span>跟随唯一主题曲，收集知识星并安全抵达校园</span>
                 </div>
-                <div className="track-picker" aria-label="选择歌曲">
-                  {BUILT_IN_TRACK_ORDER.map((trackId, index) => {
-                    const track = getTrack(trackId);
-                    const isSelected = selectedTrackId === track.id;
-                    return (
-                      <button
-                        type="button"
-                        key={track.id}
-                        className={isSelected ? "is-selected" : ""}
-                        onClick={() =>
-                          void loadBuiltInTrack(
-                            track.id as Exclude<TrackId, "custom-upload">,
-                          )
-                        }
-                        style={{ color: track.color }}
-                        aria-pressed={isSelected}
-                      >
-                        <span className="song-number">
-                          {String(index + 1).padStart(2, "0")}
-                        </span>
-                        <span className="track-copy">
-                          <b>{track.name}</b>
-                          <small>
-                            {track.artist} · {track.description}
-                          </small>
-                        </span>
-                        <em>
-                          {isSelected && songReady
-                            ? `${detectedBpm} BPM`
-                            : track.mapLabel}
-                        </em>
-                        <i>
-                          {isSelected && songLoading
-                            ? "ANALYZING"
-                            : isSelected && songReady
-                              ? "✓ 已选择"
-                              : track.difficulty}
-                        </i>
-                      </button>
-                    );
-                  })}
-                  <label
-                    className={`uploaded-track-row ${
-                      selectedTrackId === "custom-upload" ? "is-selected" : ""
-                    }`}
-                    htmlFor="custom-song-upload"
-                  >
-                    <span className="song-number">04</span>
-                    <span className="track-copy">
-                      <b>
-                        {selectedTrackId === "custom-upload" && songReady
-                          ? songTitle
-                          : "上传自己的歌曲"}
-                      </b>
-                      <small>
-                        {selectedTrackId === "custom-upload" && songLoading
-                          ? "正在拆解节拍与鼓点…"
-                          : selectedTrackId === "custom-upload" && songReady
-                            ? "节拍分析完成，可以发车"
-                            : "支持 MP3 / M4A / WAV / AAC / OGG"}
-                      </small>
-                    </span>
-                    <em>
-                      {selectedTrackId === "custom-upload" && songLoading
-                        ? "分析中"
-                        : selectedTrackId === "custom-upload" && songReady
-                          ? `${detectedBpm} BPM · ${Math.floor(songDuration / 60)}:${String(
-                              Math.floor(songDuration % 60),
-                            ).padStart(2, "0")}`
-                          : "自定义巡演"}
-                    </em>
-                    <i>
-                      {selectedTrackId === "custom-upload" && songLoading
-                        ? "ANALYZING"
-                        : selectedTrackId === "custom-upload" && songReady
-                          ? "✓ 已选择"
-                          : "UPLOAD"}
-                    </i>
-                  </label>
-                </div>
-                <input
-                  id="custom-song-upload"
-                  className="visually-hidden"
-                  type="file"
-                  accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.flac,.mgg"
-                  onChange={handleSongUpload}
-                />
-                <label className="upload-button" htmlFor="custom-song-upload">
-                  ＋ 上传本地歌曲
-                </label>
-                {songFileName && selectedTrackId === "custom-upload" && (
-                  <p className="file-status" title={songFileName}>
-                    {songReady ? "✓" : "…"} {songFileName}
-                  </p>
-                )}
+
+                <article className="single-song-card" aria-label="本次主题曲">
+                  <div className="single-song-art" aria-hidden="true">
+                    <img src={UI_ICONS.play} alt="" />
+                  </div>
+                  <div className="single-song-copy">
+                    <small>OPENING SEASON TRACK</small>
+                    <strong>{GAME_TRACK.name}</strong>
+                    <span>{GAME_TRACK.artist} · 完整版 01:26</span>
+                  </div>
+                  <div className="single-song-badges" aria-label="歌曲信息">
+                    <b>{PRECOMPUTED_CHART.timing.bpm} BPM</b>
+                    <em>开学季主题曲</em>
+                  </div>
+                </article>
+
+                <aside className="chart-ready-note" role="note">
+                  <img src={UI_ICONS.star} alt="" aria-hidden="true" />
+                  <div>
+                    <strong>音乐和校园路线都准备好了</strong>
+                    <small>
+                      跟随强拍收集知识星，躲开路障并礼让行人，
+                      一路升级到校车大巴。
+                    </small>
+                  </div>
+                </aside>
+
                 {songError && <p className="song-error">{songError}</p>}
                 <label className="song-player-name-field">
                   <span>
@@ -4544,7 +3275,7 @@ export default function Home() {
                         nextName,
                       );
                     }}
-                    placeholder="请输入昵称后发车"
+                    placeholder="请输入校园昵称后出发"
                     aria-label="排行榜昵称"
                   />
                   <em>成绩将以此昵称进入全局排行榜</em>
@@ -4555,14 +3286,14 @@ export default function Home() {
                     onClick={() => void startGame()}
                     disabled={!songReady || songLoading || !playerName.trim()}
                   >
-                    <span>▶</span>{" "}
+                    <img src={UI_ICONS.play} alt="" aria-hidden="true" />
                     {!playerName.trim()
                       ? "请填写排行榜昵称"
                       : songLoading
-                        ? "正在生成卡点地图…"
+                        ? "正在载入主题曲…"
                         : songReady
-                          ? `用《${songTitle}》发车`
-                          : "请选择歌曲"}
+                          ? `用《${songTitle}》出发`
+                          : "主题曲加载失败"}
                   </button>
                   <button
                     className="secondary-button"
@@ -4579,34 +3310,39 @@ export default function Home() {
 
             {status === "paused" && (
               <div className="game-overlay pause-overlay">
-                <p className="overlay-kicker">TOUR PAUSED</p>
-                <div className="pause-icon" aria-hidden="true">
-                  Ⅱ
-                </div>
-                <h2>巡演暂停</h2>
+                <p className="overlay-kicker">CAMPUS PAUSED</p>
+                <img
+                  className="pause-icon"
+                  src={UI_ICONS.pause}
+                  alt=""
+                  aria-hidden="true"
+                />
+                <h2>校园旅程暂停</h2>
                 <p>
-                  歌曲、节拍和道路已经冻结。
+                  主题曲和校园旅程已暂停。
                   <br />
-                  继续后从当前拍点重新出发。
+                  继续后从当前位置接着出发。
                 </p>
                 <div className="result-actions pause-actions">
                   <button
                     className="primary-button"
                     onClick={() => void resumeGame()}
                   >
-                    ▶ 继续游戏
+                    <img src={UI_ICONS.play} alt="" aria-hidden="true" />
+                    继续游戏
                   </button>
                   <button
                     className="secondary-button"
                     onClick={() => void startGame()}
                   >
-                    ↻ 重新开局
+                    <img src={UI_ICONS.restart} alt="" aria-hidden="true" />
+                    重新开局
                   </button>
                   <button
                     className="secondary-button"
-                    onClick={returnToSongSelect}
+                    onClick={returnToStart}
                   >
-                    返回选歌
+                    返回准备页
                   </button>
                 </div>
                 <small className="pause-hint">P / ESC 继续</small>
@@ -4634,31 +3370,30 @@ export default function Home() {
                     ? "MYSTERY BAG"
                     : "MYSTERY REVEALED"}
                 </p>
-                <div className="lucky-dialog-icon" aria-hidden="true">
-                  {luckyDialog.phase === "choice"
-                    ? "?"
-                    : luckyDialog.outcome === "double"
-                      ? "×2"
-                      : "÷2"}
-                </div>
+                <img
+                  className="lucky-dialog-icon"
+                  src={CAMPUS_ASSETS.mysterySchoolbag}
+                  alt=""
+                  aria-hidden="true"
+                />
 
                 {luckyDialog.phase === "choice" ? (
                   <>
                     <h2>是否开启锦囊？</h2>
                     <p className="lucky-dialog-copy">
-                      开启后可能让粉丝翻倍，也可能直接减少一半。
+                      开启后可能让知识星翻倍，也可能直接减少一半。
                       <br />
-                      不开启则不会改变当前粉丝数。
+                      不开启则不会改变当前知识星数量。
                     </p>
                     <div className="lucky-risk-row" aria-label="锦囊可能结果">
                       <div className="lucky-risk-card is-good">
                         <small>GOOD LUCK</small>
                         <strong>
                           <i>↑</i>
-                          <span>粉丝</span>
+                          <span>知识星</span>
                           <b>×2</b>
                         </strong>
-                        <em>最高到车辆载客上限</em>
+                        <em>最高到当前载具收集上限</em>
                       </div>
                       <div className="lucky-risk-random" aria-hidden="true">
                         <b>?</b>
@@ -4668,10 +3403,10 @@ export default function Home() {
                         <small>RISK</small>
                         <strong>
                           <i>↓</i>
-                          <span>粉丝</span>
+                          <span>知识星</span>
                           <b>÷2</b>
                         </strong>
-                        <em>粉丝减半并中断连击</em>
+                        <em>知识星减半并中断连击</em>
                       </div>
                     </div>
                     <div className="result-actions lucky-actions">
@@ -4696,9 +3431,9 @@ export default function Home() {
                     <p className="lucky-result-label">
                       {luckyDialog.outcome === "double"
                         ? luckyDialog.capped
-                          ? `粉丝翻倍成功，车辆达到 ${luckyDialog.capacity} 人上限`
-                          : "粉丝数量成功翻倍"
-                        : "粉丝数量减少一半，连击已中断"}
+                          ? `知识星翻倍成功，达到 ${luckyDialog.capacity} 颗上限`
+                          : "知识星数量成功翻倍"
+                        : "知识星数量减少一半，连击已中断"}
                     </p>
                     <div className="lucky-result-numbers">
                       <span>{luckyDialog.before}</span>
@@ -4718,18 +3453,21 @@ export default function Home() {
 
             {status === "finished" && (
               <div className="game-overlay result-overlay">
-                <p className="overlay-kicker">TOUR COMPLETE</p>
-                <div className="stage-icon" style={{ color: resultTier.color }}>
-                  {resultTier.icon}
-                </div>
-                <p className="result-label">今晚成功解锁</p>
+                <p className="overlay-kicker">CAMPUS COMPLETE</p>
+                <img
+                  className="stage-icon"
+                  src={resultTier.iconSrc}
+                  alt=""
+                  aria-hidden="true"
+                />
+                <p className="result-label">本次开学人设</p>
                 <h2 style={{ color: resultTier.color }}>{resultTier.name}</h2>
                 <p className="result-place">
                   {songTitle} · {resultTier.place}
                 </p>
                 <div className="result-stats">
                   <div>
-                    <small>到场粉丝</small>
+                    <small>知识星</small>
                     <strong>{fans}</strong>
                   </div>
                   <div>
@@ -4737,24 +3475,24 @@ export default function Home() {
                     <strong>×{maxCombo}</strong>
                   </div>
                   <div>
-                    <small>演出金币</small>
+                    <small>活力币</small>
                     <strong className="gold-text">+{earnedCoins}</strong>
                   </div>
                 </div>
                 <p className="concert-score">
-                  演唱会积分 <strong>{fans}</strong> 粉丝 ×{" "}
+                  校园积分 <strong>{fans}</strong> 知识星 ×{" "}
                   <strong>{maxCombo}</strong> 连击 = <b>{fans * maxCombo}</b>
                 </p>
                 <p className="coin-formula">
-                  场馆奖励 {resultTier.coins} + 合拍奖励 {maxCombo * 3}
+                  称号奖励 {resultTier.coins} + 合拍奖励 {maxCombo * 3}
                 </p>
                 {leaderboardPanel}
                 <button
                   className="share-result-button"
                   onClick={() => setShareCardOpen(true)}
                 >
-                  <span>✦</span>
-                  <strong>分享巡演成绩</strong>
+                  <img src={UI_ICONS.star} alt="" aria-hidden="true" />
+                  <strong>分享开学人设</strong>
                   <small>
                     {leaderboardSyncing
                       ? "排行榜同步中…"
@@ -4766,13 +3504,14 @@ export default function Home() {
                     className="primary-button"
                     onClick={() => void startGame()}
                   >
+                    <img src={UI_ICONS.restart} alt="" aria-hidden="true" />
                     再跑一场
                   </button>
                   <button
                     className="secondary-button"
-                    onClick={returnToSongSelect}
+                    onClick={returnToStart}
                   >
-                    返回选歌
+                    返回准备页
                   </button>
                 </div>
 
@@ -4781,7 +3520,7 @@ export default function Home() {
                     className="share-card-backdrop"
                     role="dialog"
                     aria-modal="true"
-                    aria-label="巡演成绩分享卡"
+                    aria-label="开学人设分享卡"
                     onPointerDown={(event) => {
                       if (event.target === event.currentTarget && !shareBusy) {
                         setShareCardOpen(false);
@@ -4795,32 +3534,32 @@ export default function Home() {
                         aria-label="关闭成绩卡"
                         disabled={shareBusy}
                       >
-                        ×
+                        <img src={UI_ICONS.close} alt="" aria-hidden="true" />
                       </button>
                       <article className="share-result-card">
                         <div className="share-card-topline">
-                          TOUR RESULT <i />
+                          CAMPUS RESULT <i />
                         </div>
                         <div className="share-card-brand">
-                          <span>★</span>
+                          <img src={UI_ICONS.star} alt="" aria-hidden="true" />
                           <div>
-                            <small>FAN BUS RHYTHM TOUR</small>
-                            <strong>应援大巴冲冲冲！</strong>
+                            <small>BACK TO SCHOOL RHYTHM RUSH</small>
+                            <strong>开学冲冲冲！</strong>
                           </div>
                         </div>
                         <div className="share-card-player">
-                          <small>PLAYER / 巡演明星</small>
-                          <strong>{playerName.trim() || "巡演玩家"}</strong>
+                          <small>STUDENT / 校园新生</small>
+                          <strong>{playerName.trim() || "校园新生"}</strong>
                           <span title={songTitle}>《{songTitle}》</span>
                         </div>
                         <div className="share-card-score">
-                          <small>CONCERT SCORE</small>
+                          <small>KNOWLEDGE SCORE</small>
                           <strong>{fans * maxCombo}</strong>
                           <i />
                         </div>
                         <div className="share-card-rank">
                           <div>
-                            <small>SONG RANK</small>
+                            <small>CAMPUS RANK</small>
                             <strong>
                               {currentLeaderboardEntry?.rank
                                 ? `第 ${currentLeaderboardEntry.rank} 名`
@@ -4830,20 +3569,24 @@ export default function Home() {
                             </strong>
                           </div>
                           <div>
-                            <small>FANS / COMBO</small>
+                            <small>STARS / COMBO</small>
                             <strong>
                               {fans} / ×{maxCombo}
                             </strong>
                           </div>
                         </div>
                         <div className="share-card-venue">
-                          <span>{resultTier.icon}</span>
+                          <img
+                            src={resultTier.iconSrc}
+                            alt=""
+                            aria-hidden="true"
+                          />
                           <div>
-                            <small>今晚解锁</small>
+                            <small>本次解锁</small>
                             <strong>{resultTier.name}</strong>
                           </div>
                         </div>
-                        <p>带着粉丝，奔赴下一场演唱会。</p>
+                        <p>这次开学，我的隐藏人设被发现了。</p>
                       </article>
                       <div className="share-card-actions">
                         <button
@@ -4873,33 +3616,44 @@ export default function Home() {
 
             {status === "failed" && (
               <div className="game-overlay failed-overlay">
-                <p className="overlay-kicker">EMERGENCY STOP</p>
-                <div className="failure-sign">!</div>
+                <p className="overlay-kicker">SAFETY FIRST</p>
+                <img
+                  className="failure-sign"
+                  src={UI_ICONS.crossing}
+                  alt=""
+                  aria-hidden="true"
+                />
                 <p className="result-label">检测到行人</p>
-                <h2>演出取消</h2>
+                <h2>安全挑战未完成</h2>
                 <p className="failure-copy">
-                  大巴紧急刹车保护过马路的老奶奶。
+                  {failureSummary?.reason === "pedestrian-collision"
+                    ? "载具已紧急刹车，优先保护正在过马路的老奶奶。"
+                    : "校园道路出现了突发情况，本次挑战已结束。"}
                   <br />
-                  本次不获得演出金币，请重新挑战。
+                  成绩已在这里结算，本次不获得活力币。
                 </p>
                 <div className="failure-ticket">
-                  <span>FINAL FANS</span>
-                  <strong>{fans}</strong>
-                  <small>COINS +0</small>
+                  <span>本次知识星</span>
+                  <strong>{failureSummary?.fans ?? fans}</strong>
+                  <small>
+                    最高连击 ×{failureSummary?.maxCombo ?? maxCombo} · 进度{" "}
+                    {Math.round(failureSummary?.progress ?? progress)}% · 活力币
+                    +0
+                  </small>
                 </div>
-                {leaderboardPanel}
                 <div className="result-actions">
                   <button
                     className="primary-button"
                     onClick={() => void startGame()}
                   >
-                    重新发车
+                    <img src={UI_ICONS.restart} alt="" aria-hidden="true" />
+                    重新挑战
                   </button>
                   <button
                     className="secondary-button"
-                    onClick={returnToSongSelect}
+                    onClick={returnToStart}
                   >
-                    返回选歌
+                    返回准备页
                   </button>
                 </div>
               </div>
@@ -4953,23 +3707,11 @@ export default function Home() {
                   style={{ transform: `translateX(${joystickOffset}px)` }}
                   aria-hidden="true"
                 >
-                  <svg
+                  <img
                     className="steer-glyph"
-                    viewBox="0 0 64 34"
-                    focusable="false"
-                  >
-                    <path className="steer-glyph-rail" d="M16 17H48" />
-                    <path className="steer-glyph-left" d="M24 8L15 17L24 26" />
-                    <path className="steer-glyph-right" d="M40 8L49 17L40 26" />
-                    <rect
-                      className="steer-glyph-core"
-                      x="29"
-                      y="12"
-                      width="6"
-                      height="10"
-                      rx="1"
-                    />
-                  </svg>
+                    src={UI_ICONS.steer}
+                    alt=""
+                  />
                 </b>
               </div>
               <small>DRAG TO STEER</small>
@@ -4993,7 +3735,7 @@ export default function Home() {
       <footer>
         <span>换道也要踩点</span>
         <i />
-        <span>祝你一路涨粉</span>
+        <span>祝你开学一路升级</span>
       </footer>
         </>
       )}

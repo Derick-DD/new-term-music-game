@@ -12,9 +12,10 @@ export async function generateMetadata(): Promise<Metadata> {
     requestHeaders.get("x-forwarded-proto") ??
     (host.startsWith("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
-  const title = "应援大巴冲冲冲！";
+  const title = "开学冲冲冲！";
   const description =
-    "驾驶明星大巴跟随歌曲强拍收集应援棒，每个应援棒让粉丝 +1，把不断壮大的应援队安全送到演唱会。";
+    "跟随校园节拍收集知识能量，从自行车一路升级到校车大巴，在蓝绿粉校园道路上冲刺开学季排行榜。";
+  const socialImage = `${origin}/og-sites.png`;
 
   return {
     metadataBase: new URL(origin),
@@ -27,10 +28,10 @@ export async function generateMetadata(): Promise<Metadata> {
       url: origin,
       images: [
         {
-          url: `${origin}/og.png`,
+          url: socialImage,
           width: 1734,
           height: 907,
-          alt: "应援大巴冲冲冲像素节奏游戏",
+          alt: "开学冲冲冲校园节奏游戏",
         },
       ],
     },
@@ -38,7 +39,7 @@ export async function generateMetadata(): Promise<Metadata> {
       card: "summary_large_image",
       title,
       description,
-      images: [`${origin}/og.png`],
+      images: [socialImage],
     },
   };
 }

@@ -1,8 +1,9 @@
 import { getDb } from "../../../db";
-
-export const runtime = "nodejs";
+import treasureChart from "../../data/congratulations-treasure.chart.json";
 
 const TOP_LIMIT = 8;
+const ACTIVITY_SONG_KEY = `track:${treasureChart.audio.id}:${treasureChart.chartVersion}`;
+const ACTIVITY_SONG_TITLE = treasureChart.audio.title;
 
 type RankedLeaderboardRow = {
   id: number;
@@ -18,14 +19,12 @@ type RankedLeaderboardRow = {
   rank: number;
 };
 
-type StoredLeaderboardRow = Omit<RankedLeaderboardRow, "rank">;
-
-function concertForScore(score: number) {
-  if (score >= 6_500) return "星河体育场";
-  if (score >= 4_500) return "霓虹体育馆";
-  if (score >= 2_800) return "城市剧场";
-  if (score >= 1_400) return "星光 Livehouse";
-  return "街角快闪";
+function resultTierForScore(score: number) {
+  if (score >= 6_500) return "天才学神";
+  if (score >= 4_500) return "隐形学霸";
+  if (score >= 2_800) return "卷王本王";
+  if (score >= 1_400) return "知识分子";
+  return "佛系咸鱼";
 }
 
 function mapLeaderboardRow(row: RankedLeaderboardRow) {
@@ -37,15 +36,17 @@ function mapLeaderboardRow(row: RankedLeaderboardRow) {
     fans: row.fans,
     maxCombo: row.max_combo,
     score: row.score,
-    concert: row.concert,
+    // Recompute the label so scores saved by an earlier campaign never leak
+    // obsolete venue names into the campus-season leaderboard.
+    concert: resultTierForScore(row.score),
     song: row.song,
     createdAt: row.updated_at,
     rank: row.rank,
   };
 }
 
-function getLeaderboard(songKey: string, currentPlayerId?: string) {
-  const database = getDb();
+async function getLeaderboard(songKey: string, currentPlayerId?: string) {
+  const database = await getDb();
   const rankedQuery = `
     SELECT
       id,
@@ -68,21 +69,24 @@ function getLeaderboard(songKey: string, currentPlayerId?: string) {
     FROM leaderboard_scores
     WHERE song_key = ?
   `;
-  const rows = database
+  const { results } = await database
     .prepare(`${rankedQuery} ORDER BY rank ASC LIMIT ?`)
-    .all(songKey, TOP_LIMIT) as RankedLeaderboardRow[];
+    .bind(songKey, TOP_LIMIT)
+    .all<RankedLeaderboardRow>();
+  const rows = [...results];
 
   if (
     currentPlayerId &&
     !rows.some((row) => row.player_id === currentPlayerId)
   ) {
-    const currentRow = database
+    const currentRow = await database
       .prepare(
         `SELECT * FROM (${rankedQuery}) ranked
          WHERE player_id = ?
          LIMIT 1`,
       )
-      .get(songKey, currentPlayerId) as RankedLeaderboardRow | undefined;
+      .bind(songKey, currentPlayerId)
+      .first<RankedLeaderboardRow>();
     if (currentRow) rows.push(currentRow);
   }
 
@@ -93,10 +97,10 @@ export async function GET(request: Request) {
   try {
     const songKey =
       new URL(request.url).searchParams.get("songKey")?.trim() ?? "";
-    if (!songKey || songKey.length > 100) {
-      return Response.json({ error: "请选择歌曲后查看排行榜" }, { status: 400 });
+    if (songKey !== ACTIVITY_SONG_KEY) {
+      return Response.json({ error: "活动排行榜标识无效" }, { status: 400 });
     }
-    return Response.json({ leaderboard: getLeaderboard(songKey) });
+    return Response.json({ leaderboard: await getLeaderboard(songKey) });
   } catch (error) {
     console.error("[leaderboard] load failed", error);
     return Response.json(
@@ -113,20 +117,19 @@ export async function POST(request: Request) {
       name?: string;
       fans?: number;
       maxCombo?: number;
-      song?: string;
       songKey?: string;
     };
     const playerId = payload.playerId?.trim() ?? "";
-    const name = (payload.name?.trim() || "巡演玩家").slice(0, 10);
+    const name = (payload.name?.trim() || "校园新生").slice(0, 10);
     const fans = Math.round(Number(payload.fans));
     const maxCombo = Math.round(Number(payload.maxCombo));
-    const song = (payload.song?.trim() || "未知歌曲").slice(0, 80);
+    const song = ACTIVITY_SONG_TITLE;
     const songKey = payload.songKey?.trim().slice(0, 100) ?? "";
 
     if (
       playerId.length < 8 ||
       playerId.length > 80 ||
-      !songKey ||
+      songKey !== ACTIVITY_SONG_KEY ||
       !Number.isInteger(fans) ||
       fans < 0 ||
       fans > 120 ||
@@ -137,107 +140,65 @@ export async function POST(request: Request) {
       return Response.json({ error: "排行榜成绩无效" }, { status: 400 });
     }
 
-    const database = getDb();
+    const database = await getDb();
     const score = fans * maxCombo;
-    const concert = concertForScore(score);
-    database.exec("BEGIN IMMEDIATE");
-    try {
-      const existing = database
-        .prepare(
-          `SELECT
-            id,
-            player_id,
-            player_name,
-            song_key,
-            fans,
-            max_combo,
-            score,
-            concert,
-            song,
-            updated_at
-           FROM leaderboard_scores
-           WHERE player_id = ? AND song_key = ?
-           LIMIT 1`,
-        )
-        .get(playerId, songKey) as StoredLeaderboardRow | undefined;
-
-      if (!existing) {
-        database
-          .prepare(
-            `INSERT INTO leaderboard_scores (
-              player_id,
-              player_name,
-              song_key,
-              fans,
-              max_combo,
-              score,
-              concert,
-              song,
-              updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .run(
-            playerId,
-            name,
-            songKey,
-            fans,
-            maxCombo,
-            score,
-            concert,
-            song,
-            Date.now(),
-          );
-      } else {
-        const isBetterScore =
-          score > existing.score ||
-          (score === existing.score && fans > existing.fans) ||
-          (score === existing.score &&
-            fans === existing.fans &&
-            maxCombo > existing.max_combo);
-        if (isBetterScore) {
-          database
-            .prepare(
-              `UPDATE leaderboard_scores
-               SET
-                 player_name = ?,
-                 fans = ?,
-                 max_combo = ?,
-                 score = ?,
-                 concert = ?,
-                 song = ?,
-                 updated_at = ?
-               WHERE player_id = ? AND song_key = ?`,
-            )
-            .run(
-              name,
-              fans,
-              maxCombo,
-              score,
-              concert,
-              song,
-              Date.now(),
-              playerId,
-              songKey,
-            );
-        } else if (name !== existing.player_name) {
-          database
-            .prepare(
-              `UPDATE leaderboard_scores
-               SET player_name = ?, updated_at = ?
-               WHERE player_id = ? AND song_key = ?`,
-            )
-            .run(name, Date.now(), playerId, songKey);
-        }
-      }
-      database.exec("COMMIT");
-    } catch (error) {
-      database.exec("ROLLBACK");
-      throw error;
-    }
+    const concert = resultTierForScore(score);
+    const submittedAt = Date.now();
+    await database
+      .prepare(
+        `INSERT INTO leaderboard_scores (
+          player_id,
+          player_name,
+          song_key,
+          fans,
+          max_combo,
+          score,
+          concert,
+          song,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(player_id, song_key) DO UPDATE SET
+          player_name = excluded.player_name,
+          fans = CASE
+            WHEN excluded.score > leaderboard_scores.score
+              OR (excluded.score = leaderboard_scores.score AND excluded.fans > leaderboard_scores.fans)
+              OR (excluded.score = leaderboard_scores.score AND excluded.fans = leaderboard_scores.fans AND excluded.max_combo > leaderboard_scores.max_combo)
+            THEN excluded.fans ELSE leaderboard_scores.fans END,
+          max_combo = CASE
+            WHEN excluded.score > leaderboard_scores.score
+              OR (excluded.score = leaderboard_scores.score AND excluded.fans > leaderboard_scores.fans)
+              OR (excluded.score = leaderboard_scores.score AND excluded.fans = leaderboard_scores.fans AND excluded.max_combo > leaderboard_scores.max_combo)
+            THEN excluded.max_combo ELSE leaderboard_scores.max_combo END,
+          score = MAX(leaderboard_scores.score, excluded.score),
+          concert = CASE
+            WHEN excluded.score > leaderboard_scores.score
+              OR (excluded.score = leaderboard_scores.score AND excluded.fans > leaderboard_scores.fans)
+              OR (excluded.score = leaderboard_scores.score AND excluded.fans = leaderboard_scores.fans AND excluded.max_combo > leaderboard_scores.max_combo)
+            THEN excluded.concert ELSE leaderboard_scores.concert END,
+          song = excluded.song,
+          updated_at = CASE
+            WHEN excluded.player_name <> leaderboard_scores.player_name
+              OR excluded.score > leaderboard_scores.score
+              OR (excluded.score = leaderboard_scores.score AND excluded.fans > leaderboard_scores.fans)
+              OR (excluded.score = leaderboard_scores.score AND excluded.fans = leaderboard_scores.fans AND excluded.max_combo > leaderboard_scores.max_combo)
+            THEN excluded.updated_at ELSE leaderboard_scores.updated_at END`,
+      )
+      .bind(
+        playerId,
+        name,
+        songKey,
+        fans,
+        maxCombo,
+        score,
+        concert,
+        song,
+        submittedAt,
+      )
+      .run();
 
     return Response.json(
       {
-        leaderboard: getLeaderboard(songKey, playerId),
+        leaderboard: await getLeaderboard(songKey, playerId),
         submittedScore: score,
       },
       { status: 201 },
