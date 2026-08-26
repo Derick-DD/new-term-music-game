@@ -3016,107 +3016,6 @@ button:focus-visible {
   font-size: 11px;
 }
 
-.leaderboard-panel {
-  width: min(100%, 390px);
-  margin: 0 0 14px;
-  border: 2px solid #413579;
-  background: rgba(9, 8, 35, 0.92);
-  padding: 7px;
-}
-
-.leaderboard-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid #39306c;
-  padding: 2px 4px 6px;
-}
-
-.leaderboard-heading span {
-  color: var(--cyan);
-  font-size: 8px;
-  font-weight: 950;
-  letter-spacing: 0.15em;
-}
-
-.leaderboard-heading small {
-  color: var(--gold);
-  font-size: 7px;
-  font-weight: 900;
-}
-
-.leaderboard-list {
-  display: grid;
-}
-
-.leaderboard-list > div {
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 7px;
-  min-height: 33px;
-  border-bottom: 1px solid rgba(57, 48, 108, 0.7);
-  padding: 4px;
-  text-align: left;
-}
-
-.leaderboard-list > div:last-child {
-  border-bottom: 0;
-}
-
-.leaderboard-list > div.is-current {
-  background: rgba(255, 230, 109, 0.11);
-  box-shadow: inset 3px 0 0 var(--gold);
-}
-
-.leaderboard-list b {
-  color: #71699d;
-  font-size: 8px;
-}
-
-.leaderboard-list span {
-  min-width: 0;
-}
-
-.leaderboard-list strong,
-.leaderboard-list small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.leaderboard-list strong {
-  color: white;
-  font-size: 8px;
-}
-
-.leaderboard-list small {
-  margin-top: 2px;
-  color: #79719f;
-  font-size: 6px;
-}
-
-.leaderboard-list em {
-  color: var(--gold);
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 950;
-}
-
-.leaderboard-list i {
-  color: var(--cyan);
-  font-size: 6px;
-  font-style: normal;
-}
-
-.leaderboard-empty {
-  margin: 0;
-  padding: 14px 6px 8px;
-  color: #8279a9;
-  font-size: 7px;
-}
-
 .share-result-button {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr);
@@ -3320,7 +3219,7 @@ button:focus-visible {
 
 .share-card-player small,
 .share-card-score small,
-.share-card-rank small,
+.share-card-achievement small,
 .share-card-venue small {
   color: #948bbd;
   font-size: 5px;
@@ -3378,27 +3277,65 @@ button:focus-visible {
   background: linear-gradient(90deg, var(--gold), var(--pink));
 }
 
-.share-card-rank {
+.share-card-summary {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) 86px;
+  align-items: stretch;
   gap: 7px;
 }
 
-.share-card-rank > div {
+.share-card-achievement {
   border: 1px solid #50438d;
   background: #100d32;
   padding: 8px;
 }
 
-.share-card-rank strong {
+.share-card-achievement strong {
   display: block;
   margin-top: 4px;
   color: var(--cyan);
   font-size: 12px;
 }
 
-.share-card-rank > div:last-child strong {
-  color: white;
+.share-card-qr-placeholder {
+  position: relative;
+  display: grid;
+  min-height: 86px;
+  place-items: end center;
+  border: 2px solid var(--ink);
+  background: #fff;
+  padding: 5px;
+  color: var(--ink);
+}
+
+.share-card-qr-placeholder i {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 4px solid currentColor;
+}
+
+.share-card-qr-placeholder i:nth-child(1) {
+  top: 7px;
+  left: 7px;
+}
+
+.share-card-qr-placeholder i:nth-child(2) {
+  top: 7px;
+  right: 7px;
+}
+
+.share-card-qr-placeholder i:nth-child(3) {
+  bottom: 23px;
+  left: 7px;
+}
+
+.share-card-qr-placeholder small {
+  position: relative;
+  z-index: 1;
+  color: #43526c;
+  font-size: 7px;
+  font-weight: 800;
 }
 
 .share-card-venue {
@@ -4970,7 +4907,6 @@ body {
 .track-picker button,
 .track-picker .uploaded-track-row,
 .song-player-name-field,
-.leaderboard-panel,
 .result-stats > div,
 .failure-ticket {
   border-color: var(--ink);
@@ -5052,8 +4988,6 @@ body {
   white-space: nowrap;
 }
 
-.leaderboard-heading,
-.leaderboard-list > div,
 .result-label,
 .result-place,
 .concert-score,
@@ -5077,7 +5011,7 @@ body {
 
 .result-stats strong,
 .result-stats strong.gold-text,
-.share-card-rank > div:last-child strong {
+.share-card-achievement strong {
   color: var(--ink);
 }
 
@@ -5106,7 +5040,7 @@ body {
 .share-card-brand strong,
 .share-card-player strong,
 .share-card-score strong,
-.share-card-rank strong,
+.share-card-achievement strong,
 .share-result-card > p {
   color: var(--ink);
 }
@@ -5119,7 +5053,7 @@ body {
 }
 
 .share-card-player,
-.share-card-rank > div,
+.share-card-achievement,
 .share-card-venue {
   border-color: rgba(23, 34, 58, 0.5);
   background: rgba(255, 255, 255, 0.58);
@@ -5127,7 +5061,7 @@ body {
 
 .share-card-player small,
 .share-card-score small,
-.share-card-rank small,
+.share-card-achievement small,
 .share-card-venue small,
 .share-card-player span,
 .share-card-venue strong {
@@ -5989,5 +5923,664 @@ footer {
 
   .game-screen {
     width: min(100%, calc((100dvh - 198px) * 0.6667));
+  }
+}
+
+/* Static mobile release: clean type, accessible contrast, and fluid viewport. */
+html,
+body,
+button,
+input,
+textarea {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+}
+
+.sky-grid,
+.home-screen::before {
+  display: none;
+}
+
+.home-screen {
+  background:
+    radial-gradient(circle at 78% 30%, rgba(35, 207, 178, 0.24), transparent 34%),
+    linear-gradient(155deg, #fffaf1 0%, #e8fff8 56%, #d8f4ff 100%);
+  background-size: auto;
+}
+
+.home-screen::after {
+  box-shadow: none;
+}
+
+.home-copy h1,
+.home-copy h1 span,
+.home-copy h1 strong,
+.story-title,
+.story-title span,
+.story-title em {
+  filter: none;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Arial, sans-serif;
+  font-style: normal;
+  letter-spacing: -0.02em;
+  text-shadow: none;
+  transform: none;
+  -webkit-text-stroke: 0;
+}
+
+.home-copy h1 span {
+  color: #075f6c;
+}
+
+.home-copy h1 strong {
+  color: #a92d63;
+}
+
+.home-copy h1 strong::after,
+.story-title::before,
+.story-title::after,
+.share-card-topline i {
+  display: none;
+}
+
+.home-lead,
+.rules-lead,
+.story-route > div > span,
+.story-mission small {
+  color: #28364d;
+  text-shadow: none;
+}
+
+.home-tags,
+.home-track-number {
+  display: none;
+}
+
+.home-track-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.home-song-status {
+  max-width: 430px;
+  margin: 10px 0 0;
+  color: #8a2450;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.share-result-card {
+  background:
+    radial-gradient(circle at 75% 10%, rgba(244, 126, 173, 0.26), transparent 35%),
+    linear-gradient(160deg, #fffaf1, #d9fff4 72%);
+}
+
+.share-card-brand strong,
+.share-card-player strong,
+.share-card-score strong,
+.share-card-achievement strong,
+.result-overlay h2 {
+  color: var(--ink) !important;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Arial, sans-serif;
+  text-shadow: none;
+}
+
+.share-card-brand small,
+.share-card-player small,
+.share-card-score small,
+.share-card-achievement small,
+.share-card-venue small,
+.share-result-card > p {
+  color: #43526c;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.share-card-achievement {
+  border-color: rgba(23, 34, 58, 0.5);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.share-card-achievement strong {
+  margin-top: 8px;
+  font-size: 17px;
+}
+
+.share-card-qr-placeholder small {
+  font-size: 9px;
+}
+
+.pause-overlay h2,
+.lucky-overlay h2,
+.lucky-overlay.is-double h2,
+.lucky-overlay.is-half h2,
+.failed-overlay h2 {
+  color: var(--ink) !important;
+  text-shadow: none;
+}
+
+.pause-overlay > p:not(.overlay-kicker),
+.lucky-dialog-copy,
+.lucky-result-label,
+.failure-copy {
+  color: #28364d;
+}
+
+.failure-ticket span,
+.failure-ticket small {
+  color: #43526c;
+}
+
+.failure-ticket strong {
+  color: var(--ink);
+}
+
+.pause-hint,
+.lucky-risk-card > small,
+.lucky-risk-card em,
+.lucky-risk-random small,
+.failure-ticket span,
+.failure-ticket small,
+.hit-button small {
+  font-size: 9px;
+}
+
+.share-card-close {
+  width: 44px;
+  height: 44px;
+}
+
+@media (max-width: 780px) {
+  html,
+  body {
+    width: 100%;
+    min-height: 100%;
+    overflow: hidden;
+  }
+
+  .arcade-page {
+    width: 100%;
+    height: 100vh;
+    height: 100svh;
+    height: 100dvh;
+    padding:
+      max(5px, env(safe-area-inset-top))
+      max(5px, env(safe-area-inset-right))
+      max(5px, env(safe-area-inset-bottom))
+      max(5px, env(safe-area-inset-left));
+  }
+
+  .arcade-page.is-home-page {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100svh;
+    min-height: 100dvh;
+    overflow-y: auto;
+  }
+
+  .home-screen {
+    min-height: 100vh;
+    min-height: 100svh;
+    min-height: 100dvh;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0;
+    background:
+      linear-gradient(180deg, rgba(216, 248, 255, 0.22), rgba(255, 250, 241, 0.96)),
+      url("/assets/campus-season/campus-road.png") center top / cover;
+    box-shadow: none;
+  }
+
+  .home-nav {
+    margin-inline: 16px;
+    border-bottom: 1px solid rgba(23, 34, 58, 0.2);
+    padding:
+      max(12px, env(safe-area-inset-top))
+      0 11px;
+  }
+
+  .home-hero {
+    min-height: auto;
+    align-items: center;
+    padding: clamp(22px, 6vh, 56px) 18px 24px;
+  }
+
+  .home-copy {
+    border: 2px solid var(--ink);
+    border-radius: 20px;
+    background: rgba(255, 250, 241, 0.96);
+    padding: clamp(16px, 4.5vw, 22px);
+    box-shadow: 4px 5px 0 rgba(23, 34, 58, 0.22);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+
+  .home-eyebrow {
+    margin-bottom: 13px;
+    color: var(--ink);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+
+  .home-eyebrow span {
+    border-width: 1px;
+    background: #d9fff4;
+    color: #087e72;
+    font-size: 9px;
+  }
+
+  .home-eyebrow::after {
+    display: none;
+  }
+
+  .home-eyebrow i {
+    display: none;
+  }
+
+  .home-sound-button {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+
+  .home-copy h1 span {
+    font-size: clamp(38px, 12vw, 56px);
+  }
+
+  .home-copy h1 strong {
+    margin: 4px 0 0;
+    font-size: clamp(43px, 13.5vw, 64px);
+  }
+
+  .home-lead {
+    margin: 17px 0 19px;
+    border-left: 0;
+    background: transparent;
+    padding: 0;
+    color: #28364d;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.65;
+  }
+
+  .home-actions {
+    gap: 10px;
+  }
+
+  .home-start-button,
+  .home-rules-button {
+    min-height: 50px;
+  }
+
+  .home-start-button {
+    font-size: 16px;
+  }
+
+  .home-rules-button {
+    min-width: 104px;
+    font-size: 12px;
+  }
+
+  .home-footer {
+    display: none;
+  }
+
+  .game-layout {
+    width: 100%;
+    height: 100%;
+    max-width: 500px;
+    margin-inline: auto;
+  }
+
+  .game-cabinet {
+    grid-template-rows: auto auto 6px minmax(0, 1fr) auto;
+    width: 100%;
+    height: 100%;
+    padding: 4px;
+  }
+
+  .cabinet-top {
+    min-height: 40px;
+    height: auto;
+    gap: 6px;
+    padding: 5px 6px;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .cabinet-top > div:first-child {
+    max-width: none;
+    flex: 1;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .cabinet-tools {
+    flex: 0 0 auto;
+  }
+
+  .pause-toggle {
+    width: 44px;
+    min-width: 44px;
+    min-height: 32px;
+    padding: 4px;
+    font-size: 0;
+  }
+
+  .pause-toggle > img {
+    width: 22px;
+    height: 22px;
+  }
+
+  .bpm-bars {
+    display: none;
+  }
+
+  .hud {
+    grid-template-columns: 72px 68px minmax(0, 1fr);
+    min-height: 64px;
+  }
+
+  .hud-block {
+    min-height: 64px;
+    padding: 7px 6px;
+  }
+
+  .hud-block span {
+    color: #43526c;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+  }
+
+  .hud-block strong {
+    font-size: 19px;
+  }
+
+  .vehicle-run-card {
+    grid-template-columns: 46px minmax(0, 1fr);
+    min-height: 64px;
+    border-right: 0;
+    padding: 5px 6px;
+  }
+
+  .vehicle-run-card .vehicle-task-copy strong {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .vehicle-run-card .vehicle-task-copy strong span,
+  .vehicle-run-card .vehicle-task-copy small {
+    color: #43526c;
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .vehicle-run-card .vehicle-level-badge strong {
+    font-size: 12px;
+  }
+
+  .music-state {
+    display: none;
+  }
+
+  .progress-track {
+    height: 6px;
+    padding: 1px;
+  }
+
+  .game-screen {
+    align-self: center;
+    justify-self: center;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    margin: 0;
+    aspect-ratio: 2 / 3;
+  }
+
+  .game-screen canvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  .mobile-controls {
+    min-height: 86px;
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+  }
+
+  .vehicle-run-card .vehicle-level-badge small,
+  .vehicle-run-card .vehicle-task-meter b,
+  .joystick-control > small,
+  .result-overlay small,
+  .failed-overlay small,
+  .pause-overlay small,
+  .lucky-overlay small {
+    font-size: 9px;
+  }
+
+  .pause-overlay,
+  .lucky-overlay {
+    justify-content: flex-start;
+    overflow-y: auto;
+    padding: 16px 13px;
+  }
+
+  .arcade-page.is-rules-page .game-cabinet {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .arcade-page.is-rules-page .hud,
+  .arcade-page.is-rules-page .progress-track,
+  .arcade-page.is-rules-page .mobile-controls {
+    display: none;
+  }
+
+  .arcade-page.is-rules-page .game-screen {
+    width: min(100%, 356px);
+    height: 100%;
+  }
+
+  .rules-overlay {
+    justify-content: flex-start;
+    overflow-y: auto;
+    padding: 15px 13px;
+  }
+
+  .rules-overlay .overlay-kicker {
+    font-size: 10px;
+  }
+
+  .rules-overlay h1 {
+    margin: 6px 0 8px;
+    font-size: clamp(27px, 8vw, 36px);
+  }
+
+  .rules-lead {
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .story-route {
+    gap: 7px;
+  }
+
+  .story-route > div {
+    grid-template-columns: 34px minmax(0, 1fr);
+    min-height: 64px;
+    gap: 9px;
+    padding: 9px 10px;
+  }
+
+  .story-route > div > b {
+    width: 32px;
+    height: 32px;
+    font-size: 10px;
+  }
+
+  .story-route > div > span {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .story-route strong {
+    margin-bottom: 3px;
+    color: var(--ink);
+    font-size: 14px;
+  }
+
+  .story-route em {
+    color: #8a2450;
+    font-style: normal;
+    font-weight: 800;
+  }
+
+  .story-mission {
+    margin: 9px 0;
+    padding: 8px 10px;
+  }
+
+  .story-mission strong {
+    font-size: 12px;
+  }
+
+  .story-mission small {
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  .rules-start-button {
+    min-width: 180px;
+    min-height: 46px;
+    font-size: 12px;
+  }
+
+  .game-toast {
+    max-width: calc(100% - 24px);
+    padding: 8px 10px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .share-card-backdrop {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: max(12px, env(safe-area-inset-top)) 10px 16px;
+  }
+
+  .share-card-shell {
+    width: min(92vw, 380px);
+    padding-top: 46px;
+  }
+
+  .share-result-card {
+    width: 100%;
+    padding: 14px;
+    box-shadow: 4px 5px 0 var(--ink);
+  }
+
+  .share-card-topline,
+  .share-card-brand small,
+  .share-card-player small,
+  .share-card-score small,
+  .share-card-achievement small,
+  .share-card-venue small,
+  .share-result-card > p {
+    font-size: 9px;
+  }
+
+  .share-card-player strong {
+    font-size: 17px;
+  }
+
+  .share-card-score strong {
+    font-size: 42px;
+  }
+
+  .share-card-summary {
+    grid-template-columns: minmax(0, 1fr) 88px;
+  }
+
+  .share-card-qr-placeholder {
+    min-height: 88px;
+  }
+}
+
+@media (max-height: 680px) and (max-width: 780px) {
+  .game-screen {
+    width: auto;
+    height: 100%;
+  }
+}
+
+@media (max-width: 380px), (max-height: 680px) and (max-width: 780px) {
+  .home-hero {
+    padding: 14px 13px 16px;
+  }
+
+  .home-copy {
+    padding: 14px;
+  }
+
+  .home-copy h1 span {
+    font-size: 34px;
+  }
+
+  .home-copy h1 strong {
+    font-size: 40px;
+  }
+
+  .home-lead {
+    margin: 11px 0 14px;
+    font-size: 12px;
+  }
+
+  .rules-overlay {
+    padding-block: 10px;
+  }
+
+  .rules-logo {
+    display: none;
+  }
+
+  .rules-lead {
+    margin-bottom: 7px;
+  }
+
+  .story-route {
+    gap: 5px;
+  }
+
+  .story-route > div {
+    min-height: 56px;
+    padding: 7px 8px;
+  }
+
+  .story-route > div > span {
+    font-size: 11px;
+  }
+
+  .story-route strong {
+    font-size: 13px;
+  }
+
+  .story-mission {
+    margin-block: 6px;
+  }
+
+  .mobile-controls {
+    min-height: 78px;
   }
 }

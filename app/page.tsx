@@ -17,7 +17,13 @@ const PLAYER_Y = 584;
 const ENTITY_RENDER_SIZE = 68;
 const STARTING_FANS = 0;
 const TRAVEL_BEATS = 4;
-const MISS_WINDOW = 190;
+const PERFECT_WINDOW = 65;
+const GREAT_WINDOW = 155;
+const MISS_WINDOW = 240;
+const ENTITY_DESPAWN_AFTER_MS = 650;
+const PEDESTRIAN_WARNING_BEATS = 8;
+const PEDESTRIAN_CROSSING_BEATS = 16;
+const PEDESTRIAN_DANGER_WINDOW_MS = 500;
 const HIT_INPUT_GUARD_MS = 70;
 const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
@@ -57,7 +63,7 @@ type EntityType = "fan" | "obstacle" | "lucky" | "magnet" | "invincible";
 type ObstacleType = "cone" | "pothole" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
 type ToneMode = "normal" | "thick" | "thin";
-type ReadyPage = "home" | "rules" | "start";
+type ReadyPage = "home" | "rules";
 
 type VehicleLevel = {
   level: number;
@@ -83,7 +89,6 @@ type Entity = {
   hitAt: number;
   obstacle?: ObstacleType;
   handled: boolean;
-  wobble: number;
 };
 
 type Pedestrian = {
@@ -147,25 +152,10 @@ type ConcertTier = {
   iconSrc: string;
 };
 
-type LeaderboardEntry = {
-  id: number;
-  playerId: string;
-  name: string;
-  songKey: string;
-  fans: number;
-  maxCombo: number;
-  score: number;
-  concert: string;
-  song: string;
-  createdAt: number;
-  rank: number;
-};
-
 type ShareCardData = {
   nickname: string;
   song: string;
   score: number;
-  rank: number | null;
   fans: number;
   maxCombo: number;
   venue: string;
@@ -200,7 +190,7 @@ const VEHICLE_LEVELS: VehicleLevel[] = [
     capacity: 30,
     primary: "#23cfb2",
     secondary: "#f5a5c3",
-    task: "收集 4 颗知识星 + PERFECT 1 次",
+    task: "收集 4 点知识 + PERFECT 1 次",
     requirement: { hits: 4, perfect: 1 },
   },
   {
@@ -209,7 +199,7 @@ const VEHICLE_LEVELS: VehicleLevel[] = [
     capacity: 55,
     primary: "#f47ead",
     secondary: "#23cfb2",
-    task: "收集 12 颗知识星 + 最高连击 6",
+    task: "收集 12 点知识 + 最高连击 6",
     requirement: { hits: 12, maxCombo: 6 },
   },
   {
@@ -218,7 +208,7 @@ const VEHICLE_LEVELS: VehicleLevel[] = [
     capacity: 85,
     primary: "#45c8ed",
     secondary: "#f5a5c3",
-    task: "收集 22 颗知识星 + PERFECT 7 次 + 最高连击 10",
+    task: "收集 22 点知识 + PERFECT 7 次 + 最高连击 10",
     requirement: { hits: 22, perfect: 7, maxCombo: 10 },
   },
   {
@@ -271,8 +261,6 @@ const AUDIO_SOURCE_API =
   process.env.NEXT_PUBLIC_TREASURE_AUDIO_API?.trim() ?? "";
 const DIRECT_AUDIO_URL =
   process.env.NEXT_PUBLIC_TREASURE_AUDIO_URL?.trim() ?? "";
-const LEADERBOARD_SONG_KEY = `track:${PRECOMPUTED_CHART.audio.id}:${PRECOMPUTED_CHART.chartVersion}`;
-
 const GAME_TRACK: Track = {
   id: "congratulations-treasure",
   name: PRECOMPUTED_CHART.audio.title,
@@ -376,7 +364,7 @@ function drawFittedText(
 ) {
   let size = initialSize;
   do {
-    context.font = `900 ${size}px "Arial Black", "PingFang SC", sans-serif`;
+    context.font = `900 ${size}px "PingFang SC", "Microsoft YaHei", Arial, sans-serif`;
     if (context.measureText(text).width <= maxWidth) break;
     size -= 4;
   } while (size > minimumSize);
@@ -411,23 +399,6 @@ async function createShareCardBlob(data: ShareCardData) {
   context.fillStyle = background;
   context.fillRect(0, 0, 1080, 1440);
 
-  context.globalAlpha = 0.14;
-  context.strokeStyle = "#17223a";
-  context.lineWidth = 3;
-  for (let x = 36; x < 1080; x += 72) {
-    context.beginPath();
-    context.moveTo(x, 0);
-    context.lineTo(x, 1440);
-    context.stroke();
-  }
-  for (let y = 36; y < 1440; y += 72) {
-    context.beginPath();
-    context.moveTo(0, y);
-    context.lineTo(1080, y);
-    context.stroke();
-  }
-  context.globalAlpha = 1;
-
   const glow = context.createRadialGradient(540, 340, 30, 540, 340, 500);
   glow.addColorStop(0, "rgba(244,126,173,0.55)");
   glow.addColorStop(1, "rgba(244,126,173,0)");
@@ -444,7 +415,7 @@ async function createShareCardBlob(data: ShareCardData) {
 
   context.textAlign = "left";
   context.fillStyle = "#17223a";
-  context.font = '900 30px "Courier New", monospace';
+  context.font = '800 30px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText("CAMPUS RESULT / OPENING SEASON", 92, 125);
 
   context.fillStyle = "#fff5e8";
@@ -461,18 +432,18 @@ async function createShareCardBlob(data: ShareCardData) {
   context.lineWidth = 6;
   context.strokeRect(92, 310, 896, 310);
   context.fillStyle = "#52617a";
-  context.font = '900 28px "Courier New", monospace';
+  context.font = '800 28px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText("STUDENT", 132, 374);
   context.fillStyle = "#17223a";
   drawFittedText(context, data.nickname, 132, 466, 816, 88, 54);
   context.fillStyle = "#159b8b";
-  context.font = '900 28px "Courier New", monospace';
+  context.font = '800 28px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText("TODAY'S TRACK", 132, 535);
   context.fillStyle = "#e7518f";
   drawFittedText(context, `《${data.song}》`, 132, 588, 816, 46, 28);
 
   context.fillStyle = "#e7518f";
-  context.font = '900 34px "Courier New", monospace';
+  context.font = '800 34px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText("KNOWLEDGE SCORE", 92, 720);
   context.fillStyle = "#17223a";
   drawFittedText(context, String(data.score), 92, 930, 896, 210, 150);
@@ -480,29 +451,38 @@ async function createShareCardBlob(data: ShareCardData) {
   context.fillRect(92, 970, 560, 14);
 
   context.fillStyle = "rgba(255,255,255,0.72)";
-  context.fillRect(92, 1040, 426, 170);
-  context.fillRect(562, 1040, 426, 170);
+  context.fillRect(92, 1040, 560, 170);
+  context.fillStyle = "#ffffff";
+  context.fillRect(746, 1040, 242, 242);
   context.strokeStyle = "#7187b2";
   context.lineWidth = 5;
-  context.strokeRect(92, 1040, 426, 170);
-  context.strokeRect(562, 1040, 426, 170);
+  context.strokeRect(92, 1040, 560, 170);
+  context.strokeRect(746, 1040, 242, 242);
   context.fillStyle = "#52617a";
-  context.font = '900 26px "Courier New", monospace';
-  context.fillText("CAMPUS RANK", 124, 1092);
-  context.fillText("STARS / MAX COMBO", 594, 1092);
-  context.fillStyle = "#159b8b";
-  context.font = '900 66px "Arial Black", sans-serif';
-  context.fillText(data.rank ? `#${data.rank}` : "--", 124, 1173);
+  context.font = '800 26px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
+  context.fillText("知识 / 最高连击", 124, 1092);
   context.fillStyle = "#17223a";
-  context.font = '900 48px "Arial Black", sans-serif';
-  context.fillText(`${data.fans} / ×${data.maxCombo}`, 594, 1168);
+  context.font = '900 58px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
+  context.fillText(`${data.fans} / ×${data.maxCombo}`, 124, 1172);
+
+  context.strokeStyle = "#17223a";
+  context.lineWidth = 12;
+  const qrCorners = [
+    [774, 1068],
+    [910, 1068],
+    [774, 1204],
+  ];
+  qrCorners.forEach(([x, y]) => context.strokeRect(x, y, 48, 48));
+  context.fillStyle = "#52617a";
+  context.font = '700 20px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
+  context.fillText("二维码占位", 810, 1260);
 
   drawContainedImage(context, tierIcon, 92, 1234, 72, 72);
   context.fillStyle = "#17223a";
-  context.font = '900 34px "PingFang SC", sans-serif';
+  context.font = '900 34px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText(data.venue, 184, 1288);
   context.fillStyle = "#52617a";
-  context.font = '900 24px "Courier New", monospace';
+  context.font = '700 24px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText("这次开学，我的隐藏人设被发现了", 184, 1332);
 
   return new Promise<Blob | null>((resolve) => {
@@ -632,7 +612,6 @@ export default function Home() {
   const shakeRef = useRef(0);
   const hitFlashRef = useRef(0);
   const collectFlashRef = useRef(0);
-  const busBounceRef = useRef(0);
   const screenPunchRef = useRef(0);
   const invulnerableUntilRef = useRef(0);
   const shieldRef = useRef(false);
@@ -647,8 +626,6 @@ export default function Home() {
   const toastTimerRef = useRef<number | null>(null);
   const judgementTimerRef = useRef<number | null>(null);
   const lastHitInputAtRef = useRef(-Infinity);
-  const playerNameRef = useRef("");
-  const playerIdRef = useRef("");
   const joystickPointerRef = useRef<number | null>(null);
   const joystickDirectionRef = useRef<-1 | 0 | 1>(0);
   const joystickRepeatRef = useRef<number | null>(null);
@@ -656,12 +633,10 @@ export default function Home() {
 
   const [status, setStatus] = useState<GameStatus>("ready");
   const [readyPage, setReadyPage] = useState<ReadyPage>("home");
-  const [playerName, setPlayerName] = useState("");
   const [songReady, setSongReady] = useState(false);
   const [songLoading, setSongLoading] = useState(false);
   const [songError, setSongError] = useState("");
   const [fans, setFans] = useState(STARTING_FANS);
-  const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
   const [successfulHits, setSuccessfulHits] = useState(0);
   const [vehicleLevel, setVehicleLevel] = useState(1);
@@ -669,7 +644,6 @@ export default function Home() {
   const [invincibleRemaining, setInvincibleRemaining] = useState(0);
   const [progress, setProgress] = useState(0);
   const [beatIndex, setBeatIndex] = useState(0);
-  const [currentBpm, setCurrentBpm] = useState(GAME_TRACK.bpmAt(0));
   const [toneMode, setToneMode] = useState<ToneMode>("normal");
   const [muted, setMuted] = useState(false);
   const [shield, setShield] = useState(false);
@@ -678,11 +652,6 @@ export default function Home() {
   const [earnedCoins, setEarnedCoins] = useState(0);
   const [failureSummary, setFailureSummary] =
     useState<FailureSummary | null>(null);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [currentRankEntryId, setCurrentRankEntryId] = useState<string | null>(
-    null,
-  );
-  const [leaderboardSyncing, setLeaderboardSyncing] = useState(false);
   const [shareCardOpen, setShareCardOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [joystickOffset, setJoystickOffset] = useState(0);
@@ -699,54 +668,15 @@ export default function Home() {
   } | null>(null);
   const [luckyDialog, setLuckyDialog] = useState<LuckyDialog | null>(null);
   const songTitle = GAME_TRACK.name;
-  const leaderboardSongKey = LEADERBOARD_SONG_KEY;
   const currentVehicle = getVehicle(vehicleLevel);
   const currentVehicleName = currentVehicle.name;
   const selectedAssetThemeClass = "is-campus-season";
-  const currentLeaderboardEntry = currentRankEntryId
-    ? leaderboard.find((entry) => entry.playerId === currentRankEntryId)
-    : undefined;
   const vehicleTaskProgress = getVehicleTaskProgress(
     currentVehicle,
     successfulHits,
     perfectCountRef.current,
     maxCombo,
   );
-  const leaderboardPanel = (
-    <section className="leaderboard-panel" aria-label="玩家排行榜">
-      <div className="leaderboard-heading">
-        <span>《{songTitle}》排行榜</span>
-        <small>SONG TOP 8</small>
-      </div>
-      {leaderboard.length > 0 ? (
-        <div className="leaderboard-list">
-          {leaderboard.map((entry, index) => (
-            <div
-              className={
-                entry.playerId === currentRankEntryId ? "is-current" : undefined
-              }
-              key={entry.id}
-            >
-              <b>{String(entry.rank || index + 1).padStart(2, "0")}</b>
-              <span>
-                <strong>{entry.name}</strong>
-                <small>
-                  {entry.concert} · {entry.fans} 知识星
-                </small>
-              </span>
-              <em>{entry.score} PTS</em>
-              <i>×{entry.maxCombo}</i>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="leaderboard-empty">
-          这首歌还没有成绩，来留下第一份开学答卷吧。
-        </p>
-      )}
-    </section>
-  );
-
   const showToast = useCallback((text: string, tone: ToastTone) => {
     if (toastTimerRef.current) {
       window.clearTimeout(toastTimerRef.current);
@@ -758,20 +688,17 @@ export default function Home() {
   const createCurrentShareCard = useCallback(
     () =>
       createShareCardBlob({
-        nickname: playerName.trim() || "校园新生",
+        nickname: "校园新生",
         song: songTitle,
         score: fans * maxCombo,
-        rank: currentLeaderboardEntry?.rank ?? null,
         fans,
         maxCombo,
         venue: resultTier.name,
         tierIconSrc: resultTier.iconSrc,
       }),
     [
-      currentLeaderboardEntry?.rank,
       fans,
       maxCombo,
-      playerName,
       resultTier.iconSrc,
       resultTier.name,
       songTitle,
@@ -801,7 +728,7 @@ export default function Home() {
         type: "image/png",
       });
       const score = fans * maxCombo;
-      const shareText = `${playerName.trim() || "校园新生"}在《${songTitle}》拿到 ${score} 分，解锁称号「${resultTier.name}」，校园榜第 ${currentLeaderboardEntry?.rank ?? "--"} 名！`;
+      const shareText = `我在《${songTitle}》拿到 ${score} 分，解锁新学期人设「${resultTier.name}」！`;
       if (navigator.share) {
         const shareData: ShareData = {
           title: "开学冲冲冲！校园成绩",
@@ -824,10 +751,8 @@ export default function Home() {
     }
   }, [
     createCurrentShareCard,
-    currentLeaderboardEntry?.rank,
     fans,
     maxCombo,
-    playerName,
     resultTier.name,
     showToast,
     songTitle,
@@ -914,7 +839,6 @@ export default function Home() {
     setNoteJudgement(null);
     screenPunchRef.current = 1.8;
     collectFlashRef.current = 1.4;
-    busBounceRef.current = 1.35;
     addBurst(busXRef.current, PLAYER_Y - 18, next.secondary, 46);
     addFloatText(
       busXRef.current,
@@ -1130,7 +1054,6 @@ export default function Home() {
       songRef.current = song;
       trackRef.current = GAME_TRACK;
       beatTimesRef.current = [...PRECOMPUTED_CHART.timing.beatTimesMs];
-      setCurrentBpm(PRECOMPUTED_CHART.timing.bpm);
       setSongReady(true);
       showToast(
         remoteFallbackUsed
@@ -1159,7 +1082,12 @@ export default function Home() {
       track.notePattern[targetBeat % track.notePattern.length] ?? 0;
     const intensity =
       track.intensityPattern[targetBeat % track.intensityPattern.length] ?? 0;
-    if (noteLevel !== 2) return;
+    const weakNoteOrdinal = track.notePattern
+      .slice(0, targetBeat + 1)
+      .reduce((total, level) => total + (level === 1 ? 1 : 0), 0);
+    const shouldSpawnKnowledge =
+      noteLevel === 2 || (noteLevel === 1 && weakNoteOrdinal % 3 === 0);
+    if (!shouldSpawnKnowledge) return;
     const spawnY = ROAD_HORIZON_Y;
     const spawnAt = beatTimesRef.current[beat];
     const hitAt = beatTimesRef.current[targetBeat];
@@ -1172,11 +1100,11 @@ export default function Home() {
       .reduce((total, level) => total + (level === 2 ? 1 : 0), 0);
 
     const bonusType: EntityType | null =
-      activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 8
+      noteLevel === 2 && activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 8
         ? "magnet"
-        : activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 20
+        : noteLevel === 2 && activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 20
           ? "invincible"
-          : activeNoteOrdinal > 8 && activeNoteOrdinal % 19 === 0
+          : noteLevel === 2 && [19, 57].includes(activeNoteOrdinal)
             ? "lucky"
             : null;
     entitiesRef.current.push({
@@ -1188,7 +1116,6 @@ export default function Home() {
       spawnAt,
       hitAt,
       handled: false,
-      wobble: Math.random() * Math.PI,
     });
     if (bonusType) {
       entitiesRef.current.push({
@@ -1200,11 +1127,17 @@ export default function Home() {
         spawnAt: spawnAt + powerupTrailDelayMs,
         hitAt: hitAt + powerupTrailDelayMs,
         handled: false,
-        wobble: Math.random() * Math.PI,
       });
     }
 
-    if (beat < 2) return;
+    if (beat < 2 || noteLevel !== 2) return;
+    if (
+      track.grannyBeats.some(
+        (pedestrianBeat) => Math.abs(targetBeat - pedestrianBeat) <= 2,
+      )
+    ) {
+      return;
+    }
     if (
       targetBeat - lastObstacleTargetBeatRef.current <
       MIN_OBSTACLE_BEAT_GAP
@@ -1232,7 +1165,6 @@ export default function Home() {
         spawnAt,
         hitAt,
         handled: false,
-        wobble: Math.random() * Math.PI,
       });
     }
   }, []);
@@ -1392,6 +1324,17 @@ export default function Home() {
 
       const pedestrian = pedestrianRef.current;
       if (pedestrian) {
+        ctx.save();
+        ctx.fillStyle = "rgba(255, 216, 77, 0.96)";
+        ctx.strokeStyle = "#17223a";
+        ctx.lineWidth = 2;
+        ctx.fillRect(ROAD_LEFT + 12, pedestrian.y - 78, 126, 25);
+        ctx.strokeRect(ROAD_LEFT + 12, pedestrian.y - 78, 126, 25);
+        ctx.fillStyle = "#17223a";
+        ctx.font = '800 13px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
+        ctx.textAlign = "center";
+        ctx.fillText("前方行人 · 提前避让", ROAD_LEFT + 75, pedestrian.y - 61);
+        ctx.restore();
         ctx.fillStyle = "rgba(255, 245, 232, 0.72)";
         for (let stripe = 0; stripe < 5; stripe += 1) {
           ctx.fillRect(
@@ -1422,8 +1365,6 @@ export default function Home() {
         const x = laneXAtDepth(entity.lane, depth);
         const spriteSize =
           ENTITY_RENDER_SIZE * (0.34 + Math.min(1, depth) * 0.66);
-        const wobble =
-          Math.sin(elapsed / 220 + entity.wobble) * Math.min(1.2, depth) * 1.25;
         const spriteTop = -spriteSize;
         const drawRoadSprite = (image: HTMLImageElement) =>
           drawContainedImage(
@@ -1435,19 +1376,37 @@ export default function Home() {
             spriteSize,
           );
         ctx.save();
-        ctx.translate(Math.round(x + wobble), Math.round(entity.y));
-        ctx.beginPath();
-        ctx.ellipse(
-          0,
-          2,
-          spriteSize * 0.34,
-          spriteSize * 0.11,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fillStyle = `rgba(23, 34, 58, ${0.08 + Math.min(1, depth) * 0.16})`;
-        ctx.fill();
+        ctx.translate(Math.round(x), Math.round(entity.y));
+        if (entity.type === "obstacle") {
+          ctx.beginPath();
+          ctx.ellipse(
+            0,
+            2,
+            spriteSize * 0.34,
+            spriteSize * 0.11,
+            0,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fillStyle = `rgba(23, 34, 58, ${0.08 + Math.min(1, depth) * 0.16})`;
+          ctx.fill();
+        } else {
+          const haloColor =
+            entity.type === "lucky"
+              ? "244, 126, 173"
+              : entity.type === "magnet"
+                ? "35, 207, 178"
+                : entity.type === "invincible"
+                  ? "255, 216, 77"
+                  : "69, 200, 237";
+          ctx.beginPath();
+          ctx.arc(0, -spriteSize / 2, spriteSize * 0.5 + pulse * 2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${haloColor}, 0.2)`;
+          ctx.fill();
+          ctx.strokeStyle = `rgba(${haloColor}, 0.95)`;
+          ctx.lineWidth = Math.max(2, spriteSize * 0.055);
+          ctx.stroke();
+        }
 
         if (entity.type === "fan") {
           const timingDistance = Math.abs(entity.hitAt - elapsed);
@@ -1522,7 +1481,7 @@ export default function Home() {
       }
 
       const busX = busXRef.current;
-      const busY = PLAYER_Y - busBounceRef.current * 18;
+      const busY = PLAYER_Y;
       const vehicle = getVehicle(vehicleLevelRef.current);
       const busScale = 1 + (vehicle.level - 1) * 0.015;
       ctx.save();
@@ -1548,8 +1507,6 @@ export default function Home() {
         ctx.globalAlpha = 1;
       }
       ctx.scale(busScale, busScale);
-      ctx.fillStyle = "rgba(23, 34, 58, 0.3)";
-      ctx.fillRect(-27, 45, 54, 12);
       if (shieldRef.current) {
         ctx.strokeStyle = `rgba(69, 200, 237, ${0.58 + pulse * 0.32})`;
         ctx.lineWidth = 5;
@@ -1566,14 +1523,7 @@ export default function Home() {
               ? images.car
               : images.schoolBus;
       if (vehicleImage?.complete && vehicleImage.naturalWidth) {
-        const bounds =
-          vehicle.level === 1
-            ? { x: -35, y: -64, width: 70, height: 126 }
-            : vehicle.level === 2
-              ? { x: -40, y: -65, width: 80, height: 128 }
-              : vehicle.level === 3
-                ? { x: -41, y: -59, width: 82, height: 118 }
-                : { x: -42, y: -63, width: 84, height: 126 };
+        const bounds = { x: -50, y: -96, width: 100, height: 100 };
         drawContainedImage(
           ctx,
           vehicleImage,
@@ -1648,7 +1598,6 @@ export default function Home() {
     setEarnedCoins(coins);
     setResultTier(tier);
     setFans(fansRef.current);
-    setCombo(comboRef.current);
     setMaxCombo(maxComboRef.current);
 
     const previousCoins = Number(
@@ -1664,44 +1613,6 @@ export default function Home() {
     setBankCoins(nextCoins);
     setBestFans(nextBest);
 
-    const playerId = playerIdRef.current;
-    if (playerId) {
-      setLeaderboardSyncing(true);
-      setCurrentRankEntryId(playerId);
-      void fetch("/api/leaderboard", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          playerId,
-          name: playerNameRef.current.trim() || "校园新生",
-          fans: fansRef.current,
-          maxCombo: maxComboRef.current,
-          song: trackRef.current.name,
-          songKey: LEADERBOARD_SONG_KEY,
-        }),
-      })
-        .then(async (response) => {
-          if (!response.ok) throw new Error("Leaderboard sync failed");
-          const payload = (await response.json()) as {
-            leaderboard?: LeaderboardEntry[];
-          };
-          setLeaderboardSyncing(false);
-          if (payload.leaderboard) {
-            setLeaderboard(payload.leaderboard);
-            showToast(
-              `已计入《${trackRef.current.name}》榜 · ${fansRef.current * maxComboRef.current} 分`,
-              "gold",
-            );
-          }
-        })
-        .catch(() => {
-          setLeaderboardSyncing(false);
-          showToast("歌曲排行榜同步失败，请稍后重试", "danger");
-        });
-    } else {
-      setLeaderboardSyncing(false);
-    }
-
     addBurst(GAME_WIDTH / 2, PLAYER_Y - 120, tier.color, 38);
     if (songRef.current) {
       songRef.current.pause();
@@ -1711,7 +1622,7 @@ export default function Home() {
     setMagnetRemaining(0);
     setInvincibleRemaining(0);
     resetSongTone();
-  }, [addBurst, resetSongTone, showToast, stopJoystick]);
+  }, [addBurst, resetSongTone, stopJoystick]);
 
   const failGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
@@ -1738,10 +1649,7 @@ export default function Home() {
     });
     setEarnedCoins(0);
     setFans(fansRef.current);
-    setCombo(comboRef.current);
     setMaxCombo(maxComboRef.current);
-    setCurrentRankEntryId(null);
-    setLeaderboardSyncing(false);
     setShareCardOpen(false);
     setProgress(failureProgress);
     setNoteJudgement(null);
@@ -1799,12 +1707,11 @@ export default function Home() {
         const beat = nextBeatRef.current;
         beatRef.current = beat;
         beatPulseRef.current = 1;
-        setCurrentBpm(track.bpmAt(beat));
         spawnBeat(beat);
 
         const pedestrianWarningIndex = track.grannyBeats.findIndex(
           (targetBeat) =>
-            beat === targetBeat - 4 &&
+            beat === targetBeat - PEDESTRIAN_WARNING_BEATS &&
             !grannyWarnedBeatsRef.current.has(targetBeat),
         );
         if (pedestrianWarningIndex >= 0) {
@@ -1815,24 +1722,25 @@ export default function Home() {
             startAt: beatTimes[beat],
             hitAt: beatTimes[pedestrianBeat],
             endAt:
-              beatTimes[Math.min(pedestrianBeat + 4, beatTimes.length - 1)],
+              beatTimes[
+                Math.min(
+                  pedestrianBeat +
+                    (PEDESTRIAN_CROSSING_BEATS - PEDESTRIAN_WARNING_BEATS),
+                  beatTimes.length - 1,
+                )
+              ],
             direction,
             x: direction === 1 ? ROAD_LEFT - 24 : ROAD_LEFT + ROAD_WIDTH + 24,
-            y: PLAYER_Y - 4,
+            y: PLAYER_Y - 26,
           };
-          showToast(
-            pedestrianWarningIndex === 0
-              ? "注意！4 拍后第一位行人抵达中间车道"
-              : "再次注意！4 拍后第二位行人从另一侧通过",
-            "gold",
-          );
+          showToast("前方斑马线有行人，请提前换道", "gold");
         }
         const pedestrianDangerIndex = track.grannyBeats.indexOf(beat);
         if (pedestrianDangerIndex >= 0) {
           showToast(
             pedestrianDangerIndex === 0
-              ? "危险！第一位行人到达，离开中间车道"
-              : "危险！第二位行人到达，再次避让",
+              ? "行人正在通过，请保持侧边车道"
+              : "再次礼让行人，请保持侧边车道",
             "danger",
           );
         }
@@ -1896,7 +1804,6 @@ export default function Home() {
             );
             perfectCountRef.current += 1;
             successfulHitsRef.current += 1;
-            setCombo(comboRef.current);
             setMaxCombo(maxComboRef.current);
             setSuccessfulHits(successfulHitsRef.current);
             const upgraded = checkVehicleUpgrade();
@@ -1926,7 +1833,6 @@ export default function Home() {
             playPerfectHit();
             beatPulseRef.current = 1.45;
             collectFlashRef.current = 1;
-            busBounceRef.current = 0.8;
             screenPunchRef.current = 0.75;
             triggerHaptic([14, 10, 20]);
             if (perfectCountRef.current % 8 === 0 && !shieldRef.current) {
@@ -1939,7 +1845,6 @@ export default function Home() {
           if (!entity.handled && elapsed > entity.hitAt + MISS_WINDOW) {
             entity.handled = true;
             comboRef.current = 0;
-            setCombo(0);
             showJudgement("MISS", "节拍漏击 · COMBO BREAK");
             addFloatText(
               laneXAtDepth(entity.lane, roadDepthFromY(entity.y)),
@@ -1949,7 +1854,10 @@ export default function Home() {
             );
             hitFlashRef.current = 0.32;
           }
-          if (!entity.handled && entity.y < GAME_HEIGHT + 90) {
+          if (
+            !entity.handled &&
+            elapsed <= entity.hitAt + ENTITY_DESPAWN_AFTER_MS
+          ) {
             nextEntities.push(entity);
           }
           continue;
@@ -1962,7 +1870,10 @@ export default function Home() {
           entity.y < PLAYER_Y + OBSTACLE_COLLISION_AFTER;
 
         if (!colliding) {
-          if (!entity.handled && entity.y < GAME_HEIGHT + 90) {
+          if (
+            !entity.handled &&
+            elapsed <= entity.hitAt + ENTITY_DESPAWN_AFTER_MS
+          ) {
             nextEntities.push(entity);
           }
           continue;
@@ -1990,10 +1901,9 @@ export default function Home() {
           magnetUntilRef.current = elapsed + POWERUP_DURATION_MS;
           setMagnetRemaining(POWERUP_DURATION_MS);
           collectFlashRef.current = 1.3;
-          busBounceRef.current = 1.15;
           addBurst(x, PLAYER_Y - 10, "#72f1ff", 30);
           addFloatText(x, PLAYER_Y - 66, "磁铁 5 秒", "#72f1ff");
-          showToast("获得磁铁！5 秒内附近知识星自动 PERFECT", "cyan");
+          showToast("获得磁铁！5 秒内附近知识自动 PERFECT", "cyan");
           navigator.vibrate?.([24, 15, 32]);
         } else if (entity.type === "invincible") {
           entity.handled = true;
@@ -2033,7 +1943,6 @@ export default function Home() {
           fansRef.current -= actualLoss;
           comboRef.current = 0;
           setFans(fansRef.current);
-          setCombo(0);
           shakeRef.current = 0.34;
           hitFlashRef.current = 1;
           triggerHaptic(
@@ -2046,7 +1955,7 @@ export default function Home() {
           playObstacleImpact(entity.obstacle ?? "cone");
           triggerDamageVariation();
           addBurst(x, PLAYER_Y, "#ff375f", 17);
-          addFloatText(x, PLAYER_Y - 58, `-${actualLoss} 知识星`, "#ff526f");
+          addFloatText(x, PLAYER_Y - 58, `-${actualLoss} 知识`, "#ff526f");
           showToast(
             `掉粉 -${actualLoss} · 音色变${toneModeRef.current === "thick" ? "厚" : "细"} 8 拍`,
             "danger",
@@ -2070,7 +1979,7 @@ export default function Home() {
             ? ROAD_LEFT + ROAD_WIDTH + 24
             : ROAD_LEFT - 24;
         const pedestrianX = fromX + (toX - fromX) * crossingProgress;
-        const pedestrianY = PLAYER_Y - 4;
+        const pedestrianY = PLAYER_Y - 26;
         pedestrianRef.current = {
           ...pedestrian,
           x: pedestrianX,
@@ -2080,8 +1989,10 @@ export default function Home() {
         if (
           crossingProgress >= 0 &&
           crossingProgress <= 1 &&
+          Math.abs(elapsed - pedestrian.hitAt) <=
+            PEDESTRIAN_DANGER_WINDOW_MS &&
           Math.abs(pedestrianY - PLAYER_Y) < 48 &&
-          Math.abs(pedestrianX - busXRef.current) < 36
+          Math.abs(pedestrianX - busXRef.current) < 30
         ) {
           failGame();
           return;
@@ -2117,7 +2028,6 @@ export default function Home() {
         0,
         collectFlashRef.current - delta * 5.8,
       );
-      busBounceRef.current = Math.max(0, busBounceRef.current - delta * 5.2);
       screenPunchRef.current = Math.max(0, screenPunchRef.current - delta * 7);
 
       const canvas = canvasRef.current;
@@ -2192,7 +2102,6 @@ export default function Home() {
         return;
       }
       comboRef.current = 0;
-      setCombo(0);
       showJudgement("MISS", "不在节拍点或车道错误");
       addFloatText(busXRef.current, PLAYER_Y - 72, "MISS", "#ff526f");
       hitFlashRef.current = 0.34;
@@ -2203,7 +2112,11 @@ export default function Home() {
     candidate.handled = true;
     const timingError = Math.abs(elapsed - candidate.hitAt);
     const quality: NoteJudgement["quality"] =
-      timingError <= 55 ? "PERFECT" : timingError <= 110 ? "GREAT" : "GOOD";
+      timingError <= PERFECT_WINDOW
+        ? "PERFECT"
+        : timingError <= GREAT_WINDOW
+          ? "GREAT"
+          : "GOOD";
     comboRef.current += 1;
     maxComboRef.current = Math.max(maxComboRef.current, comboRef.current);
     if (quality === "PERFECT") perfectCountRef.current += 1;
@@ -2214,7 +2127,6 @@ export default function Home() {
     const fanGained = fansRef.current < capacity;
     fansRef.current = Math.min(capacity, fansRef.current + 1);
     setFans(fansRef.current);
-    setCombo(comboRef.current);
     setMaxCombo(maxComboRef.current);
     if (!upgraded) {
       showJudgement(
@@ -2245,7 +2157,6 @@ export default function Home() {
     );
     beatPulseRef.current = 1.65;
     collectFlashRef.current = 1;
-    busBounceRef.current = 1;
     screenPunchRef.current = quality === "PERFECT" ? 1.2 : 0.72;
     triggerHaptic(quality === "PERFECT" ? [18, 16, 28] : 22);
 
@@ -2270,10 +2181,6 @@ export default function Home() {
 
   const startGame = useCallback(async () => {
     const song = songRef.current;
-    if (!playerNameRef.current.trim()) {
-      showToast("请先填写排行榜昵称", "pink");
-      return;
-    }
     if (!songReady || !song) {
       showToast("歌曲仍在准备中，请稍候", "pink");
       return;
@@ -2347,24 +2254,19 @@ export default function Home() {
     shakeRef.current = 0;
     hitFlashRef.current = 0;
     collectFlashRef.current = 0;
-    busBounceRef.current = 0;
     screenPunchRef.current = 0;
     fallbackElapsedRef.current = 0;
     setFans(STARTING_FANS);
     setVehicleLevel(1);
-    setCombo(0);
     setMaxCombo(0);
     setSuccessfulHits(0);
     setMagnetRemaining(0);
     setInvincibleRemaining(0);
     setProgress(0);
     setShield(false);
-    setCurrentBpm(PRECOMPUTED_CHART.timing.bpm);
     setToast(null);
     setNoteJudgement(null);
     setLuckyDialog(null);
-    setCurrentRankEntryId(null);
-    setLeaderboardSyncing(false);
     setShareCardOpen(false);
     setShareBusy(false);
     resetSongTone();
@@ -2448,7 +2350,7 @@ export default function Home() {
       addFloatText(
         busXRef.current,
         PLAYER_Y - 64,
-        doubledFans > capacity ? `翻倍！上限 ${capacity}` : "知识星 ×2!",
+        doubledFans > capacity ? `翻倍！上限 ${capacity}` : "知识 ×2!",
         "#ffe66d",
       );
       addBurst(busXRef.current, PLAYER_Y - 10, "#ffe66d", 28);
@@ -2466,8 +2368,7 @@ export default function Home() {
     } else {
       fansRef.current = Math.max(1, Math.floor(before / 2));
       comboRef.current = 0;
-      setCombo(0);
-      addFloatText(busXRef.current, PLAYER_Y - 64, "知识星 ÷2", "#ff7ac8");
+      addFloatText(busXRef.current, PLAYER_Y - 64, "知识 ÷2", "#ff7ac8");
       addBurst(busXRef.current, PLAYER_Y - 10, "#ff7ac8", 22);
       hitFlashRef.current = 0.7;
       shakeRef.current = 0.22;
@@ -2571,7 +2472,7 @@ export default function Home() {
     resetSongTone();
     statusRef.current = "ready";
     setStatus("ready");
-    setReadyPage("start");
+    setReadyPage("home");
     laneRef.current = 2;
     busXRef.current = laneCenter(2);
     vehicleLevelRef.current = 1;
@@ -2586,7 +2487,6 @@ export default function Home() {
     invincibleUntilRef.current = -1;
     setVehicleLevel(1);
     setFans(STARTING_FANS);
-    setCombo(0);
     setMaxCombo(0);
     setSuccessfulHits(0);
     setMagnetRemaining(0);
@@ -2596,8 +2496,6 @@ export default function Home() {
     setToast(null);
     setNoteJudgement(null);
     setLuckyDialog(null);
-    setCurrentRankEntryId(null);
-    setLeaderboardSyncing(false);
     setShareCardOpen(false);
     setShareBusy(false);
     setFailureSummary(null);
@@ -2618,54 +2516,14 @@ export default function Home() {
   }, [loadFixedSong]);
 
   useEffect(() => {
-    let cancelled = false;
-    setCurrentRankEntryId(null);
-    void fetch(
-      `/api/leaderboard?songKey=${encodeURIComponent(leaderboardSongKey)}`,
-    )
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Leaderboard load failed");
-        const payload = (await response.json()) as {
-          leaderboard?: LeaderboardEntry[];
-        };
-        if (!cancelled && payload.leaderboard) {
-          setLeaderboard(payload.leaderboard);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLeaderboard([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [leaderboardSongKey]);
-
-  useEffect(() => {
     const savedBest = Number(window.localStorage.getItem("fan-bus-best") || 0);
     const savedCoins = Number(
       window.localStorage.getItem("fan-bus-coins") || 0,
     );
-    const storedPlayerName =
-      window.localStorage.getItem("fan-bus-player-name") || "";
-    const savedPlayerName = ["巡演玩家", "校园新生"].includes(storedPlayerName)
-      ? ""
-      : storedPlayerName;
-    let savedPlayerId = window.localStorage.getItem("fan-bus-player-id");
-    if (!savedPlayerId) {
-      savedPlayerId =
-        typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      window.localStorage.setItem("fan-bus-player-id", savedPlayerId);
-    }
-    playerIdRef.current = savedPlayerId;
     window.localStorage.removeItem("fan-bus-vehicle-level");
     const savedScoreTimer = window.setTimeout(() => {
       setBestFans(savedBest);
       setBankCoins(savedCoins);
-      playerNameRef.current = savedPlayerName;
-      setPlayerName(savedPlayerName);
       vehicleLevelRef.current = 1;
       setVehicleLevel(1);
     }, 0);
@@ -2714,14 +2572,7 @@ export default function Home() {
         event.key === " " &&
         ["ready", "finished", "failed"].includes(statusRef.current)
       ) {
-        if (
-          statusRef.current === "ready" &&
-          (readyPage === "home" || readyPage === "rules")
-        ) {
-          setReadyPage("start");
-        } else {
-          void startGame();
-        }
+        void startGame();
       }
     };
     window.addEventListener("keydown", keydown);
@@ -2729,7 +2580,7 @@ export default function Home() {
       window.clearTimeout(savedScoreTimer);
       window.removeEventListener("keydown", keydown);
     };
-  }, [hitNote, move, pauseGame, readyPage, resumeGame, startGame, toggleMute]);
+  }, [hitNote, move, pauseGame, resumeGame, startGame, toggleMute]);
 
   useEffect(() => {
     (Object.entries(CAMPUS_ASSETS) as Array<[CampusAsset, string]>).forEach(
@@ -2779,9 +2630,14 @@ export default function Home() {
   }, [status, stopJoystick]);
 
   const isHomePage = status === "ready" && readyPage === "home";
+  const isRulesPage = status === "ready" && readyPage === "rules";
 
   return (
-    <main className={`arcade-page ${isHomePage ? "is-home-page" : ""}`}>
+    <main
+      className={`arcade-page ${isHomePage ? "is-home-page" : ""} ${
+        isRulesPage ? "is-rules-page" : ""
+      }`}
+    >
       <div className="sky-grid" aria-hidden="true" />
       {isHomePage ? (
         <section className="home-screen" aria-labelledby="home-title">
@@ -2799,7 +2655,7 @@ export default function Home() {
             <div className="home-records" aria-label="游戏记录">
               <span>
                 <small>BEST</small>
-                <strong>{bestFans}</strong> 知识星
+                <strong>{bestFans}</strong> 知识
               </span>
               <i aria-hidden="true" />
               <span>
@@ -2822,34 +2678,31 @@ export default function Home() {
               <p className="home-eyebrow">
                 <span>OPENING SEASON</span>
                 <i aria-hidden="true" />
-                踩准节拍，发现校园宝藏
+                踩准节拍，有用的知识+1+1+1
               </p>
               <h1 id="home-title">
                 <span>开学季</span>
                 <strong>冲冲冲！</strong>
               </h1>
               <p className="home-lead">
-                从自行车一路升级到校车大巴，踩准强拍收集知识星，
-                穿过蓝绿粉校园，解锁你的隐藏开学人设。
+                跟着歌曲节拍收集知识，解锁你的新学期隐藏人设
               </p>
-              <div className="home-tags" aria-label="游戏特色">
-                <span>
-                  <b>01</b> 首校园主题曲
-                </span>
-                <span>
-                  <b>04</b> 级载具进化
-                </span>
-                <span>
-                  <b>TOP 8</b> 歌曲排行榜
-                </span>
-              </div>
               <div className="home-actions">
                 <button
                   className="home-start-button"
-                  onClick={() => setReadyPage("start")}
+                  onClick={() =>
+                    songReady ? void startGame() : void loadFixedSong()
+                  }
+                  disabled={songLoading}
                   autoFocus
                 >
-                  <span>走进校园</span>
+                  <span>
+                    {songLoading
+                      ? "音乐加载中…"
+                      : songReady
+                        ? "走进校园"
+                        : "重新加载音乐"}
+                  </span>
                   <img
                     className="home-play-icon"
                     src={UI_ICONS.play}
@@ -2864,6 +2717,7 @@ export default function Home() {
                   查看玩法
                 </button>
               </div>
+              {songError && <p className="home-song-status">{songError}</p>}
               <p className="home-key-hint">
                 <kbd>SPACE</kbd>
                 <span>也可快速开始</span>
@@ -2879,7 +2733,7 @@ export default function Home() {
                 <div className="home-art-stats">
                   <span>
                     <small>MISSION</small>
-                    收集沿途知识星
+                    收集沿途知识
                   </span>
                   <b>→</b>
                   <span>
@@ -2889,11 +2743,10 @@ export default function Home() {
                 </div>
               </div>
               <div className="home-track-card">
-                <span className="home-track-number">01</span>
                 <div>
                   <small>FEATURED TRACK</small>
                   <strong>恭喜你发现了宝藏</strong>
-                  <em>TF家族 · 开学季主题曲 01:26</em>
+                  <em>TF家族 · 开学季主题曲</em>
                 </div>
                 <span className="home-equalizer">
                   <i />
@@ -2921,12 +2774,7 @@ export default function Home() {
           <span className="brand-kicker">
             <small>CAMPUS RUSH</small>
             <strong>
-              {status === "playing" || status === "paused" || status === "lucky"
-                ? currentBpm
-                : songReady
-                  ? PRECOMPUTED_CHART.timing.bpm
-                  : "--"}
-              <i>BPM</i>
+              开学季<i>GO</i>
             </strong>
           </span>
           <span className="brand-title">
@@ -2937,7 +2785,7 @@ export default function Home() {
         <div className="meta-strip" aria-label="游戏记录">
           <span>
             <small>BEST</small>
-            {bestFans} 知识星
+            {bestFans} 知识
           </span>
           <span>
             <small>ENERGY</small>
@@ -2959,9 +2807,9 @@ export default function Home() {
             <div>
               <span className="live-dot" />
               {status === "playing" || status === "paused" || status === "lucky"
-                ? songTitle
+                ? "游戏BGM《恭喜你发现了宝藏》——TF家族"
                 : readyPage === "rules"
-                  ? `校园路线 · ${GAME_TRACK.name}`
+                  ? "查看玩法"
                   : "READY TO GO"}
             </div>
             <div className="cabinet-tools">
@@ -2998,15 +2846,15 @@ export default function Home() {
 
           <div className="hud">
             <div className="hud-block">
-              <span>STARS / CAP</span>
+              <span>知识</span>
               <strong className="fans-count">
                 {String(fans).padStart(3, "0")}
                 <small>/{currentVehicle.capacity}</small>
               </strong>
             </div>
             <div className="hud-block combo-block">
-              <span>BEAT COMBO</span>
-              <strong>×{combo}</strong>
+              <span>最高连击</span>
+              <strong>×{maxCombo}</strong>
             </div>
             <div className="vehicle-run-card" aria-label="当前车辆升级任务">
               <div className="vehicle-level-badge">
@@ -3033,7 +2881,7 @@ export default function Home() {
             <div
               className={`music-state ${toneMode !== "normal" ? `is-variation is-${toneMode}` : ""}`}
             >
-              <strong>{songReady ? currentBpm : "--"} BPM</strong>
+              <strong>跟随节拍</strong>
               <span>
                 {status === "lucky"
                   ? "锦囊选择中"
@@ -3147,135 +2995,48 @@ export default function Home() {
                   aria-hidden="true"
                 />
                 <h1 className="story-title">
-                  <span>开学季</span>
-                  <em>冲冲冲！</em>
+                  <span>查看玩法</span>
                 </h1>
                 <p className="rules-lead">
-                  开学第一天，从一辆校园自行车出发。
-                  踩准节拍收集沿路知识星，躲开障碍并
-                  <strong>安全抵达校园</strong>！
+                  跟着歌曲节拍收集知识，左右换道躲开障碍，安全抵达校园。
                 </p>
                 <div className="rules-grid story-route" aria-label="校园路线">
                   <div>
                     <b>01</b>
                     <span>
-                      <strong>自行车出发</strong>
-                      知识星从 0 开始，沿校园道路左右换道寻找宝藏。
+                      <strong>升级开学载具</strong>
+                      从0开始收集知识，自行车也可以升级成校车
                     </span>
                   </div>
                   <div>
                     <b>02</b>
                     <span>
-                      <strong>收集知识星</strong>
-                      知识星到达黄色判定线时按 <em>HIT</em>；每次命中
-                      都会增加 1 颗知识星。
+                      <strong>疯狂汲取知识</strong>
+                      跟着歌曲节拍按<em>HIT</em>，命中1次知识+1
                     </span>
                   </div>
                   <div>
                     <b>03</b>
                     <span>
-                      <strong>升级校园载具</strong>
-                      从自行车、摩托车、小轿车一路升级到校车大巴。
+                      <strong>解锁隐藏人设</strong>
+                      知识数量x最高连击次数=你的新学期人设
                     </span>
                   </div>
                 </div>
                 <div className="story-mission">
-                  <span>FIRST DAY GOAL</span>
-                  <strong>解锁你的隐藏开学人设</strong>
-                  <small>校园安全第一，遇到过马路的老奶奶必须礼让。</small>
+                  <strong>安全提示</strong>
+                  <small>看到斑马线提示请提前换道，礼让正在过马路的行人。</small>
                 </div>
                 <button
                   className="primary-button rules-start-button"
-                  onClick={() => setReadyPage("start")}
+                  onClick={() =>
+                    songReady ? void startGame() : void loadFixedSong()
+                  }
+                  disabled={songLoading}
                 >
                   <img src={UI_ICONS.play} alt="" aria-hidden="true" />
-                  准备开学 · 前往出发页
+                  {songLoading ? "音乐加载中…" : "开始游戏"}
                 </button>
-              </div>
-            )}
-
-            {status === "ready" && readyPage === "start" && (
-              <div className="game-overlay intro-overlay single-track-overlay">
-                <div className="song-select-title">
-                  <p className="overlay-kicker">READY TO GO</p>
-                  <h1>准备出发</h1>
-                  <span>跟随唯一主题曲，收集知识星并安全抵达校园</span>
-                </div>
-
-                <article className="single-song-card" aria-label="本次主题曲">
-                  <div className="single-song-art" aria-hidden="true">
-                    <img src={UI_ICONS.play} alt="" />
-                  </div>
-                  <div className="single-song-copy">
-                    <small>OPENING SEASON TRACK</small>
-                    <strong>{GAME_TRACK.name}</strong>
-                    <span>{GAME_TRACK.artist} · 完整版 01:26</span>
-                  </div>
-                  <div className="single-song-badges" aria-label="歌曲信息">
-                    <b>{PRECOMPUTED_CHART.timing.bpm} BPM</b>
-                    <em>开学季主题曲</em>
-                  </div>
-                </article>
-
-                <aside className="chart-ready-note" role="note">
-                  <img src={UI_ICONS.star} alt="" aria-hidden="true" />
-                  <div>
-                    <strong>音乐和校园路线都准备好了</strong>
-                    <small>
-                      跟随强拍收集知识星和惊喜道具，避开路锥、维修坑洼与隔离路障，
-                      礼让行人并一路升级到校车大巴。
-                    </small>
-                  </div>
-                </aside>
-
-                {songError && <p className="song-error">{songError}</p>}
-                <label className="song-player-name-field">
-                  <span>
-                    <small>PLAYER NAME</small>
-                    <strong>排行榜昵称</strong>
-                  </span>
-                  <input
-                    value={playerName}
-                    maxLength={10}
-                    onChange={(event) => {
-                      const nextName = event.target.value;
-                      playerNameRef.current = nextName;
-                      setPlayerName(nextName);
-                      window.localStorage.setItem(
-                        "fan-bus-player-name",
-                        nextName,
-                      );
-                    }}
-                    placeholder="请输入校园昵称后出发"
-                    aria-label="排行榜昵称"
-                  />
-                  <em>成绩将以此昵称进入全局排行榜</em>
-                </label>
-                <div className="result-actions song-start-actions">
-                  <button
-                    className="primary-button"
-                    onClick={() => void startGame()}
-                    disabled={!songReady || songLoading || !playerName.trim()}
-                  >
-                    <img src={UI_ICONS.play} alt="" aria-hidden="true" />
-                    {!playerName.trim()
-                      ? "请填写排行榜昵称"
-                      : songLoading
-                        ? "正在载入主题曲…"
-                        : songReady
-                          ? `用《${songTitle}》出发`
-                          : "主题曲加载失败"}
-                  </button>
-                  <button
-                    className="secondary-button"
-                    onClick={() => setReadyPage("rules")}
-                  >
-                    查看玩法
-                  </button>
-                </div>
-                <p className="control-hint">
-                  ← → / A D 换道 · SPACE 击打 · P / ESC 暂停
-                </p>
               </div>
             )}
 
@@ -3313,7 +3074,7 @@ export default function Home() {
                     className="secondary-button"
                     onClick={returnToStart}
                   >
-                    返回准备页
+                    返回首页
                   </button>
                 </div>
                 <small className="pause-hint">P / ESC 继续</small>
@@ -3352,16 +3113,16 @@ export default function Home() {
                   <>
                     <h2>是否开启锦囊？</h2>
                     <p className="lucky-dialog-copy">
-                      开启后可能让知识星翻倍，也可能直接减少一半。
+                      开启后可能让知识翻倍，也可能直接减少一半。
                       <br />
-                      不开启则不会改变当前知识星数量。
+                      不开启则不会改变当前知识数量。
                     </p>
                     <div className="lucky-risk-row" aria-label="锦囊可能结果">
                       <div className="lucky-risk-card is-good">
                         <small>GOOD LUCK</small>
                         <strong>
                           <i>↑</i>
-                          <span>知识星</span>
+                          <span>知识</span>
                           <b>×2</b>
                         </strong>
                         <em>最高到当前载具收集上限</em>
@@ -3374,10 +3135,10 @@ export default function Home() {
                         <small>RISK</small>
                         <strong>
                           <i>↓</i>
-                          <span>知识星</span>
+                          <span>知识</span>
                           <b>÷2</b>
                         </strong>
-                        <em>知识星减半并中断连击</em>
+                        <em>知识减半并中断连击</em>
                       </div>
                     </div>
                     <div className="result-actions lucky-actions">
@@ -3402,9 +3163,9 @@ export default function Home() {
                     <p className="lucky-result-label">
                       {luckyDialog.outcome === "double"
                         ? luckyDialog.capped
-                          ? `知识星翻倍成功，达到 ${luckyDialog.capacity} 颗上限`
-                          : "知识星数量成功翻倍"
-                        : "知识星数量减少一半，连击已中断"}
+                          ? `知识翻倍成功，达到 ${luckyDialog.capacity} 点上限`
+                          : "知识数量成功翻倍"
+                        : "知识数量减少一半，连击已中断"}
                     </p>
                     <div className="lucky-result-numbers">
                       <span>{luckyDialog.before}</span>
@@ -3432,13 +3193,13 @@ export default function Home() {
                   aria-hidden="true"
                 />
                 <p className="result-label">本次开学人设</p>
-                <h2 style={{ color: resultTier.color }}>{resultTier.name}</h2>
+                <h2>{resultTier.name}</h2>
                 <p className="result-place">
                   {songTitle} · {resultTier.place}
                 </p>
                 <div className="result-stats">
                   <div>
-                    <small>知识星</small>
+                    <small>知识</small>
                     <strong>{fans}</strong>
                   </div>
                   <div>
@@ -3451,24 +3212,19 @@ export default function Home() {
                   </div>
                 </div>
                 <p className="concert-score">
-                  校园积分 <strong>{fans}</strong> 知识星 ×{" "}
+                  校园积分 <strong>{fans}</strong> 知识 ×{" "}
                   <strong>{maxCombo}</strong> 连击 = <b>{fans * maxCombo}</b>
                 </p>
                 <p className="coin-formula">
                   称号奖励 {resultTier.coins} + 合拍奖励 {maxCombo * 3}
                 </p>
-                {leaderboardPanel}
                 <button
                   className="share-result-button"
                   onClick={() => setShareCardOpen(true)}
                 >
                   <img src={UI_ICONS.star} alt="" aria-hidden="true" />
                   <strong>分享开学人设</strong>
-                  <small>
-                    {leaderboardSyncing
-                      ? "排行榜同步中…"
-                      : "分享昵称、歌曲、得分与排名"}
-                  </small>
+                  <small>分享歌曲、得分与新学期人设</small>
                 </button>
                 <div className="result-actions">
                   <button
@@ -3482,7 +3238,7 @@ export default function Home() {
                     className="secondary-button"
                     onClick={returnToStart}
                   >
-                    返回准备页
+                    返回首页
                   </button>
                 </div>
 
@@ -3520,7 +3276,7 @@ export default function Home() {
                         </div>
                         <div className="share-card-player">
                           <small>STUDENT / 校园新生</small>
-                          <strong>{playerName.trim() || "校园新生"}</strong>
+                          <strong>校园新生</strong>
                           <span title={songTitle}>《{songTitle}》</span>
                         </div>
                         <div className="share-card-score">
@@ -3528,22 +3284,19 @@ export default function Home() {
                           <strong>{fans * maxCombo}</strong>
                           <i />
                         </div>
-                        <div className="share-card-rank">
-                          <div>
-                            <small>CAMPUS RANK</small>
-                            <strong>
-                              {currentLeaderboardEntry?.rank
-                                ? `第 ${currentLeaderboardEntry.rank} 名`
-                                : leaderboardSyncing
-                                  ? "同步中…"
-                                  : "暂未上榜"}
-                            </strong>
+                        <div className="share-card-summary">
+                          <div className="share-card-achievement">
+                            <small>知识 / 最高连击</small>
+                            <strong>{fans} / ×{maxCombo}</strong>
                           </div>
-                          <div>
-                            <small>STARS / COMBO</small>
-                            <strong>
-                              {fans} / ×{maxCombo}
-                            </strong>
+                          <div
+                            className="share-card-qr-placeholder"
+                            aria-label="二维码占位，后续替换为活动网址"
+                          >
+                            <i />
+                            <i />
+                            <i />
+                            <small>二维码占位</small>
                           </div>
                         </div>
                         <div className="share-card-venue">
@@ -3563,18 +3316,14 @@ export default function Home() {
                         <button
                           className="primary-button"
                           onClick={() => void shareResult()}
-                          disabled={shareBusy || leaderboardSyncing}
+                          disabled={shareBusy}
                         >
-                          {leaderboardSyncing
-                            ? "等待排名…"
-                            : shareBusy
-                              ? "生成中…"
-                              : "分享给好友"}
+                          {shareBusy ? "生成中…" : "分享给好友"}
                         </button>
                         <button
                           className="secondary-button"
                           onClick={() => void saveShareCard()}
-                          disabled={shareBusy || leaderboardSyncing}
+                          disabled={shareBusy}
                         >
                           保存图片
                         </button>
@@ -3604,7 +3353,7 @@ export default function Home() {
                   成绩已在这里结算，本次不获得活力币。
                 </p>
                 <div className="failure-ticket">
-                  <span>本次知识星</span>
+                  <span>本次知识</span>
                   <strong>{failureSummary?.fans ?? fans}</strong>
                   <small>
                     最高连击 ×{failureSummary?.maxCombo ?? maxCombo} · 进度{" "}
@@ -3624,7 +3373,7 @@ export default function Home() {
                     className="secondary-button"
                     onClick={returnToStart}
                   >
-                    返回准备页
+                    返回首页
                   </button>
                 </div>
               </div>

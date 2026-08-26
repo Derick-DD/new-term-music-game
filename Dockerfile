@@ -9,23 +9,15 @@ FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN npm run build:static
 
-FROM node:22-bookworm-slim AS runner
+FROM nginx:1.27-alpine AS runner
 
-WORKDIR /app
-ENV NODE_ENV=production
-ENV HOSTNAME=0.0.0.0
-ENV PORT=3000
-ENV DATABASE_PATH=/app/data/fan-bus.sqlite
+COPY --from=builder /app/out /usr/share/nginx/html
 
-RUN mkdir -p /app/data && chown -R node:node /app
-COPY --from=builder --chown=node:node /app/public ./public
-COPY --from=builder --chown=node:node /app/.next/standalone ./
-COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+EXPOSE 80
 
-USER node
-EXPOSE 3000
-VOLUME ["/app/data"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1/ || exit 1
 
-CMD ["node", "server.js"]
+CMD ["nginx", "-g", "daemon off;"]
