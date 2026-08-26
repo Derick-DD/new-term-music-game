@@ -35,7 +35,8 @@ const CROSSWALK_BAR_GAP = 0.028;
 const HIT_INPUT_GUARD_MS = 70;
 const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
-const VEHICLE_EFFECT_CENTER_Y = -46;
+const VEHICLE_VISUAL_SCALE = 1.2;
+const VEHICLE_EFFECT_CENTER_Y = -46 * VEHICLE_VISUAL_SCALE;
 const MIN_OBSTACLE_BEAT_GAP = 3;
 const JOYSTICK_FIRST_REPEAT_MS = 280;
 const JOYSTICK_REPEAT_MS = 220;
@@ -324,11 +325,11 @@ const UI_ICONS = {
 } as const;
 
 const OUTCOME_ICONS = {
-  slacker: "/assets/campus-season/icons/outcome-slacker-fish.png",
-  scholar: "/assets/campus-season/icons/outcome-scholar.png",
-  grinder: "/assets/campus-season/icons/outcome-grind-king.png",
-  hidden: "/assets/campus-season/icons/outcome-hidden-achiever.png",
-  genius: "/assets/campus-season/icons/outcome-genius.png",
+  slacker: "/assets/campus-season/icons/outcome-slacker-fish-crayon.png",
+  scholar: "/assets/campus-season/icons/outcome-scholar-cheese.png",
+  grinder: "/assets/campus-season/icons/outcome-grind-cat-roll.png",
+  hidden: "/assets/campus-season/icons/outcome-hidden-dog-reader.png",
+  genius: "/assets/campus-season/icons/outcome-genius-penguin.png",
 } as const;
 
 type CampusAsset = keyof typeof CAMPUS_ASSETS;
@@ -480,13 +481,13 @@ async function createShareCardBlob(data: ShareCardData) {
   context.font = '700 20px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText("二维码占位", 810, 1260);
 
-  drawContainedImage(context, tierIcon, 92, 1234, 72, 72);
+  drawContainedImage(context, tierIcon, 92, 1218, 120, 120);
   context.fillStyle = "#17223a";
   context.font = '900 34px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText(data.venue, 184, 1288);
+  context.fillText(data.venue, 232, 1278);
   context.fillStyle = "#52617a";
   context.font = '700 24px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("这次开学，我的隐藏人设被发现了", 184, 1332);
+  context.fillText("这次开学，我的隐藏人设被发现了", 232, 1322);
 
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob(resolve, "image/png", 1);
@@ -1570,7 +1571,8 @@ export default function Home() {
       const busX = busXRef.current;
       const busY = PLAYER_Y;
       const vehicle = getVehicle(vehicleLevelRef.current);
-      const busScale = 1 + (vehicle.level - 1) * 0.015;
+      const busScale =
+        VEHICLE_VISUAL_SCALE * (1 + (vehicle.level - 1) * 0.015);
       ctx.save();
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = "source-over";
@@ -1602,7 +1604,7 @@ export default function Home() {
           ctx.arc(
             0,
             VEHICLE_EFFECT_CENTER_Y,
-            48 + index * 9 + pulse * 5,
+            VEHICLE_VISUAL_SCALE * (48 + index * 9 + pulse * 5),
             0,
             Math.PI * 2,
           );
@@ -1618,7 +1620,7 @@ export default function Home() {
         ctx.arc(
           0,
           VEHICLE_EFFECT_CENTER_Y,
-          48 + pulse * 4,
+          VEHICLE_VISUAL_SCALE * (48 + pulse * 4),
           0,
           Math.PI * 2,
         );

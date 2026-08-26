@@ -233,7 +233,7 @@ test("implements the requested campus gameplay safeguards", async () => {
       );
     }
   }
-  const largestVehicleHalfWidth = (100 * 1.045) / 2;
+  const largestVehicleHalfWidth = 62.8 / 2;
   assert.ok(playerCenters[0] - largestVehicleHalfWidth > 0);
   assert.ok(playerCenters[4] + largestVehicleHalfWidth < gameWidth);
 
@@ -315,7 +315,17 @@ test("implements the requested campus gameplay safeguards", async () => {
     /x \+ wobble|busBounce|fillRect\(-27, 45|ctx\.shadowColor|ctx\.shadowBlur|ctx\.ellipse/,
   );
   assert.match(page, /const bounds = \{ x: -50, y: -96, width: 100, height: 100 \}/);
-  assert.match(page, /const VEHICLE_EFFECT_CENTER_Y = -46/);
+  assert.match(page, /const VEHICLE_VISUAL_SCALE = 1\.2/);
+  assert.match(page, /const VEHICLE_EFFECT_CENTER_Y = -46 \* VEHICLE_VISUAL_SCALE/);
+  assert.match(
+    page,
+    /const busScale =\s*VEHICLE_VISUAL_SCALE \* \(1 \+ \(vehicle\.level - 1\) \* 0\.015\)/,
+  );
+  assert.match(
+    page,
+    /VEHICLE_VISUAL_SCALE \* \(48 \+ index \* 9 \+ pulse \* 5\)/,
+  );
+  assert.match(page, /VEHICLE_VISUAL_SCALE \* \(48 \+ pulse \* 4\)/);
   assert.match(page, /lastVehicleImageRef\.current/);
   assert.match(page, /fansRef\.current \+= 1/g);
   assert.match(page, /name: "校车大巴"/);
@@ -388,4 +398,41 @@ test("uses ImageGen vehicle sprites with visible occupants", async () => {
   assert.match(page, /entity\.type === "lucky"/);
   assert.match(page, /const haloColor/);
   assert.match(page, /ENTITY_RENDER_SIZE \*/);
+});
+
+test("uses a unified ImageGen crayon persona icon set", async () => {
+  const outcomeFiles = [
+    "outcome-slacker-fish-crayon.png",
+    "outcome-scholar-cheese.png",
+    "outcome-grind-cat-roll.png",
+    "outcome-hidden-dog-reader.png",
+    "outcome-genius-penguin.png",
+  ];
+  const [page, styles, ...images] = await Promise.all([
+    readFile(new URL("app/page.tsx", ROOT), "utf8"),
+    readFile(new URL("app/globals.css", ROOT), "utf8"),
+    ...outcomeFiles.map((fileName) =>
+      readFile(
+        new URL(`public/assets/campus-season/icons/${fileName}`, ROOT),
+      ),
+    ),
+  ]);
+
+  const hashes = new Set();
+  for (let index = 0; index < outcomeFiles.length; index += 1) {
+    const image = images[index];
+    assert.ok(image.byteLength > 150_000);
+    assert.equal(image.readUInt32BE(16), 512);
+    assert.equal(image.readUInt32BE(20), 512);
+    assert.equal(image[25], 6);
+    hashes.add(createHash("sha256").update(image).digest("hex"));
+    assert.match(page, new RegExp(outcomeFiles[index].replace(".", "\\.")));
+  }
+  assert.equal(hashes.size, outcomeFiles.length);
+  assert.match(page, /drawContainedImage\(context, tierIcon, 92, 1218, 120, 120\)/);
+  assert.match(styles, /\.share-card-venue > img \{\s*width: 48px;\s*height: 48px/);
+  assert.match(
+    styles,
+    /@media \(max-width: 780px\) \{\s*\.stage-icon \{\s*width: 76px;\s*height: 76px/,
+  );
 });

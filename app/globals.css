@@ -6673,3 +6673,20 @@ body {
   font-weight: 900;
   text-shadow: none;
 }
+
+/* Crayon persona icons keep their small labels readable in shared cards. */
+.share-card-venue {
+  grid-template-columns: 50px minmax(0, 1fr);
+}
+
+.share-card-venue > img {
+  width: 48px;
+  height: 48px;
+}
+
+@media (max-width: 780px) {
+  .stage-icon {
+    width: 76px;
+    height: 76px;
+  }
+}
