@@ -35,6 +35,8 @@ const CROSSWALK_BAR_GAP = 0.028;
 const HIT_INPUT_GUARD_MS = 70;
 const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
+const MAGNET_SPAWN_ORDINALS = [36, 64] as const;
+const SECOND_MAGNET_CHANCE = 0.25;
 const VEHICLE_VISUAL_SCALE = 1.2;
 const VEHICLE_EFFECT_CENTER_Y = -46 * VEHICLE_VISUAL_SCALE;
 const MIN_OBSTACLE_BEAT_GAP = 3;
@@ -161,8 +163,6 @@ type ConcertTier = {
 };
 
 type ShareCardData = {
-  nickname: string;
-  song: string;
   score: number;
   fans: number;
   maxCombo: number;
@@ -431,64 +431,60 @@ async function createShareCardBlob(data: ShareCardData) {
   drawFittedText(context, "开学冲冲冲！", 218, 232, 760, 66, 42);
 
   context.fillStyle = "rgba(255,245,232,0.94)";
-  context.fillRect(92, 310, 896, 310);
+  context.fillRect(92, 280, 896, 620);
   context.strokeStyle = "#f47ead";
   context.lineWidth = 6;
-  context.strokeRect(92, 310, 896, 310);
-  drawContainedImage(context, tierIcon, 132, 350, 220, 220);
+  context.strokeRect(92, 280, 896, 620);
+  drawContainedImage(context, tierIcon, 320, 300, 440, 440);
+  context.textAlign = "center";
   context.fillStyle = "#52617a";
   context.font = '800 28px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("本次解锁 / CAMPUS PERSONA", 396, 410);
+  context.fillText("本次解锁 / CAMPUS PERSONA", 540, 786);
   context.fillStyle = "#17223a";
-  drawFittedText(context, data.venue, 396, 516, 540, 76, 48);
+  drawFittedText(context, data.venue, 540, 856, 760, 76, 48);
 
-  context.fillStyle = "#e7518f";
-  context.font = '800 34px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("KNOWLEDGE SCORE", 92, 720);
-  context.fillStyle = "#17223a";
-  drawFittedText(context, String(data.score), 92, 930, 896, 210, 150);
-  context.fillStyle = "#f47ead";
-  context.fillRect(92, 970, 560, 14);
-
-  context.fillStyle = "rgba(255,255,255,0.72)";
-  context.fillRect(92, 1040, 560, 170);
-  context.fillStyle = "#ffffff";
-  context.fillRect(746, 1040, 242, 242);
+  context.textAlign = "left";
+  context.fillStyle = "rgba(255,255,255,0.76)";
+  context.fillRect(92, 928, 896, 182);
   context.strokeStyle = "#7187b2";
   context.lineWidth = 5;
-  context.strokeRect(92, 1040, 560, 170);
-  context.strokeRect(746, 1040, 242, 242);
+  context.strokeRect(92, 928, 896, 182);
+  context.fillStyle = "#e7518f";
+  context.font = '800 28px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
+  context.fillText("KNOWLEDGE SCORE", 124, 972);
+  context.fillStyle = "#17223a";
+  drawFittedText(context, String(data.score), 124, 1080, 820, 104, 82);
+  context.fillStyle = "#f47ead";
+  context.fillRect(124, 1090, 420, 10);
+
+  context.fillStyle = "rgba(255,255,255,0.72)";
+  context.fillRect(92, 1138, 560, 206);
+  context.fillStyle = "#ffffff";
+  context.fillRect(682, 1138, 306, 206);
+  context.strokeStyle = "#7187b2";
+  context.lineWidth = 5;
+  context.strokeRect(92, 1138, 560, 206);
+  context.strokeRect(682, 1138, 306, 206);
   context.fillStyle = "#52617a";
   context.font = '800 26px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("知识 / 最高连击", 124, 1092);
+  context.fillText("知识 / 最高连击", 124, 1192);
   context.fillStyle = "#17223a";
   context.font = '900 58px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText(`${data.fans} / ×${data.maxCombo}`, 124, 1172);
+  context.fillText(`${data.fans} / ×${data.maxCombo}`, 124, 1286);
 
   context.strokeStyle = "#17223a";
   context.lineWidth = 12;
   const qrCorners = [
-    [774, 1068],
-    [910, 1068],
-    [774, 1204],
+    [712, 1168],
+    [904, 1168],
+    [712, 1260],
   ];
-  qrCorners.forEach(([x, y]) => context.strokeRect(x, y, 48, 48));
+  qrCorners.forEach(([x, y]) => context.strokeRect(x, y, 44, 44));
+  context.textAlign = "center";
   context.fillStyle = "#52617a";
   context.font = '700 20px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("二维码占位", 810, 1260);
-
-  context.fillStyle = "rgba(255,245,232,0.94)";
-  context.fillRect(92, 1218, 560, 126);
-  context.strokeStyle = "#7187b2";
-  context.lineWidth = 5;
-  context.strokeRect(92, 1218, 560, 126);
-  context.fillStyle = "#52617a";
-  context.font = '800 20px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("STUDENT / 校园新生", 120, 1254);
-  context.fillStyle = "#17223a";
-  drawFittedText(context, data.nickname, 120, 1296, 500, 34, 28);
-  context.fillStyle = "#e7518f";
-  drawFittedText(context, `《${data.song}》`, 120, 1330, 500, 22, 18);
+  context.fillText("二维码占位", 835, 1322);
+  context.fillText("这次开学，我的隐藏人设被发现了", 540, 1370);
 
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob(resolve, "image/png", 1);
@@ -668,6 +664,8 @@ export default function Home() {
   const successfulHitsRef = useRef(0);
   const vehicleLevelRef = useRef(1);
   const magnetUntilRef = useRef(-1);
+  const magnetQuotaRef = useRef(1);
+  const magnetSpawnedRef = useRef(0);
   const invincibleUntilRef = useRef(-1);
   const toneModeRef = useRef<ToneMode>("normal");
   const arrangementUntilRef = useRef(-1);
@@ -737,21 +735,13 @@ export default function Home() {
   const createCurrentShareCard = useCallback(
     () =>
       createShareCardBlob({
-        nickname: "校园新生",
-        song: songTitle,
         score: fans * maxCombo,
         fans,
         maxCombo,
         venue: resultTier.name,
         tierIconSrc: resultTier.iconSrc,
       }),
-    [
-      fans,
-      maxCombo,
-      resultTier.iconSrc,
-      resultTier.name,
-      songTitle,
-    ],
+    [fans, maxCombo, resultTier.iconSrc, resultTier.name],
   );
 
   const saveShareCard = useCallback(async () => {
@@ -1157,8 +1147,13 @@ export default function Home() {
       .slice(0, targetBeat + 1)
       .reduce((total, level) => total + (level === 2 ? 1 : 0), 0);
 
+    const isMagnetSpawnSlot = MAGNET_SPAWN_ORDINALS.some(
+      (ordinal) => ordinal === activeNoteOrdinal,
+    );
     const bonusType: EntityType | null =
-      noteLevel === 2 && activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 8
+      noteLevel === 2 &&
+      isMagnetSpawnSlot &&
+      magnetSpawnedRef.current < magnetQuotaRef.current
         ? "magnet"
         : noteLevel === 2 && activeNoteOrdinal > 10 && activeNoteOrdinal % 28 === 20
           ? "invincible"
@@ -1186,6 +1181,7 @@ export default function Home() {
         hitAt: hitAt + powerupTrailDelayMs,
         handled: false,
       });
+      if (bonusType === "magnet") magnetSpawnedRef.current += 1;
     }
 
     if (beat < 2 || noteLevel !== 2) return;
@@ -2365,6 +2361,9 @@ export default function Home() {
     perfectCountRef.current = 0;
     successfulHitsRef.current = 0;
     magnetUntilRef.current = -1;
+    magnetQuotaRef.current =
+      Math.random() < SECOND_MAGNET_CHANCE ? 2 : 1;
+    magnetSpawnedRef.current = 0;
     invincibleUntilRef.current = -1;
     grannyWarnedBeatsRef.current.clear();
     invulnerableUntilRef.current = 0;
@@ -2597,6 +2596,8 @@ export default function Home() {
     lastHitInputAtRef.current = -Infinity;
     shieldRef.current = false;
     magnetUntilRef.current = -1;
+    magnetQuotaRef.current = 1;
+    magnetSpawnedRef.current = 0;
     invincibleUntilRef.current = -1;
     setVehicleLevel(1);
     setFans(STARTING_FANS);
@@ -3413,11 +3414,6 @@ export default function Home() {
                             <i />
                             <small>二维码占位</small>
                           </div>
-                        </div>
-                        <div className="share-card-player">
-                          <small>STUDENT / 校园新生</small>
-                          <strong>校园新生</strong>
-                          <span title={songTitle}>《{songTitle}》</span>
                         </div>
                         <p>这次开学，我的隐藏人设被发现了。</p>
                       </article>

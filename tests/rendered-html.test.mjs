@@ -129,6 +129,54 @@ test("implements the requested campus gameplay safeguards", async () => {
     /weakNoteOrdinal % 2 === 0 \|\| weakNoteOrdinal % 7 === 0/,
   );
   assert.match(page, /\[19, 57\]\.includes\(activeNoteOrdinal\)/);
+  assert.match(page, /const MAGNET_SPAWN_ORDINALS = \[36, 64\] as const/);
+  assert.match(page, /const SECOND_MAGNET_CHANCE = 0\.25/);
+  assert.match(
+    page,
+    /Math\.random\(\) < SECOND_MAGNET_CHANCE \? 2 : 1/,
+  );
+  assert.match(
+    page,
+    /magnetSpawnedRef\.current < magnetQuotaRef\.current/,
+  );
+  assert.match(
+    page,
+    /if \(bonusType === "magnet"\) magnetSpawnedRef\.current \+= 1/,
+  );
+  assert.ok((page.match(/magnetSpawnedRef\.current = 0/g) ?? []).length >= 2);
+  assert.doesNotMatch(page, /activeNoteOrdinal % 28 === 8/);
+  let activeNoteOrdinal = 0;
+  const magnetTargetBeats = [];
+  for (
+    let targetBeat = 4;
+    targetBeat < chart.gameplay.notePattern.length;
+    targetBeat += 1
+  ) {
+    if (chart.gameplay.notePattern[targetBeat] !== 2) continue;
+    activeNoteOrdinal += 1;
+    if ([36, 64].includes(activeNoteOrdinal)) magnetTargetBeats.push(targetBeat);
+  }
+  assert.deepEqual(magnetTargetBeats, [74, 130]);
+  assert.ok(
+    magnetTargetBeats.every((targetBeat) => Math.abs(targetBeat - 62) > 4),
+  );
+  assert.ok(
+    magnetTargetBeats.every(
+      (targetBeat) => targetBeat - 4 >= 62 + (16 - 8),
+    ),
+  );
+  for (const quota of [1, 2]) {
+    let spawnedMagnets = 0;
+    for (let ordinal = 1; ordinal <= strongNotes; ordinal += 1) {
+      if (
+        [36, 64].includes(ordinal) &&
+        spawnedMagnets < quota
+      ) {
+        spawnedMagnets += 1;
+      }
+    }
+    assert.equal(spawnedMagnets, quota);
+  }
   assert.match(page, /const PERFECT_WINDOW = 65/);
   assert.match(page, /const GREAT_WINDOW = 155/);
   assert.match(page, /const MISS_WINDOW = 240/);
@@ -429,8 +477,12 @@ test("uses a unified ImageGen crayon persona icon set", async () => {
     assert.match(page, new RegExp(outcomeFiles[index].replace(".", "\\.")));
   }
   assert.equal(hashes.size, outcomeFiles.length);
-  assert.match(page, /drawContainedImage\(context, tierIcon, 132, 350, 220, 220\)/);
-  assert.match(styles, /\.share-card-venue > img \{\s*width: 48px;\s*height: 48px/);
+  assert.match(page, /drawContainedImage\(context, tierIcon, 320, 300, 440, 440\)/);
+  assert.match(styles, /\.share-card-venue > img \{\s*width: 112px;\s*height: 112px/);
+  assert.match(
+    styles,
+    /@media \(max-width: 380px\), \(max-height: 680px\) and \(max-width: 780px\)[\s\S]*?\.share-card-venue > img \{\s*width: 96px;\s*height: 96px/,
+  );
   const shareCardStart = page.indexOf('<article className="share-result-card">');
   const shareCardEnd = page.indexOf("</article>", shareCardStart);
   const shareCardMarkup = page.slice(shareCardStart, shareCardEnd);
@@ -439,14 +491,13 @@ test("uses a unified ImageGen crayon persona icon set", async () => {
     shareCardMarkup.indexOf('className="share-card-venue"') <
       shareCardMarkup.indexOf('className="share-card-score"'),
   );
-  assert.ok(
-    shareCardMarkup.indexOf('className="share-card-summary"') <
-      shareCardMarkup.indexOf('className="share-card-player"'),
-  );
   assert.equal((shareCardMarkup.match(/resultTier\.iconSrc/g) ?? []).length, 1);
   assert.equal((shareCardMarkup.match(/resultTier\.name/g) ?? []).length, 1);
   assert.match(shareCardMarkup, /本次解锁/);
-  assert.match(shareCardMarkup, /STUDENT \/ 校园新生/);
+  assert.doesNotMatch(shareCardMarkup, /校园新生|share-card-player/);
+  assert.doesNotMatch(page, /data\.nickname|data\.song/);
+  assert.match(page, /context\.fillRect\(92, 1138, 560, 206\)/);
+  assert.match(page, /context\.fillRect\(682, 1138, 306, 206\)/);
   assert.match(
     styles,
     /@media \(max-width: 780px\) \{\s*\.stage-icon \{\s*width: 76px;\s*height: 76px/,

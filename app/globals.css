@@ -3211,10 +3211,6 @@ button:focus-visible {
   padding: 10px;
 }
 
-.share-card-summary + .share-card-player {
-  margin-top: 8px;
-}
-
 .share-card-player small,
 .share-card-player strong,
 .share-card-player span {
@@ -6678,14 +6674,48 @@ body {
   text-shadow: none;
 }
 
-/* Crayon persona icons keep their small labels readable in shared cards. */
+/* The unlocked persona is the visual focus of every shared card. */
 .share-card-venue {
-  grid-template-columns: 50px minmax(0, 1fr);
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 7px;
+  min-height: 188px;
+  border: 2px solid rgba(23, 34, 58, 0.5);
+  border-top: 5px solid var(--pink);
+  padding: 14px 12px;
+  text-align: center;
 }
 
 .share-card-venue > img {
-  width: 48px;
-  height: 48px;
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  object-position: center;
+}
+
+.share-card-venue > div {
+  min-width: 0;
+}
+
+.share-card-venue small {
+  font-size: 10px;
+}
+
+.share-card-venue strong {
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 20px;
+}
+
+@media (max-width: 380px), (max-height: 680px) and (max-width: 780px) {
+  .share-card-venue {
+    min-height: 172px;
+  }
+
+  .share-card-venue > img {
+    width: 96px;
+    height: 96px;
+  }
 }
 
 @media (max-width: 780px) {
