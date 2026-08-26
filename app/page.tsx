@@ -14,6 +14,8 @@ const LANE_WIDTH = ROAD_WIDTH / 5;
 const ROAD_HORIZON_Y = 302;
 const ROAD_VANISH_X = GAME_WIDTH / 2;
 const PLAYER_Y = 584;
+const ROAD_BOTTOM_DEPTH =
+  (GAME_HEIGHT - ROAD_HORIZON_Y) / (PLAYER_Y - ROAD_HORIZON_Y);
 const ENTITY_RENDER_SIZE = 68;
 const STARTING_FANS = 0;
 const TRAVEL_BEATS = 4;
@@ -22,11 +24,14 @@ const GREAT_WINDOW = 155;
 const MISS_WINDOW = 240;
 const ENTITY_DESPAWN_AFTER_MS = 650;
 const PEDESTRIAN_WARNING_BEATS = 8;
-const PEDESTRIAN_CROSSING_BEATS = 16;
+const PEDESTRIAN_EVENT_BEATS = 16;
+const PEDESTRIAN_LANE_CLEARANCE_BEATS = 8;
+const PEDESTRIAN_LANES = [1, 3] as const;
 const PEDESTRIAN_DANGER_WINDOW_MS = 500;
 const HIT_INPUT_GUARD_MS = 70;
 const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
+const VEHICLE_EFFECT_CENTER_Y = -46;
 const MIN_OBSTACLE_BEAT_GAP = 3;
 const JOYSTICK_FIRST_REPEAT_MS = 280;
 const JOYSTICK_REPEAT_MS = 220;
@@ -68,7 +73,6 @@ type ReadyPage = "home" | "rules";
 type VehicleLevel = {
   level: number;
   name: string;
-  capacity: number;
   primary: string;
   secondary: string;
   task: string;
@@ -95,6 +99,7 @@ type Pedestrian = {
   startAt: number;
   hitAt: number;
   endAt: number;
+  lane: number;
   direction: 1 | -1;
   x: number;
   y: number;
@@ -113,8 +118,6 @@ type LuckyDialog =
       outcome: "double" | "half";
       before: number;
       after: number;
-      capacity: number;
-      capped: boolean;
     };
 
 type FailureSummary = {
@@ -186,8 +189,7 @@ type Track = {
 const VEHICLE_LEVELS: VehicleLevel[] = [
   {
     level: 1,
-    name: "校园自行车",
-    capacity: 30,
+    name: "自行车",
     primary: "#23cfb2",
     secondary: "#f5a5c3",
     task: "收集 4 点知识 + PERFECT 1 次",
@@ -195,8 +197,7 @@ const VEHICLE_LEVELS: VehicleLevel[] = [
   },
   {
     level: 2,
-    name: "元气摩托车",
-    capacity: 55,
+    name: "摩托车",
     primary: "#f47ead",
     secondary: "#23cfb2",
     task: "收集 12 点知识 + 最高连击 6",
@@ -204,8 +205,7 @@ const VEHICLE_LEVELS: VehicleLevel[] = [
   },
   {
     level: 3,
-    name: "校园小轿车",
-    capacity: 85,
+    name: "小轿车",
     primary: "#45c8ed",
     secondary: "#f5a5c3",
     task: "收集 22 点知识 + PERFECT 7 次 + 最高连击 10",
@@ -213,8 +213,7 @@ const VEHICLE_LEVELS: VehicleLevel[] = [
   },
   {
     level: 4,
-    name: "开学校车大巴",
-    capacity: 120,
+    name: "校车大巴",
     primary: "#45c8ed",
     secondary: "#f47ead",
     task: "已达最高等级",
@@ -509,8 +508,15 @@ function laneCenter(lane: number) {
 function roadDepthFromY(y: number) {
   return Math.max(
     0,
-    Math.min(1.35, (y - ROAD_HORIZON_Y) / (PLAYER_Y - ROAD_HORIZON_Y)),
+    Math.min(
+      ROAD_BOTTOM_DEPTH,
+      (y - ROAD_HORIZON_Y) / (PLAYER_Y - ROAD_HORIZON_Y),
+    ),
   );
+}
+
+function roadYAtDepth(depth: number) {
+  return ROAD_HORIZON_Y + (PLAYER_Y - ROAD_HORIZON_Y) * depth;
 }
 
 function roadYFromProgress(progress: number) {
@@ -521,6 +527,15 @@ function roadYFromProgress(progress: number) {
 
 function laneXAtDepth(lane: number, depth: number) {
   return ROAD_VANISH_X + (laneCenter(lane) - ROAD_VANISH_X) * depth;
+}
+
+function laneBoundaryXAtDepth(boundary: number, depth: number) {
+  const boundaryAtPlayer = ROAD_LEFT + boundary * LANE_WIDTH;
+  return ROAD_VANISH_X + (boundaryAtPlayer - ROAD_VANISH_X) * depth;
+}
+
+function pedestrianLaneForIndex(index: number) {
+  return PEDESTRIAN_LANES[index % PEDESTRIAN_LANES.length];
 }
 
 function clampLane(lane: number) {
@@ -579,6 +594,7 @@ export default function Home() {
   const campusImagesRef = useRef<
     Partial<Record<CampusAsset, HTMLImageElement>>
   >({});
+  const lastVehicleImageRef = useRef<HTMLImageElement | null>(null);
   const animationRef = useRef<number | null>(null);
   const statusRef = useRef<GameStatus>("ready");
   const laneRef = useRef(2);
@@ -843,10 +859,10 @@ export default function Home() {
     addFloatText(
       busXRef.current,
       PLAYER_Y - 96,
-      `BUS LV.${next.level}  容量 ${next.capacity}`,
+      `RIDE LV.${next.level}  ${next.name}`,
       next.secondary,
     );
-    showToast(`车辆升级！${next.name} · 容量 ${next.capacity}`, "gold");
+    showToast(`车辆升级！${next.name}`, "gold");
     navigator.vibrate?.([35, 25, 45, 25, 65]);
     return true;
   }, [addBurst, addFloatText, showToast]);
@@ -1077,7 +1093,21 @@ export default function Home() {
     if (beat >= track.totalBeats - TRAVEL_BEATS) return;
 
     const targetBeat = beat + TRAVEL_BEATS;
-    const safeLane = track.lanePattern[targetBeat % track.lanePattern.length];
+    const patternLane =
+      track.lanePattern[targetBeat % track.lanePattern.length];
+    const reservedPedestrianIndex = track.grannyBeats.findIndex(
+      (pedestrianBeat) =>
+        Math.abs(targetBeat - pedestrianBeat) <=
+        PEDESTRIAN_LANE_CLEARANCE_BEATS,
+    );
+    const reservedPedestrianLane =
+      reservedPedestrianIndex >= 0
+        ? pedestrianLaneForIndex(reservedPedestrianIndex)
+        : -1;
+    const safeLane =
+      patternLane === reservedPedestrianLane
+        ? clampLane(patternLane + (patternLane < 2 ? 1 : -1))
+        : patternLane;
     const noteLevel =
       track.notePattern[targetBeat % track.notePattern.length] ?? 0;
     const intensity =
@@ -1148,6 +1178,7 @@ export default function Home() {
     const obstacleCount =
       beat > 12 && noteLevel === 2 && intensity > 0.68 ? 2 : 1;
     const used = new Set<number>([safeLane]);
+    if (reservedPedestrianLane >= 0) used.add(reservedPedestrianLane);
     for (let i = 0; i < obstacleCount; i += 1) {
       let obstacleLane = (beat * 2 + i * 3) % 5;
       while (used.has(obstacleLane)) {
@@ -1238,42 +1269,27 @@ export default function Home() {
       ctx.fillStyle = MAP_PALETTE.sky;
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       if (images.road?.complete && images.road.naturalWidth) {
-        const coverScale = Math.max(
-          GAME_WIDTH / images.road.naturalWidth,
-          GAME_HEIGHT / images.road.naturalHeight,
-        );
-        const width = images.road.naturalWidth * coverScale;
-        const height = images.road.naturalHeight * coverScale;
-        ctx.drawImage(
-          images.road,
-          (GAME_WIDTH - width) / 2,
-          (GAME_HEIGHT - height) / 2,
-          width,
-          height,
-        );
+        ctx.drawImage(images.road, 0, 0, GAME_WIDTH, GAME_HEIGHT);
       }
 
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(ROAD_VANISH_X, ROAD_HORIZON_Y);
-      ctx.lineTo(ROAD_LEFT + ROAD_WIDTH + 30, GAME_HEIGHT + 20);
-      ctx.lineTo(ROAD_LEFT - 30, GAME_HEIGHT + 20);
+      ctx.lineTo(laneBoundaryXAtDepth(5, ROAD_BOTTOM_DEPTH), GAME_HEIGHT);
+      ctx.lineTo(laneBoundaryXAtDepth(0, ROAD_BOTTOM_DEPTH), GAME_HEIGHT);
       ctx.closePath();
       ctx.fillStyle = "rgba(113, 135, 178, 0.08)";
       ctx.fill();
       ctx.restore();
 
-      const boundaryXAtDepth = (boundary: number, depth: number) =>
-        ROAD_VANISH_X +
-        (ROAD_LEFT + boundary * LANE_WIDTH - ROAD_VANISH_X) * depth;
-      const roadYAtDepth = (depth: number) =>
-        ROAD_HORIZON_Y + (GAME_HEIGHT - ROAD_HORIZON_Y) * depth;
-
       ctx.lineCap = "round";
       for (let boundary = 0; boundary <= 5; boundary += 1) {
         ctx.beginPath();
         ctx.moveTo(ROAD_VANISH_X, ROAD_HORIZON_Y);
-        ctx.lineTo(boundaryXAtDepth(boundary, 1), GAME_HEIGHT);
+        ctx.lineTo(
+          laneBoundaryXAtDepth(boundary, ROAD_BOTTOM_DEPTH),
+          GAME_HEIGHT,
+        );
         ctx.strokeStyle =
           boundary === 0
             ? "rgba(35, 207, 178, 0.68)"
@@ -1287,19 +1303,20 @@ export default function Home() {
       for (let boundary = 1; boundary < 5; boundary += 1) {
         for (let marker = 0; marker < 7; marker += 1) {
           const phase = (marker / 7 + roadFlow) % 1;
-          const startDepth = Math.pow(phase, 1.45);
-          const endDepth = Math.min(1, startDepth + 0.045 + startDepth * 0.055);
+          const endPhase = Math.min(1, phase + 0.045 + phase * 0.055);
+          const startDepth = Math.pow(phase, 1.45) * ROAD_BOTTOM_DEPTH;
+          const endDepth = Math.pow(endPhase, 1.45) * ROAD_BOTTOM_DEPTH;
           ctx.beginPath();
           ctx.moveTo(
-            boundaryXAtDepth(boundary, startDepth),
+            laneBoundaryXAtDepth(boundary, startDepth),
             roadYAtDepth(startDepth),
           );
           ctx.lineTo(
-            boundaryXAtDepth(boundary, endDepth),
+            laneBoundaryXAtDepth(boundary, endDepth),
             roadYAtDepth(endDepth),
           );
           ctx.strokeStyle = `rgba(255, 245, 232, ${0.3 + startDepth * 0.42})`;
-          ctx.lineWidth = 1 + startDepth * 3;
+          ctx.lineWidth = 1 + phase * 3;
           ctx.stroke();
         }
       }
@@ -1308,55 +1325,70 @@ export default function Home() {
       ctx.fillStyle = `rgba(255, 216, 77, ${0.12 + pulse * 0.12})`;
       ctx.fillRect(ROAD_LEFT + 10, PLAYER_Y - 4, ROAD_WIDTH - 20, 8);
       for (let lane = 0; lane < 5; lane += 1) {
-        ctx.beginPath();
-        ctx.ellipse(
-          laneCenter(lane),
-          PLAYER_Y,
-          22 + pulse * 2,
-          7 + pulse,
-          0,
-          0,
-          Math.PI * 2,
-        );
         ctx.fillStyle = "rgba(255, 245, 232, 0.2)";
-        ctx.fill();
+        ctx.fillRect(laneCenter(lane) - 18, PLAYER_Y - 2, 36, 4);
       }
 
       const pedestrian = pedestrianRef.current;
       if (pedestrian) {
         ctx.save();
+        const pathStartDepth = 0.025;
+        const pathEndDepth = Math.min(ROAD_BOTTOM_DEPTH, 1.1);
+        ctx.beginPath();
+        ctx.moveTo(
+          laneBoundaryXAtDepth(pedestrian.lane, pathStartDepth),
+          roadYAtDepth(pathStartDepth),
+        );
+        ctx.lineTo(
+          laneBoundaryXAtDepth(pedestrian.lane, pathEndDepth),
+          roadYAtDepth(pathEndDepth),
+        );
+        ctx.lineTo(
+          laneBoundaryXAtDepth(pedestrian.lane + 1, pathEndDepth),
+          roadYAtDepth(pathEndDepth),
+        );
+        ctx.lineTo(
+          laneBoundaryXAtDepth(pedestrian.lane + 1, pathStartDepth),
+          roadYAtDepth(pathStartDepth),
+        );
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255, 216, 77, ${0.1 + pulse * 0.05})`;
+        ctx.fill();
+
+        const warningWidth = 184;
+        const warningX = (GAME_WIDTH - warningWidth) / 2;
+        const warningY = ROAD_HORIZON_Y + 18;
         ctx.fillStyle = "rgba(255, 216, 77, 0.96)";
         ctx.strokeStyle = "#17223a";
         ctx.lineWidth = 2;
-        ctx.fillRect(ROAD_LEFT + 12, pedestrian.y - 78, 126, 25);
-        ctx.strokeRect(ROAD_LEFT + 12, pedestrian.y - 78, 126, 25);
+        ctx.fillRect(warningX, warningY, warningWidth, 27);
+        ctx.strokeRect(warningX, warningY, warningWidth, 27);
         ctx.fillStyle = "#17223a";
         ctx.font = '800 13px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
         ctx.textAlign = "center";
-        ctx.fillText("前方行人 · 提前避让", ROAD_LEFT + 75, pedestrian.y - 61);
-        ctx.restore();
-        ctx.fillStyle = "rgba(255, 245, 232, 0.72)";
-        for (let stripe = 0; stripe < 5; stripe += 1) {
-          ctx.fillRect(
-            ROAD_LEFT + 12,
-            pedestrian.y - 49 + stripe * 19,
-            ROAD_WIDTH - 24,
-            8,
-          );
-        }
-        ctx.fillStyle = "rgba(255, 216, 77, 0.13)";
-        ctx.fillRect(ROAD_LEFT + 7, pedestrian.y - 48, ROAD_WIDTH - 14, 96);
+        ctx.fillText(
+          `前方第 ${pedestrian.lane + 1} 车道有行人`,
+          GAME_WIDTH / 2,
+          warningY + 18,
+        );
         if (images.grandma?.complete && images.grandma.naturalWidth) {
-          ctx.save();
+          const pedestrianDepth = roadDepthFromY(pedestrian.y);
+          const pedestrianScale =
+            0.3 + Math.min(1, pedestrianDepth) * 0.7;
+          const pedestrianWidth = 64 * pedestrianScale;
+          const pedestrianHeight = 89 * pedestrianScale;
           ctx.translate(Math.round(pedestrian.x), pedestrian.y);
           if (pedestrian.direction === -1) ctx.scale(-1, 1);
-          ctx.beginPath();
-          ctx.ellipse(0, 3, 23, 7, 0, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(23, 34, 58, 0.2)";
-          ctx.fill();
-          drawContainedImage(ctx, images.grandma, -32, -89, 64, 89);
-          ctx.restore();
+          drawContainedImage(
+            ctx,
+            images.grandma,
+            -pedestrianWidth / 2,
+            -pedestrianHeight,
+            pedestrianWidth,
+            pedestrianHeight,
+          );
         }
+        ctx.restore();
       }
 
       const visibleEntities = [...entitiesRef.current].sort((a, b) => a.y - b.y);
@@ -1377,20 +1409,7 @@ export default function Home() {
           );
         ctx.save();
         ctx.translate(Math.round(x), Math.round(entity.y));
-        if (entity.type === "obstacle") {
-          ctx.beginPath();
-          ctx.ellipse(
-            0,
-            2,
-            spriteSize * 0.34,
-            spriteSize * 0.11,
-            0,
-            0,
-            Math.PI * 2,
-          );
-          ctx.fillStyle = `rgba(23, 34, 58, ${0.08 + Math.min(1, depth) * 0.16})`;
-          ctx.fill();
-        } else {
+        if (entity.type !== "obstacle") {
           const haloColor =
             entity.type === "lucky"
               ? "244, 126, 173"
@@ -1426,38 +1445,26 @@ export default function Home() {
             ctx.stroke();
           }
           if (images.knowledgeStar?.complete && images.knowledgeStar.naturalWidth) {
-            ctx.shadowColor = "#fff5e8";
-            ctx.shadowBlur = 5 + depth * 7;
             drawRoadSprite(images.knowledgeStar);
-            ctx.shadowBlur = 0;
           }
         } else if (
           entity.type === "lucky" &&
           images.mysterySchoolbag?.complete &&
           images.mysterySchoolbag.naturalWidth
         ) {
-          ctx.shadowColor = "#f47ead";
-          ctx.shadowBlur = 6 + depth * 6 + pulse * 2;
           drawRoadSprite(images.mysterySchoolbag);
-          ctx.shadowBlur = 0;
         } else if (
           entity.type === "magnet" &&
           images.magnet?.complete &&
           images.magnet.naturalWidth
         ) {
-          ctx.shadowColor = "#23cfb2";
-          ctx.shadowBlur = 6 + depth * 6 + pulse * 2;
           drawRoadSprite(images.magnet);
-          ctx.shadowBlur = 0;
         } else if (
           entity.type === "invincible" &&
           images.lightning?.complete &&
           images.lightning.naturalWidth
         ) {
-          ctx.shadowColor = "#ffd84d";
-          ctx.shadowBlur = 6 + depth * 6 + pulse * 2;
           drawRoadSprite(images.lightning);
-          ctx.shadowBlur = 0;
         } else if (
           entity.obstacle === "cone" &&
           images.cone?.complete &&
@@ -1480,60 +1487,14 @@ export default function Home() {
         ctx.restore();
       }
 
-      const busX = busXRef.current;
-      const busY = PLAYER_Y;
-      const vehicle = getVehicle(vehicleLevelRef.current);
-      const busScale = 1 + (vehicle.level - 1) * 0.015;
-      ctx.save();
-      ctx.translate(Math.round(busX), Math.round(busY));
-      if (elapsed < magnetUntilRef.current) {
-        ctx.strokeStyle = `rgba(69, 200, 237, ${0.4 + pulse * 0.3})`;
-        ctx.lineWidth = 3;
-        ctx.setLineDash([9, 7]);
-        ctx.beginPath();
-        ctx.arc(0, 0, MAGNET_RADIUS + pulse * 5, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
+      if (hitFlashRef.current > 0) {
+        ctx.fillStyle = `rgba(244, 126, 173, ${hitFlashRef.current * 0.36})`;
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       }
-      if (elapsed < invincibleUntilRef.current) {
-        ["#fff5e8", "#ffd84d", "#f47ead"].forEach((color, index) => {
-          ctx.strokeStyle = color;
-          ctx.globalAlpha = 0.9 - index * 0.16;
-          ctx.lineWidth = 5 - index;
-          ctx.beginPath();
-          ctx.arc(0, 0, 48 + index * 9 + pulse * 5, 0, Math.PI * 2);
-          ctx.stroke();
-        });
-        ctx.globalAlpha = 1;
+      if (collectFlashRef.current > 0) {
+        ctx.fillStyle = `rgba(69, 200, 237, ${collectFlashRef.current * 0.16})`;
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       }
-      ctx.scale(busScale, busScale);
-      if (shieldRef.current) {
-        ctx.strokeStyle = `rgba(69, 200, 237, ${0.58 + pulse * 0.32})`;
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.arc(0, 4, 48 + pulse * 4, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      const vehicleImage =
-        vehicle.level === 1
-          ? images.bicycle
-          : vehicle.level === 2
-            ? images.motorcycle
-            : vehicle.level === 3
-              ? images.car
-              : images.schoolBus;
-      if (vehicleImage?.complete && vehicleImage.naturalWidth) {
-        const bounds = { x: -50, y: -96, width: 100, height: 100 };
-        drawContainedImage(
-          ctx,
-          vehicleImage,
-          bounds.x,
-          bounds.y,
-          bounds.width,
-          bounds.height,
-        );
-      }
-      ctx.restore();
 
       for (const particle of particlesRef.current) {
         ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
@@ -1546,6 +1507,97 @@ export default function Home() {
         );
       }
       ctx.globalAlpha = 1;
+
+      const busX = busXRef.current;
+      const busY = PLAYER_Y;
+      const vehicle = getVehicle(vehicleLevelRef.current);
+      const busScale = 1 + (vehicle.level - 1) * 0.015;
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.setLineDash([]);
+      ctx.translate(Math.round(busX), Math.round(busY));
+      if (elapsed < magnetUntilRef.current) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(69, 200, 237, ${0.4 + pulse * 0.3})`;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([9, 7]);
+        ctx.beginPath();
+        ctx.arc(
+          0,
+          VEHICLE_EFFECT_CENTER_Y,
+          MAGNET_RADIUS + pulse * 5,
+          0,
+          Math.PI * 2,
+        );
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (elapsed < invincibleUntilRef.current) {
+        ctx.save();
+        ["#fff5e8", "#ffd84d", "#f47ead"].forEach((color, index) => {
+          ctx.strokeStyle = color;
+          ctx.globalAlpha = 0.9 - index * 0.16;
+          ctx.lineWidth = 5 - index;
+          ctx.beginPath();
+          ctx.arc(
+            0,
+            VEHICLE_EFFECT_CENTER_Y,
+            48 + index * 9 + pulse * 5,
+            0,
+            Math.PI * 2,
+          );
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+      if (shieldRef.current) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(69, 200, 237, ${0.58 + pulse * 0.32})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(
+          0,
+          VEHICLE_EFFECT_CENTER_Y,
+          48 + pulse * 4,
+          0,
+          Math.PI * 2,
+        );
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.scale(busScale, busScale);
+      const requestedVehicleImage =
+        vehicle.level === 1
+          ? images.bicycle
+          : vehicle.level === 2
+            ? images.motorcycle
+            : vehicle.level === 3
+              ? images.car
+              : images.schoolBus;
+      if (
+        requestedVehicleImage?.complete &&
+        requestedVehicleImage.naturalWidth
+      ) {
+        lastVehicleImageRef.current = requestedVehicleImage;
+      }
+      const vehicleImage =
+        requestedVehicleImage?.complete && requestedVehicleImage.naturalWidth
+          ? requestedVehicleImage
+          : lastVehicleImageRef.current;
+      if (vehicleImage) {
+        const bounds = { x: -50, y: -96, width: 100, height: 100 };
+        drawContainedImage(
+          ctx,
+          vehicleImage,
+          bounds.x,
+          bounds.y,
+          bounds.width,
+          bounds.height,
+        );
+      }
+      ctx.restore();
+
       ctx.textAlign = "center";
       ctx.font = "bold 18px monospace";
       for (const item of floatTextRef.current) {
@@ -1556,15 +1608,6 @@ export default function Home() {
         ctx.fillText(item.text, item.x, item.y);
       }
       ctx.globalAlpha = 1;
-
-      if (hitFlashRef.current > 0) {
-        ctx.fillStyle = `rgba(244, 126, 173, ${hitFlashRef.current * 0.36})`;
-        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      }
-      if (collectFlashRef.current > 0) {
-        ctx.fillStyle = `rgba(69, 200, 237, ${collectFlashRef.current * 0.16})`;
-        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      }
       ctx.restore();
     },
     [],
@@ -1718,6 +1761,9 @@ export default function Home() {
           const pedestrianBeat = track.grannyBeats[pedestrianWarningIndex];
           grannyWarnedBeatsRef.current.add(pedestrianBeat);
           const direction = pedestrianWarningIndex === 0 ? 1 : -1;
+          const pedestrianLane = pedestrianLaneForIndex(
+            pedestrianWarningIndex,
+          );
           pedestrianRef.current = {
             startAt: beatTimes[beat],
             hitAt: beatTimes[pedestrianBeat],
@@ -1725,15 +1771,19 @@ export default function Home() {
               beatTimes[
                 Math.min(
                   pedestrianBeat +
-                    (PEDESTRIAN_CROSSING_BEATS - PEDESTRIAN_WARNING_BEATS),
+                    (PEDESTRIAN_EVENT_BEATS - PEDESTRIAN_WARNING_BEATS),
                   beatTimes.length - 1,
                 )
               ],
+            lane: pedestrianLane,
             direction,
-            x: direction === 1 ? ROAD_LEFT - 24 : ROAD_LEFT + ROAD_WIDTH + 24,
-            y: PLAYER_Y - 26,
+            x: laneXAtDepth(pedestrianLane, 0),
+            y: ROAD_HORIZON_Y,
           };
-          showToast("前方斑马线有行人，请提前换道", "gold");
+          showToast(
+            `前方第 ${pedestrianLane + 1} 车道有行人，请提前换道`,
+            "gold",
+          );
         }
         const pedestrianDangerIndex = track.grannyBeats.indexOf(beat);
         if (pedestrianDangerIndex >= 0) {
@@ -1807,16 +1857,12 @@ export default function Home() {
             setMaxCombo(maxComboRef.current);
             setSuccessfulHits(successfulHitsRef.current);
             const upgraded = checkVehicleUpgrade();
-            const capacity = getVehicle(vehicleLevelRef.current).capacity;
-            const fanGained = fansRef.current < capacity;
-            fansRef.current = Math.min(capacity, fansRef.current + 1);
+            fansRef.current += 1;
             setFans(fansRef.current);
             if (!upgraded) {
               showJudgement(
                 "PERFECT",
-                fanGained
-                  ? `MAGNET PERFECT · +1 FAN · ×${comboRef.current}`
-                  : `MAGNET PERFECT · BUS FULL ${capacity} · ×${comboRef.current}`,
+                `MAGNET PERFECT · +1 知识 · ×${comboRef.current}`,
               );
             }
             const collectedX = laneXAtDepth(
@@ -1827,7 +1873,7 @@ export default function Home() {
             addFloatText(
               collectedX,
               entity.y - 18,
-              fanGained ? "PERFECT +1" : `PERFECT · 满载 ${capacity}`,
+              "PERFECT +1",
               "#ffe66d",
             );
             playPerfectHit();
@@ -1957,7 +2003,7 @@ export default function Home() {
           addBurst(x, PLAYER_Y, "#ff375f", 17);
           addFloatText(x, PLAYER_Y - 58, `-${actualLoss} 知识`, "#ff526f");
           showToast(
-            `掉粉 -${actualLoss} · 音色变${toneModeRef.current === "thick" ? "厚" : "细"} 8 拍`,
+            `知识 -${actualLoss} · 音色变${toneModeRef.current === "thick" ? "厚" : "细"} 8 拍`,
             "danger",
           );
         }
@@ -1967,19 +2013,31 @@ export default function Home() {
 
       const pedestrian = pedestrianRef.current;
       if (pedestrian) {
-        const crossingProgress =
-          (elapsed - pedestrian.startAt) /
-          Math.max(1, pedestrian.endAt - pedestrian.startAt);
-        const fromX =
-          pedestrian.direction === 1
-            ? ROAD_LEFT - 24
-            : ROAD_LEFT + ROAD_WIDTH + 24;
-        const toX =
-          pedestrian.direction === 1
-            ? ROAD_LEFT + ROAD_WIDTH + 24
-            : ROAD_LEFT - 24;
-        const pedestrianX = fromX + (toX - fromX) * crossingProgress;
-        const pedestrianY = PLAYER_Y - 26;
+        const approachProgress = Math.max(
+          0,
+          Math.min(
+            1,
+            (elapsed - pedestrian.startAt) /
+              Math.max(1, pedestrian.hitAt - pedestrian.startAt),
+          ),
+        );
+        const departureProgress = Math.max(
+          0,
+          Math.min(
+            1.1,
+            (elapsed - pedestrian.hitAt) /
+              Math.max(1, pedestrian.endAt - pedestrian.hitAt),
+          ),
+        );
+        const pedestrianY =
+          elapsed <= pedestrian.hitAt
+            ? roadYFromProgress(approachProgress)
+            : PLAYER_Y +
+              (GAME_HEIGHT + 48 - PLAYER_Y) * departureProgress;
+        const pedestrianX = laneXAtDepth(
+          pedestrian.lane,
+          roadDepthFromY(pedestrianY),
+        );
         pedestrianRef.current = {
           ...pedestrian,
           x: pedestrianX,
@@ -1987,17 +2045,16 @@ export default function Home() {
         };
 
         if (
-          crossingProgress >= 0 &&
-          crossingProgress <= 1 &&
+          pedestrian.lane === laneRef.current &&
           Math.abs(elapsed - pedestrian.hitAt) <=
             PEDESTRIAN_DANGER_WINDOW_MS &&
-          Math.abs(pedestrianY - PLAYER_Y) < 48 &&
-          Math.abs(pedestrianX - busXRef.current) < 30
+          Math.abs(pedestrianY - PLAYER_Y) < 56 &&
+          Math.abs(pedestrianX - busXRef.current) < 42
         ) {
           failGame();
           return;
         }
-        if (crossingProgress > 1.05) {
+        if (elapsed > pedestrian.endAt) {
           pedestrianRef.current = null;
           showToast("行人已安全通过", "cyan");
         }
@@ -2123,17 +2180,13 @@ export default function Home() {
     successfulHitsRef.current += 1;
     setSuccessfulHits(successfulHitsRef.current);
     const upgraded = checkVehicleUpgrade();
-    const capacity = getVehicle(vehicleLevelRef.current).capacity;
-    const fanGained = fansRef.current < capacity;
-    fansRef.current = Math.min(capacity, fansRef.current + 1);
+    fansRef.current += 1;
     setFans(fansRef.current);
     setMaxCombo(maxComboRef.current);
     if (!upgraded) {
       showJudgement(
         quality,
-        fanGained
-          ? `JUST HIT · +1 FAN · ×${comboRef.current}`
-          : `JUST HIT · BUS FULL ${capacity} · ×${comboRef.current}`,
+        `JUST HIT · +1 知识 · ×${comboRef.current}`,
       );
     }
     if (quality === "PERFECT") {
@@ -2148,11 +2201,7 @@ export default function Home() {
     addFloatText(
       x,
       PLAYER_Y - 64,
-      fanGained
-        ? quality === "PERFECT"
-          ? "收到了! +1"
-          : "+1 STAR"
-        : `满载 ${capacity}`,
+      quality === "PERFECT" ? "收到了! +1" : "+1 知识",
       quality === "PERFECT" ? "#ffe66d" : "#ffffff",
     );
     beatPulseRef.current = 1.65;
@@ -2342,15 +2391,13 @@ export default function Home() {
     }
 
     const before = fansRef.current;
-    const capacity = getVehicle(vehicleLevelRef.current).capacity;
     const doubled = Math.random() < 0.55;
     if (doubled) {
-      const doubledFans = before * 2;
-      fansRef.current = Math.min(capacity, doubledFans);
+      fansRef.current = before * 2;
       addFloatText(
         busXRef.current,
         PLAYER_Y - 64,
-        doubledFans > capacity ? `翻倍！上限 ${capacity}` : "知识 ×2!",
+        "知识 ×2!",
         "#ffe66d",
       );
       addBurst(busXRef.current, PLAYER_Y - 10, "#ffe66d", 28);
@@ -2361,8 +2408,6 @@ export default function Home() {
         outcome: "double",
         before,
         after: fansRef.current,
-        capacity,
-        capped: doubledFans > capacity,
       });
       navigator.vibrate?.([24, 18, 38]);
     } else {
@@ -2377,8 +2422,6 @@ export default function Home() {
         outcome: "half",
         before,
         after: fansRef.current,
-        capacity,
-        capped: false,
       });
       navigator.vibrate?.([45, 25, 45]);
     }
@@ -2849,7 +2892,6 @@ export default function Home() {
               <span>知识</span>
               <strong className="fans-count">
                 {String(fans).padStart(3, "0")}
-                <small>/{currentVehicle.capacity}</small>
               </strong>
             </div>
             <div className="hud-block combo-block">
@@ -2864,7 +2906,6 @@ export default function Home() {
               <div className="vehicle-task-copy">
                 <strong>
                   {currentVehicleName}
-                  <span>上限 {currentVehicle.capacity}</span>
                 </strong>
                 <small>{currentVehicle.task}</small>
               </div>
@@ -3125,7 +3166,7 @@ export default function Home() {
                           <span>知识</span>
                           <b>×2</b>
                         </strong>
-                        <em>最高到当前载具收集上限</em>
+                        <em>知识数量直接翻倍，不设上限</em>
                       </div>
                       <div className="lucky-risk-random" aria-hidden="true">
                         <b>?</b>
@@ -3162,9 +3203,7 @@ export default function Home() {
                     </h2>
                     <p className="lucky-result-label">
                       {luckyDialog.outcome === "double"
-                        ? luckyDialog.capped
-                          ? `知识翻倍成功，达到 ${luckyDialog.capacity} 点上限`
-                          : "知识数量成功翻倍"
+                        ? "知识数量成功翻倍"
                         : "知识数量减少一半，连击已中断"}
                     </p>
                     <div className="lucky-result-numbers">

@@ -112,13 +112,28 @@ test("implements the requested campus gameplay safeguards", async () => {
   assert.match(page, /const MISS_WINDOW = 240/);
   assert.match(page, /elapsed <= entity\.hitAt \+ ENTITY_DESPAWN_AFTER_MS/g);
   assert.match(page, /const PEDESTRIAN_WARNING_BEATS = 8/);
-  assert.match(page, /const PEDESTRIAN_CROSSING_BEATS = 16/);
+  assert.match(page, /const PEDESTRIAN_EVENT_BEATS = 16/);
+  assert.match(page, /const PEDESTRIAN_LANE_CLEARANCE_BEATS = 8/);
+  assert.match(page, /const PEDESTRIAN_LANES = \[1, 3\]/);
   assert.match(page, /PEDESTRIAN_DANGER_WINDOW_MS/);
-  assert.match(page, /前方斑马线有行人，请提前换道/);
-  assert.match(page, /Math\.abs\(pedestrianX - busXRef\.current\) < 30/);
+  assert.match(page, /前方第 \$\{pedestrianLane \+ 1\} 车道有行人/);
+  assert.match(page, /roadYFromProgress\(approachProgress\)/);
+  assert.match(page, /pedestrian\.lane === laneRef\.current/);
+  assert.match(page, /patternLane === reservedPedestrianLane/);
+  assert.match(page, /Math\.abs\(pedestrianX - busXRef\.current\) < 42/);
+  assert.match(page, /const ROAD_BOTTOM_DEPTH/);
+  assert.match(page, /laneBoundaryXAtDepth\(boundary, ROAD_BOTTOM_DEPTH\)/);
   assert.match(page, /for \(let boundary = 0; boundary <= 5/);
-  assert.doesNotMatch(page, /x \+ wobble|busBounce|fillRect\(-27, 45/);
+  assert.doesNotMatch(
+    page,
+    /x \+ wobble|busBounce|fillRect\(-27, 45|ctx\.shadowColor|ctx\.shadowBlur|ctx\.ellipse/,
+  );
   assert.match(page, /const bounds = \{ x: -50, y: -96, width: 100, height: 100 \}/);
+  assert.match(page, /const VEHICLE_EFFECT_CENTER_Y = -46/);
+  assert.match(page, /lastVehicleImageRef\.current/);
+  assert.match(page, /fansRef\.current \+= 1/g);
+  assert.match(page, /name: "校车大巴"/);
+  assert.doesNotMatch(page, /capacity|满载|BUS FULL|开学校车大巴/);
 });
 
 test("ships the direct-start mobile copy and QR placeholder", async () => {
@@ -148,6 +163,14 @@ test("ships the direct-start mobile copy and QR placeholder", async () => {
   assert.match(styles, /env\(safe-area-inset-bottom\)/);
   assert.match(styles, /\.story-title::before,[\s\S]*?display: none/);
   assert.match(styles, /\.share-card-qr-placeholder/);
+  assert.match(styles, /\.home-copy h1 span \{\s*color: #168daa/);
+  assert.match(styles, /\.home-copy h1 strong \{\s*color: #e54a86/);
+  assert.match(
+    styles,
+    /\.share-result-button:hover \{[\s\S]*?background: #ffd84d/,
+  );
+  assert.match(styles, /\.concert-score strong:first-of-type/);
+  assert.match(styles, /\.concert-score strong:nth-of-type\(2\)/);
   assert.doesNotMatch(styles, /leaderboard|share-card-rank/);
 });
 

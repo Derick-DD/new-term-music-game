@@ -6584,3 +6584,84 @@ body {
     min-height: 78px;
   }
 }
+
+/* Campus polish: bright title palette and readable result interactions. */
+.home-copy h1 span {
+  color: #168daa;
+}
+
+.home-copy h1 strong {
+  color: #e54a86;
+}
+
+.home-eyebrow span {
+  background: #d9fff4;
+  color: #087e72;
+}
+
+.result-stats small {
+  color: #43526c;
+}
+
+.result-stats strong,
+.result-stats strong.gold-text {
+  color: #17223a;
+}
+
+.concert-score {
+  color: #28364d;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.concert-score strong:first-of-type {
+  color: #087e72;
+}
+
+.concert-score strong:nth-of-type(2) {
+  color: #b52f69;
+}
+
+.concert-score b {
+  color: #8a5700;
+}
+
+.coin-formula {
+  color: #43526c;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.share-result-button {
+  min-height: 64px;
+  border-color: #17223a;
+  background: #d9fff4;
+  color: #17223a;
+  box-shadow: 4px 5px 0 #17223a;
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.share-result-button strong {
+  color: #17223a;
+  font-size: 12px;
+}
+
+.share-result-button small {
+  color: #43526c;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.share-result-button:hover {
+  border-color: #17223a;
+  background: #ffd84d;
+  color: #17223a;
+}
+
+.share-result-button:focus-visible {
+  outline: 3px solid #168daa;
+  outline-offset: 3px;
+  background: #ffd84d;
+}
