@@ -24,7 +24,6 @@ const MAGNET_RADIUS = 185;
 const MIN_OBSTACLE_BEAT_GAP = 3;
 const JOYSTICK_FIRST_REPEAT_MS = 280;
 const JOYSTICK_REPEAT_MS = 220;
-const POWERUP_TRAIL_DELAY_MS = 220;
 const STADIUM_SCORE_THRESHOLD = 6_500;
 const OBSTACLE_COLLISION_BEFORE = 36;
 const OBSTACLE_COLLISION_AFTER = 40;
@@ -43,6 +42,13 @@ function triggerHaptic(pattern: number | number[]) {
   } catch {
     return false;
   }
+}
+
+function halfBeatDelayMs(beatTimesMs: number[], targetBeat: number) {
+  const hitAt = beatTimesMs[targetBeat];
+  const nextHitAt = beatTimesMs[targetBeat + 1];
+  if (!Number.isFinite(hitAt) || !Number.isFinite(nextHitAt)) return 0;
+  return Math.max(0, (nextHitAt - hitAt) / 2);
 }
 
 type GameStatus =
@@ -1059,11 +1065,13 @@ export default function Home() {
           url?: string;
           audioId?: string;
           chartVersion?: string;
+          audioSha256?: string;
         };
         if (!payload.url) throw new Error("线上歌曲接口未返回 URL");
         if (
           payload.audioId !== PRECOMPUTED_CHART.audio.id ||
-          payload.chartVersion !== PRECOMPUTED_CHART.chartVersion
+          payload.chartVersion !== PRECOMPUTED_CHART.chartVersion ||
+          payload.audioSha256 !== PRECOMPUTED_CHART.audio.sha256
         ) {
           throw new Error("线上主题曲版本不适配本次活动");
         }
@@ -1141,113 +1149,6 @@ export default function Home() {
     }
   }, [showToast]);
 
-  const playBeat = useCallback((beat: number) => {
-    const audio = audioRef.current;
-    if (!audio || mutedRef.current) return;
-
-    const track = trackRef.current;
-    const isVariation = beat < arrangementUntilRef.current;
-    const pitchRatio =
-      toneModeRef.current === "thick"
-        ? 0.84
-        : toneModeRef.current === "thin"
-          ? 1.18
-          : 1;
-    const beatSeconds = 60 / track.bpmAt(beat);
-    const now = audio.currentTime;
-    const kick = audio.createOscillator();
-    const kickGain = audio.createGain();
-    kick.type = "sine";
-    kick.frequency.setValueAtTime(isVariation ? 92 : 120, now);
-    kick.frequency.exponentialRampToValueAtTime(
-      isVariation ? 38 : 48,
-      now + 0.13,
-    );
-    kickGain.gain.setValueAtTime(isVariation ? 0.42 : 0.34, now);
-    kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-    kick.connect(kickGain).connect(audio.destination);
-    kick.start(now);
-    kick.stop(now + 0.18);
-
-    // The imported song is the backing track. Keep only a short arcade click
-    // on top so the player can feel the analysed beat without masking the song.
-    if (songRef.current) return;
-
-    const note = audio.createOscillator();
-    const noteGain = audio.createGain();
-    note.type = isVariation
-      ? "sawtooth"
-      : beat % 4 === 0
-        ? "square"
-        : "triangle";
-    note.frequency.setValueAtTime(
-      track.melody[beat % track.melody.length] * pitchRatio,
-      now,
-    );
-    note.detune.setValueAtTime(isVariation && beat % 2 ? -18 : 0, now);
-    noteGain.gain.setValueAtTime(
-      isVariation ? 0.055 : beat % 2 === 0 ? 0.075 : 0.045,
-      now,
-    );
-    noteGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-    note.connect(noteGain).connect(audio.destination);
-    note.start(now);
-    note.stop(now + 0.17);
-
-    if (beat % 2 === 0) {
-      const bass = audio.createOscillator();
-      const bassGain = audio.createGain();
-      bass.type = isVariation ? "square" : "triangle";
-      bass.frequency.setValueAtTime(
-        (track.melody[(beat + 4) % track.melody.length] / 4) * pitchRatio,
-        now,
-      );
-      bassGain.gain.setValueAtTime(0.07, now);
-      bassGain.gain.exponentialRampToValueAtTime(
-        0.001,
-        now + beatSeconds * 0.72,
-      );
-      bass.connect(bassGain).connect(audio.destination);
-      bass.start(now);
-      bass.stop(now + beatSeconds * 0.75);
-    }
-
-    if (beat % 4 === 2) {
-      const snareBuffer = audio.createBuffer(
-        1,
-        Math.floor(audio.sampleRate * 0.11),
-        audio.sampleRate,
-      );
-      const data = snareBuffer.getChannelData(0);
-      for (let i = 0; i < data.length; i += 1) {
-        data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-      }
-      const snare = audio.createBufferSource();
-      const snareGain = audio.createGain();
-      snare.buffer = snareBuffer;
-      snareGain.gain.setValueAtTime(0.1, now);
-      snareGain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
-      snare.connect(snareGain).connect(audio.destination);
-      snare.start(now);
-    }
-
-    if (isVariation) {
-      const echo = audio.createOscillator();
-      const echoGain = audio.createGain();
-      const echoStart = now + beatSeconds * 0.5;
-      echo.type = "square";
-      echo.frequency.setValueAtTime(
-        track.melody[(beat + 3) % track.melody.length] * pitchRatio,
-        echoStart,
-      );
-      echoGain.gain.setValueAtTime(0.038, echoStart);
-      echoGain.gain.exponentialRampToValueAtTime(0.001, echoStart + 0.1);
-      echo.connect(echoGain).connect(audio.destination);
-      echo.start(echoStart);
-      echo.stop(echoStart + 0.12);
-    }
-  }, []);
-
   const spawnBeat = useCallback((beat: number) => {
     const track = trackRef.current;
     if (beat >= track.totalBeats - TRAVEL_BEATS) return;
@@ -1262,6 +1163,10 @@ export default function Home() {
     const spawnY = ROAD_HORIZON_Y;
     const spawnAt = beatTimesRef.current[beat];
     const hitAt = beatTimesRef.current[targetBeat];
+    const powerupTrailDelayMs = halfBeatDelayMs(
+      beatTimesRef.current,
+      targetBeat,
+    );
     const activeNoteOrdinal = track.notePattern
       .slice(0, targetBeat + 1)
       .reduce((total, level) => total + (level === 2 ? 1 : 0), 0);
@@ -1292,8 +1197,8 @@ export default function Home() {
         lane: safeLane,
         y: spawnY,
         targetBeat,
-        spawnAt: spawnAt + POWERUP_TRAIL_DELAY_MS,
-        hitAt: hitAt + POWERUP_TRAIL_DELAY_MS,
+        spawnAt: spawnAt + powerupTrailDelayMs,
+        hitAt: hitAt + powerupTrailDelayMs,
         handled: false,
         wobble: Math.random() * Math.PI,
       });
@@ -1895,7 +1800,6 @@ export default function Home() {
         beatRef.current = beat;
         beatPulseRef.current = 1;
         setCurrentBpm(track.bpmAt(beat));
-        playBeat(beat);
         spawnBeat(beat);
 
         const pedestrianWarningIndex = track.grannyBeats.findIndex(
@@ -2248,7 +2152,6 @@ export default function Home() {
       drawGame,
       failGame,
       finishGame,
-      playBeat,
       playObstacleImpact,
       playPerfectHit,
       resetSongTone,
@@ -2472,11 +2375,6 @@ export default function Home() {
     song.muted = mutedRef.current;
     const resumePromise = audio?.resume() ?? Promise.resolve();
     const playPromise = song.play();
-    const now = performance.now();
-    startTimeRef.current = now;
-    lastTimeRef.current = now;
-    lastHudRef.current = 0;
-    animationRef.current = window.requestAnimationFrame(gameLoop);
     try {
       await Promise.all([resumePromise, playPromise]);
     } catch {
@@ -2487,6 +2385,12 @@ export default function Home() {
       setSongError("主题曲暂时无法播放，已自动切换到静音节奏模式");
       showToast("主题曲暂时无法播放 · 已启用静音节奏模式", "gold");
     }
+    if (statusRef.current !== "playing") return;
+    const now = performance.now();
+    startTimeRef.current = now;
+    lastTimeRef.current = now;
+    lastHudRef.current = 0;
+    animationRef.current = window.requestAnimationFrame(gameLoop);
   }, [gameLoop, resetSongTone, showToast, songReady, stopJoystick]);
 
   const pauseGame = useCallback(() => {
@@ -2510,10 +2414,6 @@ export default function Home() {
     setStatus("playing");
     const resumePromise = audioRef.current?.resume() ?? Promise.resolve();
     const playPromise = song.play();
-    const now = performance.now();
-    startTimeRef.current = now - fallbackElapsedRef.current;
-    lastTimeRef.current = now;
-    animationRef.current = window.requestAnimationFrame(gameLoop);
     try {
       await Promise.all([resumePromise, playPromise]);
     } catch {
@@ -2523,6 +2423,11 @@ export default function Home() {
       setMuted(true);
       showToast("主题曲暂时无法继续 · 已启用静音节奏模式", "gold");
     }
+    if (statusRef.current !== "playing") return;
+    const now = performance.now();
+    startTimeRef.current = now - fallbackElapsedRef.current;
+    lastTimeRef.current = now;
+    animationRef.current = window.requestAnimationFrame(gameLoop);
   }, [gameLoop, showToast]);
 
   const openLuckyBag = useCallback(() => {
@@ -2587,10 +2492,6 @@ export default function Home() {
     setLuckyDialog(null);
     const resumePromise = audioRef.current?.resume() ?? Promise.resolve();
     const playPromise = song.play();
-    const now = performance.now();
-    startTimeRef.current = now - fallbackElapsedRef.current;
-    lastTimeRef.current = now;
-    animationRef.current = window.requestAnimationFrame(gameLoop);
     try {
       await Promise.all([resumePromise, playPromise]);
     } catch {
@@ -2600,6 +2501,11 @@ export default function Home() {
       setMuted(true);
       showToast("主题曲暂时无法继续 · 已启用静音节奏模式", "gold");
     }
+    if (statusRef.current !== "playing") return;
+    const now = performance.now();
+    startTimeRef.current = now - fallbackElapsedRef.current;
+    lastTimeRef.current = now;
+    animationRef.current = window.requestAnimationFrame(gameLoop);
   }, [gameLoop, showToast]);
 
   const move = useCallback(

@@ -124,6 +124,9 @@ test("uses one fixed audio file and a versioned precomputed chart", async () => 
   assert.equal(intensityPattern.length, beatTimesMs.length);
   assert.equal(beatTimesMs[0], chart.timing.offsetMs);
   assert.equal(beatTimesMs.at(-1), chart.audio.durationMs);
+  assert.deepEqual(beatTimesMs.slice(19, 25), [
+    9_500, 10_000, 10_500, 11_000, 11_500, 12_000,
+  ]);
   assert.ok(
     beatTimesMs.every(
       (time, index) =>
@@ -186,6 +189,7 @@ test("uses one fixed audio file and a versioned precomputed chart", async () => 
   assert.match(page, /NEXT_PUBLIC_TREASURE_AUDIO_URL/);
   assert.match(page, /payload\.audioId !== PRECOMPUTED_CHART\.audio\.id/);
   assert.match(page, /payload\.chartVersion !== PRECOMPUTED_CHART\.chartVersion/);
+  assert.match(page, /payload\.audioSha256 !== PRECOMPUTED_CHART\.audio\.sha256/);
   assert.match(
     page,
     /Math\.abs\(durationMs - PRECOMPUTED_CHART\.audio\.durationMs\) > 750/,
@@ -241,14 +245,21 @@ test("keeps hit judgement and gameplay safeguards", async () => {
   assert.match(page, /const HIT_INPUT_GUARD_MS = 70/);
   assert.match(page, /const STARTING_FANS = 0/);
   assert.match(page, /const MIN_OBSTACLE_BEAT_GAP = 3/);
-  assert.match(page, /const POWERUP_TRAIL_DELAY_MS = 220/);
+  assert.doesNotMatch(page, /POWERUP_TRAIL_DELAY_MS/);
+  assert.match(
+    page,
+    /function halfBeatDelayMs\(beatTimesMs: number\[\], targetBeat: number\)/,
+  );
+  assert.match(page, /return Math\.max\(0, \(nextHitAt - hitAt\) \/ 2\)/);
   assert.match(page, /const OBSTACLE_COLLISION_BEFORE = 36/);
   assert.match(page, /const OBSTACLE_COLLISION_AFTER = 40/);
   assert.match(page, /const MAGNET_RADIUS = 185/);
   assert.doesNotMatch(page, /预制|卡点|浏览器解析|PREBUILT/i);
   assert.match(page, /type: "fan"/);
   assert.match(page, /type: bonusType/);
-  assert.match(page, /spawnAt: spawnAt \+ POWERUP_TRAIL_DELAY_MS/);
+  assert.match(page, /const powerupTrailDelayMs = halfBeatDelayMs/);
+  assert.match(page, /spawnAt: spawnAt \+ powerupTrailDelayMs/);
+  assert.match(page, /hitAt: hitAt \+ powerupTrailDelayMs/);
   assert.match(page, /targetBeat - lastObstacleTargetBeatRef\.current/);
   assert.match(page, /lastHitInputAtRef\.current < HIT_INPUT_GUARD_MS/);
   assert.match(page, /elapsed < invincibleUntilRef\.current/);
@@ -523,4 +534,31 @@ test("keeps Sites-compatible per-song leaderboard persistence", async () => {
   assert.match(viteConfig, /cloudflare\(/);
   assert.match(hosting, /"d1": "DB"/);
   assert.match(hosting, /"r2": null/);
+});
+
+test("keeps the original song as the beat cue and starts rendering after playback", async () => {
+  const page = await readFile(
+    new URL("../app/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(page, /const playBeat = useCallback/);
+  assert.doesNotMatch(page, /playBeat\(beat\)/);
+  assert.doesNotMatch(page, /const kickGain = audio\.createGain\(\)/);
+
+  const orderedPlaybackStarts = [
+    ["const startGame = useCallback", "const pauseGame = useCallback"],
+    ["const resumeGame = useCallback", "const openLuckyBag = useCallback"],
+    ["const continueLuckyGame = useCallback", "const move = useCallback"],
+  ];
+  for (const [startMarker, endMarker] of orderedPlaybackStarts) {
+    const start = page.indexOf(startMarker);
+    const end = page.indexOf(endMarker, start);
+    const section = page.slice(start, end);
+    assert.ok(start >= 0 && end > start);
+    assert.ok(
+      section.indexOf("await Promise.all([resumePromise, playPromise])") <
+        section.indexOf("window.requestAnimationFrame(gameLoop)"),
+    );
+  }
 });

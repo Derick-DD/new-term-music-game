@@ -33,12 +33,13 @@ Cloudflare Worker、D1、Wrangler 或 vinext。
 
 - `NEXT_PUBLIC_TREASURE_AUDIO_URL`：直接指定同版本音频 URL。
 - `NEXT_PUBLIC_TREASURE_AUDIO_API`：返回音频信息的接口，JSON 至少包含
-  `url`、`audioId` 和 `chartVersion`。
+  `url`、`audioId`、`chartVersion` 和 `audioSha256`。
 
 接口的 `audioId` 必须为 `congratulations-treasure-tf-family`，且
-`chartVersion` 必须为 `treasure-120bpm-v1`。接口不可用或版本不匹配时会回退到
-本地音频；远端文件时长若与预制的 86 秒相差超过 750 毫秒，也会自动回退，避免
-错误母带造成画面与音乐错拍。
+`chartVersion` 必须为 `treasure-120bpm-v1`，`audioSha256` 必须与上方哈希完全
+一致。接口不可用或任一版本信息不匹配时会回退到本地音频；远端文件时长若与预制
+的 86 秒相差超过 750 毫秒，也会自动回退，避免重编码或错误母带造成画面与音乐
+错拍。
 
 ## 校园季内容
 
@@ -118,7 +119,7 @@ DATABASE_PATH=/var/lib/fan-bus/fan-bus.sqlite PORT=3000 npm run start
 | `PORT` | `3000` | Node.js 服务端口 |
 | `DATABASE_PATH` | `./data/fan-bus.sqlite` | 排行榜 SQLite 文件路径 |
 | `NEXT_PUBLIC_TREASURE_AUDIO_URL` | 空 | 同版本线上音频直链；为空时使用本地音频 |
-| `NEXT_PUBLIC_TREASURE_AUDIO_API` | 空 | 返回 `url`、`audioId`、`chartVersion` 的线上音频接口 |
+| `NEXT_PUBLIC_TREASURE_AUDIO_API` | 空 | 返回 `url`、`audioId`、`chartVersion`、`audioSha256` 的线上音频接口 |
 
 ## 排行榜存储
 
