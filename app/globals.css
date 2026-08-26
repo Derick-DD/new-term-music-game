@@ -3211,6 +3211,10 @@ button:focus-visible {
   padding: 10px;
 }
 
+.share-card-summary + .share-card-player {
+  margin-top: 8px;
+}
+
 .share-card-player small,
 .share-card-player strong,
 .share-card-player span {

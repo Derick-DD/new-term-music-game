@@ -435,16 +435,12 @@ async function createShareCardBlob(data: ShareCardData) {
   context.strokeStyle = "#f47ead";
   context.lineWidth = 6;
   context.strokeRect(92, 310, 896, 310);
+  drawContainedImage(context, tierIcon, 132, 350, 220, 220);
   context.fillStyle = "#52617a";
   context.font = '800 28px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("STUDENT", 132, 374);
+  context.fillText("本次解锁 / CAMPUS PERSONA", 396, 410);
   context.fillStyle = "#17223a";
-  drawFittedText(context, data.nickname, 132, 466, 816, 88, 54);
-  context.fillStyle = "#159b8b";
-  context.font = '800 28px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("TODAY'S TRACK", 132, 535);
-  context.fillStyle = "#e7518f";
-  drawFittedText(context, `《${data.song}》`, 132, 588, 816, 46, 28);
+  drawFittedText(context, data.venue, 396, 516, 540, 76, 48);
 
   context.fillStyle = "#e7518f";
   context.font = '800 34px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
@@ -481,13 +477,18 @@ async function createShareCardBlob(data: ShareCardData) {
   context.font = '700 20px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText("二维码占位", 810, 1260);
 
-  drawContainedImage(context, tierIcon, 92, 1218, 120, 120);
-  context.fillStyle = "#17223a";
-  context.font = '900 34px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText(data.venue, 232, 1278);
+  context.fillStyle = "rgba(255,245,232,0.94)";
+  context.fillRect(92, 1218, 560, 126);
+  context.strokeStyle = "#7187b2";
+  context.lineWidth = 5;
+  context.strokeRect(92, 1218, 560, 126);
   context.fillStyle = "#52617a";
-  context.font = '700 24px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("这次开学，我的隐藏人设被发现了", 232, 1322);
+  context.font = '800 20px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
+  context.fillText("STUDENT / 校园新生", 120, 1254);
+  context.fillStyle = "#17223a";
+  drawFittedText(context, data.nickname, 120, 1296, 500, 34, 28);
+  context.fillStyle = "#e7518f";
+  drawFittedText(context, `《${data.song}》`, 120, 1330, 500, 22, 18);
 
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob(resolve, "image/png", 1);
@@ -3382,10 +3383,16 @@ export default function Home() {
                             <strong>开学冲冲冲！</strong>
                           </div>
                         </div>
-                        <div className="share-card-player">
-                          <small>STUDENT / 校园新生</small>
-                          <strong>校园新生</strong>
-                          <span title={songTitle}>《{songTitle}》</span>
+                        <div className="share-card-venue">
+                          <img
+                            src={resultTier.iconSrc}
+                            alt=""
+                            aria-hidden="true"
+                          />
+                          <div>
+                            <small>本次解锁</small>
+                            <strong>{resultTier.name}</strong>
+                          </div>
                         </div>
                         <div className="share-card-score">
                           <small>KNOWLEDGE SCORE</small>
@@ -3407,16 +3414,10 @@ export default function Home() {
                             <small>二维码占位</small>
                           </div>
                         </div>
-                        <div className="share-card-venue">
-                          <img
-                            src={resultTier.iconSrc}
-                            alt=""
-                            aria-hidden="true"
-                          />
-                          <div>
-                            <small>本次解锁</small>
-                            <strong>{resultTier.name}</strong>
-                          </div>
+                        <div className="share-card-player">
+                          <small>STUDENT / 校园新生</small>
+                          <strong>校园新生</strong>
+                          <span title={songTitle}>《{songTitle}》</span>
                         </div>
                         <p>这次开学，我的隐藏人设被发现了。</p>
                       </article>

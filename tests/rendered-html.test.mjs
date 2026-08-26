@@ -429,8 +429,24 @@ test("uses a unified ImageGen crayon persona icon set", async () => {
     assert.match(page, new RegExp(outcomeFiles[index].replace(".", "\\.")));
   }
   assert.equal(hashes.size, outcomeFiles.length);
-  assert.match(page, /drawContainedImage\(context, tierIcon, 92, 1218, 120, 120\)/);
+  assert.match(page, /drawContainedImage\(context, tierIcon, 132, 350, 220, 220\)/);
   assert.match(styles, /\.share-card-venue > img \{\s*width: 48px;\s*height: 48px/);
+  const shareCardStart = page.indexOf('<article className="share-result-card">');
+  const shareCardEnd = page.indexOf("</article>", shareCardStart);
+  const shareCardMarkup = page.slice(shareCardStart, shareCardEnd);
+  assert.ok(shareCardStart >= 0 && shareCardEnd > shareCardStart);
+  assert.ok(
+    shareCardMarkup.indexOf('className="share-card-venue"') <
+      shareCardMarkup.indexOf('className="share-card-score"'),
+  );
+  assert.ok(
+    shareCardMarkup.indexOf('className="share-card-summary"') <
+      shareCardMarkup.indexOf('className="share-card-player"'),
+  );
+  assert.equal((shareCardMarkup.match(/resultTier\.iconSrc/g) ?? []).length, 1);
+  assert.equal((shareCardMarkup.match(/resultTier\.name/g) ?? []).length, 1);
+  assert.match(shareCardMarkup, /本次解锁/);
+  assert.match(shareCardMarkup, /STUDENT \/ 校园新生/);
   assert.match(
     styles,
     /@media \(max-width: 780px\) \{\s*\.stage-icon \{\s*width: 76px;\s*height: 76px/,
