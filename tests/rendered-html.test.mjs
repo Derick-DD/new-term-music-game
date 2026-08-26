@@ -7,6 +7,8 @@ const ROOT = new URL("../", import.meta.url);
 const FIXED_AUDIO_FILE = "congratulations-treasure-tf-family.mp3";
 const EXPECTED_AUDIO_SHA256 =
   "448bddb1c19d0da0fe5911a28babbdbe6ce73477c1bcc0eaffea64c49e8874b5";
+const EXPECTED_ROAD_SHA256 =
+  "93404f24f404f48e795725bc7132658db9a8ef594f5a5c0e878eb69787061bd5";
 
 async function exists(relativePath) {
   try {
@@ -81,31 +83,51 @@ test("uses one fixed audio file and preserves the versioned timing data", async 
 });
 
 test("implements the requested campus gameplay safeguards", async () => {
-  const [page, chartSource] = await Promise.all([
+  const [page, chartSource, roadImage] = await Promise.all([
     readFile(new URL("app/page.tsx", ROOT), "utf8"),
     readFile(
       new URL("app/data/congratulations-treasure.chart.json", ROOT),
       "utf8",
     ),
+    readFile(new URL("public/assets/campus-season/campus-road.png", ROOT)),
   ]);
   const chart = JSON.parse(chartSource);
   let strongNotes = 0;
   let weakOrdinal = 0;
-  let addedWeakNotes = 0;
-  for (let targetBeat = 4; targetBeat < chart.timing.beatTimesMs.length - 1; targetBeat += 1) {
+  let knowledgeBeforeClearance = 0;
+  let spawnedKnowledge = 0;
+  const clearedTargetBeats = [];
+  for (
+    let targetBeat = 4;
+    targetBeat < chart.timing.beatTimesMs.length;
+    targetBeat += 1
+  ) {
     const level = chart.gameplay.notePattern[targetBeat];
     if (level === 2) strongNotes += 1;
-    if (level === 1) {
-      weakOrdinal += 1;
-      if (weakOrdinal % 3 === 0) addedWeakNotes += 1;
-    }
+    if (level === 1) weakOrdinal += 1;
+    const shouldSpawnKnowledge =
+      level === 2 ||
+      (level === 1 && (weakOrdinal % 2 === 0 || weakOrdinal % 7 === 0));
+    if (!shouldSpawnKnowledge) continue;
+    knowledgeBeforeClearance += 1;
+    const isPedestrianClearance = chart.gameplay.grannyBeats.some(
+      (pedestrianBeat) => Math.abs(targetBeat - pedestrianBeat) <= 4,
+    );
+    if (isPedestrianClearance) clearedTargetBeats.push(targetBeat);
+    else spawnedKnowledge += 1;
   }
 
   assert.equal(strongNotes, 84);
-  assert.equal(addedWeakNotes, 17);
-  assert.equal(strongNotes + addedWeakNotes, 101);
-  assert.ok((strongNotes + addedWeakNotes) / strongNotes > 1.2);
-  assert.match(page, /weakNoteOrdinal % 3 === 0/);
+  assert.equal(knowledgeBeforeClearance, 114);
+  assert.deepEqual(clearedTargetBeats, [
+    58, 59, 60, 62, 64, 66, 120, 122, 124, 125, 126, 128,
+  ]);
+  assert.equal(spawnedKnowledge, 102);
+  assert.ok(spawnedKnowledge / strongNotes > 1.2);
+  assert.match(
+    page,
+    /weakNoteOrdinal % 2 === 0 \|\| weakNoteOrdinal % 7 === 0/,
+  );
   assert.match(page, /\[19, 57\]\.includes\(activeNoteOrdinal\)/);
   assert.match(page, /const PERFECT_WINDOW = 65/);
   assert.match(page, /const GREAT_WINDOW = 155/);
@@ -113,17 +135,126 @@ test("implements the requested campus gameplay safeguards", async () => {
   assert.match(page, /elapsed <= entity\.hitAt \+ ENTITY_DESPAWN_AFTER_MS/g);
   assert.match(page, /const PEDESTRIAN_WARNING_BEATS = 8/);
   assert.match(page, /const PEDESTRIAN_EVENT_BEATS = 16/);
-  assert.match(page, /const PEDESTRIAN_LANE_CLEARANCE_BEATS = 8/);
-  assert.match(page, /const PEDESTRIAN_LANES = \[1, 3\]/);
+  assert.match(page, /const PEDESTRIAN_ITEM_CLEARANCE_BEATS = 4/);
   assert.match(page, /PEDESTRIAN_DANGER_WINDOW_MS/);
-  assert.match(page, /前方第 \$\{pedestrianLane \+ 1\} 车道有行人/);
+  assert.match(page, /前方人行横道/);
   assert.match(page, /roadYFromProgress\(approachProgress\)/);
-  assert.match(page, /pedestrian\.lane === laneRef\.current/);
-  assert.match(page, /patternLane === reservedPedestrianLane/);
-  assert.match(page, /Math\.abs\(pedestrianX - busXRef\.current\) < 42/);
+  assert.match(page, /pedestrianXAtDepth\([\s\S]*?crossingProgress/);
+  assert.match(page, /if \(!shouldSpawnKnowledge \|\| isPedestrianClearance\) return/);
+  assert.match(page, /PEDESTRIAN_COLLISION_RADIUS = 56/);
+  assert.match(page, /pedestrianY >= GAME_HEIGHT \|\| elapsed > pedestrian\.endAt/);
+  assert.doesNotMatch(
+    page,
+    /pedestrian\.lane|reservedPedestrian|PEDESTRIAN_LANES|pedestrianLaneForIndex/,
+  );
+  assert.match(page, /141,[\s\S]*?46,[\s\S]*?229,[\s\S]*?420/);
+
+  assert.equal(
+    createHash("sha256").update(roadImage).digest("hex"),
+    EXPECTED_ROAD_SHA256,
+  );
+  assert.equal(roadImage.readUInt32BE(16), 1024);
+  assert.equal(roadImage.readUInt32BE(20), 1536);
+  assert.match(page, /const ROAD_SAFE_INSET = 8/);
+  assert.match(page, /const ROAD_WIDTH = GAME_WIDTH - ROAD_SAFE_INSET \* 2/);
   assert.match(page, /const ROAD_BOTTOM_DEPTH/);
   assert.match(page, /laneBoundaryXAtDepth\(boundary, ROAD_BOTTOM_DEPTH\)/);
   assert.match(page, /for \(let boundary = 0; boundary <= 5/);
+  assert.match(
+    page,
+    /for \(let lane = 0; lane < 5; lane \+= 1\)[\s\S]*?laneXAtDepth\(lane, startDepth\)[\s\S]*?laneXAtDepth\(lane, endDepth\)/,
+  );
+  assert.match(
+    page,
+    /ctx\.drawImage\(images\.road, 0, 0, GAME_WIDTH, GAME_HEIGHT\)/,
+  );
+  assert.match(page, /const CROSSWALK_STRIPE_COUNT = 7/);
+  assert.match(
+    page,
+    /laneBoundaryXAtDepth\(0, crosswalkFarDepth\)[\s\S]*?laneBoundaryXAtDepth\(5, crosswalkFarDepth\)[\s\S]*?laneBoundaryXAtDepth\(5, crosswalkNearDepth\)[\s\S]*?laneBoundaryXAtDepth\(0, crosswalkNearDepth\)/,
+  );
+
+  const gameWidth = 480;
+  const roadLeft = 8;
+  const roadWidth = 464;
+  const laneWidth = roadWidth / 5;
+  const vanishX = gameWidth / 2;
+  const bottomDepth = (720 - 302) / (584 - 302);
+  const atDepth = (x, depth) => vanishX + (x - vanishX) * depth;
+  const playerCenters = Array.from(
+    { length: 5 },
+    (_, lane) => roadLeft + laneWidth * lane + laneWidth / 2,
+  );
+  const playerBoundaries = Array.from(
+    { length: 6 },
+    (_, boundary) => roadLeft + laneWidth * boundary,
+  );
+  assert.deepEqual(
+    playerCenters.map((x) => Number(x.toFixed(1))),
+    [54.4, 147.2, 240, 332.8, 425.6],
+  );
+  assert.deepEqual(
+    playerBoundaries.map((x) => Number(x.toFixed(1))),
+    [8, 100.8, 193.6, 286.4, 379.2, 472],
+  );
+  assert.deepEqual(
+    playerCenters.map((x) => Number(atDepth(x, bottomDepth).toFixed(3))),
+    [-35.109, 102.445, 240, 377.555, 515.109],
+  );
+  assert.deepEqual(
+    playerBoundaries.map((x) => Number(atDepth(x, bottomDepth).toFixed(3))),
+    [-103.887, 33.668, 171.223, 308.777, 446.332, 583.887],
+  );
+  const largestVehicleHalfWidth = (100 * 1.045) / 2;
+  assert.ok(playerCenters[0] - largestVehicleHalfWidth > 0);
+  assert.ok(playerCenters[4] + largestVehicleHalfWidth < gameWidth);
+
+  const hitCrosswalkWidth =
+    atDepth(playerBoundaries[5], 1) - atDepth(playerBoundaries[0], 1);
+  assert.equal(hitCrosswalkWidth, roadWidth);
+  assert.equal(playerCenters[2], vanishX);
+  assert.ok(playerCenters[2] - playerCenters[1] > 56);
+  assert.ok(playerCenters[3] - playerCenters[2] > 56);
+
+  const smoothstep = (progress) => progress * progress * (3 - 2 * progress);
+  const pedestrianX = (direction, crossingProgress, depth) => {
+    const left = atDepth(playerBoundaries[0], depth);
+    const right = atDepth(playerBoundaries[5], depth);
+    const spriteScale = 0.3 + Math.min(1, depth) * 0.7;
+    const edgeInset = Math.min(
+      25 * spriteScale,
+      Math.max(0, (right - left) / 2),
+    );
+    const safeLeft = left + edgeInset;
+    const safeRight = right - edgeInset;
+    const eased = smoothstep(crossingProgress);
+    return direction === 1
+      ? safeLeft + (safeRight - safeLeft) * eased
+      : safeRight + (safeLeft - safeRight) * eased;
+  };
+  const eventStartAt = chart.timing.beatTimesMs[62 - 8];
+  const eventHitAt = chart.timing.beatTimesMs[62];
+  const eventEndAt = chart.timing.beatTimesMs[62 + 8];
+  assert.equal(eventStartAt, 27_000);
+  assert.equal(eventHitAt, 31_000);
+  assert.equal(eventEndAt, 35_000);
+  assert.equal((eventHitAt - eventStartAt) / (eventEndAt - eventStartAt), 0.5);
+  assert.equal(pedestrianX(1, 0, 0), vanishX);
+  assert.equal(pedestrianX(-1, 0, 0), vanishX);
+  assert.equal(pedestrianX(1, 0.5, 1), playerCenters[2]);
+  assert.equal(pedestrianX(-1, 0.5, 1), playerCenters[2]);
+  const halfApproachDepth = Math.pow(0.5, 1.42);
+  const leftToRightQuarter = pedestrianX(1, 0.25, halfApproachDepth);
+  const rightToLeftQuarter = pedestrianX(-1, 0.25, halfApproachDepth);
+  assert.ok(leftToRightQuarter < vanishX);
+  assert.ok(rightToLeftQuarter > vanishX);
+  assert.equal(
+    Number((leftToRightQuarter + rightToLeftQuarter).toFixed(6)),
+    gameWidth,
+  );
+  assert.equal(302 + (584 - 302) * Math.pow(0, 1.42), 302);
+  assert.equal(302 + (584 - 302) * Math.pow(1, 1.42), 584);
+  assert.equal(584 + (720 + 48 - 584), 768);
   assert.doesNotMatch(
     page,
     /x \+ wobble|busBounce|fillRect\(-27, 45|ctx\.shadowColor|ctx\.shadowBlur|ctx\.ellipse/,

@@ -8,8 +8,9 @@ import treasureChart from "./data/congratulations-treasure.chart.json";
 
 const GAME_WIDTH = 480;
 const GAME_HEIGHT = 720;
-const ROAD_LEFT = 42;
-const ROAD_WIDTH = 396;
+const ROAD_SAFE_INSET = 8;
+const ROAD_LEFT = ROAD_SAFE_INSET;
+const ROAD_WIDTH = GAME_WIDTH - ROAD_SAFE_INSET * 2;
 const LANE_WIDTH = ROAD_WIDTH / 5;
 const ROAD_HORIZON_Y = 302;
 const ROAD_VANISH_X = GAME_WIDTH / 2;
@@ -25,9 +26,10 @@ const MISS_WINDOW = 240;
 const ENTITY_DESPAWN_AFTER_MS = 650;
 const PEDESTRIAN_WARNING_BEATS = 8;
 const PEDESTRIAN_EVENT_BEATS = 16;
-const PEDESTRIAN_LANE_CLEARANCE_BEATS = 8;
-const PEDESTRIAN_LANES = [1, 3] as const;
+const PEDESTRIAN_ITEM_CLEARANCE_BEATS = 4;
 const PEDESTRIAN_DANGER_WINDOW_MS = 500;
+const PEDESTRIAN_COLLISION_RADIUS = 56;
+const CROSSWALK_STRIPE_COUNT = 7;
 const HIT_INPUT_GUARD_MS = 70;
 const POWERUP_DURATION_MS = 5_000;
 const MAGNET_RADIUS = 185;
@@ -99,8 +101,8 @@ type Pedestrian = {
   startAt: number;
   hitAt: number;
   endAt: number;
-  lane: number;
   direction: 1 | -1;
+  crossingProgress: number;
   x: number;
   y: number;
 };
@@ -534,8 +536,29 @@ function laneBoundaryXAtDepth(boundary: number, depth: number) {
   return ROAD_VANISH_X + (boundaryAtPlayer - ROAD_VANISH_X) * depth;
 }
 
-function pedestrianLaneForIndex(index: number) {
-  return PEDESTRIAN_LANES[index % PEDESTRIAN_LANES.length];
+function smoothstep(progress: number) {
+  const clamped = Math.max(0, Math.min(1, progress));
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
+function pedestrianXAtDepth(
+  direction: 1 | -1,
+  crossingProgress: number,
+  depth: number,
+) {
+  const left = laneBoundaryXAtDepth(0, depth);
+  const right = laneBoundaryXAtDepth(5, depth);
+  const spriteScale = 0.3 + Math.min(1, depth) * 0.7;
+  const edgeInset = Math.min(
+    25 * spriteScale,
+    Math.max(0, (right - left) / 2),
+  );
+  const safeLeft = left + edgeInset;
+  const safeRight = right - edgeInset;
+  const easedProgress = smoothstep(crossingProgress);
+  return direction === 1
+    ? safeLeft + (safeRight - safeLeft) * easedProgress
+    : safeRight + (safeLeft - safeRight) * easedProgress;
 }
 
 function clampLane(lane: number) {
@@ -1095,19 +1118,12 @@ export default function Home() {
     const targetBeat = beat + TRAVEL_BEATS;
     const patternLane =
       track.lanePattern[targetBeat % track.lanePattern.length];
-    const reservedPedestrianIndex = track.grannyBeats.findIndex(
+    const isPedestrianClearance = track.grannyBeats.some(
       (pedestrianBeat) =>
         Math.abs(targetBeat - pedestrianBeat) <=
-        PEDESTRIAN_LANE_CLEARANCE_BEATS,
+        PEDESTRIAN_ITEM_CLEARANCE_BEATS,
     );
-    const reservedPedestrianLane =
-      reservedPedestrianIndex >= 0
-        ? pedestrianLaneForIndex(reservedPedestrianIndex)
-        : -1;
-    const safeLane =
-      patternLane === reservedPedestrianLane
-        ? clampLane(patternLane + (patternLane < 2 ? 1 : -1))
-        : patternLane;
+    const safeLane = patternLane;
     const noteLevel =
       track.notePattern[targetBeat % track.notePattern.length] ?? 0;
     const intensity =
@@ -1116,8 +1132,10 @@ export default function Home() {
       .slice(0, targetBeat + 1)
       .reduce((total, level) => total + (level === 1 ? 1 : 0), 0);
     const shouldSpawnKnowledge =
-      noteLevel === 2 || (noteLevel === 1 && weakNoteOrdinal % 3 === 0);
-    if (!shouldSpawnKnowledge) return;
+      noteLevel === 2 ||
+      (noteLevel === 1 &&
+        (weakNoteOrdinal % 2 === 0 || weakNoteOrdinal % 7 === 0));
+    if (!shouldSpawnKnowledge || isPedestrianClearance) return;
     const spawnY = ROAD_HORIZON_Y;
     const spawnAt = beatTimesRef.current[beat];
     const hitAt = beatTimesRef.current[targetBeat];
@@ -1162,13 +1180,6 @@ export default function Home() {
 
     if (beat < 2 || noteLevel !== 2) return;
     if (
-      track.grannyBeats.some(
-        (pedestrianBeat) => Math.abs(targetBeat - pedestrianBeat) <= 2,
-      )
-    ) {
-      return;
-    }
-    if (
       targetBeat - lastObstacleTargetBeatRef.current <
       MIN_OBSTACLE_BEAT_GAP
     ) {
@@ -1178,7 +1189,6 @@ export default function Home() {
     const obstacleCount =
       beat > 12 && noteLevel === 2 && intensity > 0.68 ? 2 : 1;
     const used = new Set<number>([safeLane]);
-    if (reservedPedestrianLane >= 0) used.add(reservedPedestrianLane);
     for (let i = 0; i < obstacleCount; i += 1) {
       let obstacleLane = (beat * 2 + i * 3) % 5;
       while (used.has(obstacleLane)) {
@@ -1292,15 +1302,15 @@ export default function Home() {
         );
         ctx.strokeStyle =
           boundary === 0
-            ? "rgba(35, 207, 178, 0.68)"
+            ? "rgba(35, 207, 178, 0.48)"
             : boundary === 5
-              ? "rgba(244, 126, 173, 0.68)"
-              : "rgba(255, 245, 232, 0.3)";
-        ctx.lineWidth = boundary === 0 || boundary === 5 ? 3 : 1.2;
+              ? "rgba(244, 126, 173, 0.48)"
+              : "rgba(255, 245, 232, 0.16)";
+        ctx.lineWidth = boundary === 0 || boundary === 5 ? 2 : 1;
         ctx.stroke();
       }
 
-      for (let boundary = 1; boundary < 5; boundary += 1) {
+      for (let lane = 0; lane < 5; lane += 1) {
         for (let marker = 0; marker < 7; marker += 1) {
           const phase = (marker / 7 + roadFlow) % 1;
           const endPhase = Math.min(1, phase + 0.045 + phase * 0.055);
@@ -1308,15 +1318,15 @@ export default function Home() {
           const endDepth = Math.pow(endPhase, 1.45) * ROAD_BOTTOM_DEPTH;
           ctx.beginPath();
           ctx.moveTo(
-            laneBoundaryXAtDepth(boundary, startDepth),
+            laneXAtDepth(lane, startDepth),
             roadYAtDepth(startDepth),
           );
           ctx.lineTo(
-            laneBoundaryXAtDepth(boundary, endDepth),
+            laneXAtDepth(lane, endDepth),
             roadYAtDepth(endDepth),
           );
-          ctx.strokeStyle = `rgba(255, 245, 232, ${0.3 + startDepth * 0.42})`;
-          ctx.lineWidth = 1 + phase * 3;
+          ctx.strokeStyle = `rgba(255, 245, 232, ${0.18 + startDepth * 0.3})`;
+          ctx.lineWidth = 1 + phase * 2.4;
           ctx.stroke();
         }
       }
@@ -1332,56 +1342,102 @@ export default function Home() {
       const pedestrian = pedestrianRef.current;
       if (pedestrian) {
         ctx.save();
-        const pathStartDepth = 0.025;
-        const pathEndDepth = Math.min(ROAD_BOTTOM_DEPTH, 1.1);
+        const pedestrianDepth = roadDepthFromY(pedestrian.y);
+        const crosswalkHalfDepth = 0.035 + Math.min(1, pedestrianDepth) * 0.075;
+        const crosswalkFarDepth = Math.max(
+          0,
+          pedestrianDepth - crosswalkHalfDepth,
+        );
+        const crosswalkNearDepth = Math.min(
+          ROAD_BOTTOM_DEPTH,
+          pedestrianDepth + crosswalkHalfDepth,
+        );
+
         ctx.beginPath();
         ctx.moveTo(
-          laneBoundaryXAtDepth(pedestrian.lane, pathStartDepth),
-          roadYAtDepth(pathStartDepth),
+          laneBoundaryXAtDepth(0, crosswalkFarDepth),
+          roadYAtDepth(crosswalkFarDepth),
         );
         ctx.lineTo(
-          laneBoundaryXAtDepth(pedestrian.lane, pathEndDepth),
-          roadYAtDepth(pathEndDepth),
+          laneBoundaryXAtDepth(5, crosswalkFarDepth),
+          roadYAtDepth(crosswalkFarDepth),
         );
         ctx.lineTo(
-          laneBoundaryXAtDepth(pedestrian.lane + 1, pathEndDepth),
-          roadYAtDepth(pathEndDepth),
+          laneBoundaryXAtDepth(5, crosswalkNearDepth),
+          roadYAtDepth(crosswalkNearDepth),
         );
         ctx.lineTo(
-          laneBoundaryXAtDepth(pedestrian.lane + 1, pathStartDepth),
-          roadYAtDepth(pathStartDepth),
+          laneBoundaryXAtDepth(0, crosswalkNearDepth),
+          roadYAtDepth(crosswalkNearDepth),
         );
         ctx.closePath();
-        ctx.fillStyle = `rgba(255, 216, 77, ${0.1 + pulse * 0.05})`;
+        ctx.fillStyle = `rgba(23, 34, 58, ${0.2 + pulse * 0.04})`;
         ctx.fill();
 
-        const warningWidth = 184;
-        const warningX = (GAME_WIDTH - warningWidth) / 2;
-        const warningY = ROAD_HORIZON_Y + 18;
-        ctx.fillStyle = "rgba(255, 216, 77, 0.96)";
-        ctx.strokeStyle = "#17223a";
-        ctx.lineWidth = 2;
-        ctx.fillRect(warningX, warningY, warningWidth, 27);
-        ctx.strokeRect(warningX, warningY, warningWidth, 27);
-        ctx.fillStyle = "#17223a";
-        ctx.font = '800 13px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-        ctx.textAlign = "center";
-        ctx.fillText(
-          `前方第 ${pedestrian.lane + 1} 车道有行人`,
-          GAME_WIDTH / 2,
-          warningY + 18,
+        const crosswalkSpan = crosswalkNearDepth - crosswalkFarDepth;
+        for (let stripe = 0; stripe < CROSSWALK_STRIPE_COUNT; stripe += 1) {
+          const stripeFarDepth =
+            crosswalkFarDepth +
+            crosswalkSpan * ((stripe + 0.08) / CROSSWALK_STRIPE_COUNT);
+          const stripeNearDepth =
+            crosswalkFarDepth +
+            crosswalkSpan * ((stripe + 0.62) / CROSSWALK_STRIPE_COUNT);
+          ctx.beginPath();
+          ctx.moveTo(
+            laneBoundaryXAtDepth(0, stripeFarDepth),
+            roadYAtDepth(stripeFarDepth),
+          );
+          ctx.lineTo(
+            laneBoundaryXAtDepth(5, stripeFarDepth),
+            roadYAtDepth(stripeFarDepth),
+          );
+          ctx.lineTo(
+            laneBoundaryXAtDepth(5, stripeNearDepth),
+            roadYAtDepth(stripeNearDepth),
+          );
+          ctx.lineTo(
+            laneBoundaryXAtDepth(0, stripeNearDepth),
+            roadYAtDepth(stripeNearDepth),
+          );
+          ctx.closePath();
+          ctx.fillStyle = "rgba(255, 250, 236, 0.88)";
+          ctx.fill();
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(
+          laneBoundaryXAtDepth(0, crosswalkFarDepth),
+          roadYAtDepth(crosswalkFarDepth),
         );
+        ctx.lineTo(
+          laneBoundaryXAtDepth(5, crosswalkFarDepth),
+          roadYAtDepth(crosswalkFarDepth),
+        );
+        ctx.moveTo(
+          laneBoundaryXAtDepth(0, crosswalkNearDepth),
+          roadYAtDepth(crosswalkNearDepth),
+        );
+        ctx.lineTo(
+          laneBoundaryXAtDepth(5, crosswalkNearDepth),
+          roadYAtDepth(crosswalkNearDepth),
+        );
+        ctx.strokeStyle = "rgba(255, 216, 77, 0.9)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
         if (images.grandma?.complete && images.grandma.naturalWidth) {
-          const pedestrianDepth = roadDepthFromY(pedestrian.y);
           const pedestrianScale =
             0.3 + Math.min(1, pedestrianDepth) * 0.7;
-          const pedestrianWidth = 64 * pedestrianScale;
-          const pedestrianHeight = 89 * pedestrianScale;
+          const pedestrianWidth = 50 * pedestrianScale;
+          const pedestrianHeight = 92 * pedestrianScale;
           ctx.translate(Math.round(pedestrian.x), pedestrian.y);
           if (pedestrian.direction === -1) ctx.scale(-1, 1);
-          drawContainedImage(
-            ctx,
+          ctx.drawImage(
             images.grandma,
+            141,
+            46,
+            229,
+            420,
             -pedestrianWidth / 2,
             -pedestrianHeight,
             pedestrianWidth,
@@ -1598,6 +1654,25 @@ export default function Home() {
       }
       ctx.restore();
 
+      if (pedestrian) {
+        const warningWidth = 214;
+        const warningX = (GAME_WIDTH - warningWidth) / 2;
+        const warningY = ROAD_HORIZON_Y + 18;
+        ctx.fillStyle = "rgba(255, 216, 77, 0.96)";
+        ctx.strokeStyle = "#17223a";
+        ctx.lineWidth = 2;
+        ctx.fillRect(warningX, warningY, warningWidth, 27);
+        ctx.strokeRect(warningX, warningY, warningWidth, 27);
+        ctx.fillStyle = "#17223a";
+        ctx.font = '800 13px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
+        ctx.textAlign = "center";
+        ctx.fillText(
+          `前方人行横道 · 老人${pedestrian.direction === 1 ? "向右" : "向左"}横穿`,
+          GAME_WIDTH / 2,
+          warningY + 18,
+        );
+      }
+
       ctx.textAlign = "center";
       ctx.font = "bold 18px monospace";
       for (const item of floatTextRef.current) {
@@ -1761,9 +1836,6 @@ export default function Home() {
           const pedestrianBeat = track.grannyBeats[pedestrianWarningIndex];
           grannyWarnedBeatsRef.current.add(pedestrianBeat);
           const direction = pedestrianWarningIndex === 0 ? 1 : -1;
-          const pedestrianLane = pedestrianLaneForIndex(
-            pedestrianWarningIndex,
-          );
           pedestrianRef.current = {
             startAt: beatTimes[beat],
             hitAt: beatTimes[pedestrianBeat],
@@ -1775,13 +1847,13 @@ export default function Home() {
                   beatTimes.length - 1,
                 )
               ],
-            lane: pedestrianLane,
             direction,
-            x: laneXAtDepth(pedestrianLane, 0),
+            crossingProgress: 0,
+            x: pedestrianXAtDepth(direction, 0, 0),
             y: ROAD_HORIZON_Y,
           };
           showToast(
-            `前方第 ${pedestrianLane + 1} 车道有行人，请提前换道`,
+            `前方人行横道，老人正在${direction === 1 ? "向右" : "向左"}横穿`,
             "gold",
           );
         }
@@ -1789,8 +1861,8 @@ export default function Home() {
         if (pedestrianDangerIndex >= 0) {
           showToast(
             pedestrianDangerIndex === 0
-              ? "行人正在通过，请保持侧边车道"
-              : "再次礼让行人，请保持侧边车道",
+              ? "人行横道即将抵达，请观察老人位置"
+              : "再次礼让行人，请观察老人位置",
             "danger",
           );
         }
@@ -2034,27 +2106,37 @@ export default function Home() {
             ? roadYFromProgress(approachProgress)
             : PLAYER_Y +
               (GAME_HEIGHT + 48 - PLAYER_Y) * departureProgress;
-        const pedestrianX = laneXAtDepth(
-          pedestrian.lane,
+        const crossingProgress = Math.max(
+          0,
+          Math.min(
+            1,
+            (elapsed - pedestrian.startAt) /
+              Math.max(1, pedestrian.endAt - pedestrian.startAt),
+          ),
+        );
+        const pedestrianX = pedestrianXAtDepth(
+          pedestrian.direction,
+          crossingProgress,
           roadDepthFromY(pedestrianY),
         );
         pedestrianRef.current = {
           ...pedestrian,
+          crossingProgress,
           x: pedestrianX,
           y: pedestrianY,
         };
 
         if (
-          pedestrian.lane === laneRef.current &&
           Math.abs(elapsed - pedestrian.hitAt) <=
             PEDESTRIAN_DANGER_WINDOW_MS &&
           Math.abs(pedestrianY - PLAYER_Y) < 56 &&
-          Math.abs(pedestrianX - busXRef.current) < 42
+          Math.abs(pedestrianX - busXRef.current) <
+            PEDESTRIAN_COLLISION_RADIUS
         ) {
           failGame();
           return;
         }
-        if (elapsed > pedestrian.endAt) {
+        if (pedestrianY >= GAME_HEIGHT || elapsed > pedestrian.endAt) {
           pedestrianRef.current = null;
           showToast("行人已安全通过", "cyan");
         }
