@@ -6665,3 +6665,11 @@ body {
   outline-offset: 3px;
   background: #ffd84d;
 }
+
+/* Rules subtitles stay legible on the warm paper panels at every breakpoint. */
+.story-route strong,
+.story-mission strong {
+  color: #0b678f;
+  font-weight: 900;
+  text-shadow: none;
+}

@@ -62,6 +62,8 @@ test("uses one fixed audio file and preserves the versioned timing data", async 
     readdir(new URL("public/audio/", ROOT)),
   ]);
   const chart = JSON.parse(chartSource);
+  assert.deepEqual(chart.gameplay.grannyBeats, [62]);
+  assert.equal(chart.gameplay.grannyBeats.length, 1);
   const audioFiles = publicAudioFiles.filter((fileName) =>
     /\.(?:mp3|m4a|wav|aac|ogg|flac)$/i.test(fileName),
   );
@@ -119,10 +121,8 @@ test("implements the requested campus gameplay safeguards", async () => {
 
   assert.equal(strongNotes, 84);
   assert.equal(knowledgeBeforeClearance, 114);
-  assert.deepEqual(clearedTargetBeats, [
-    58, 59, 60, 62, 64, 66, 120, 122, 124, 125, 126, 128,
-  ]);
-  assert.equal(spawnedKnowledge, 102);
+  assert.deepEqual(clearedTargetBeats, [58, 59, 60, 62, 64, 66]);
+  assert.equal(spawnedKnowledge, 108);
   assert.ok(spawnedKnowledge / strongNotes > 1.2);
   assert.match(
     page,
@@ -137,7 +137,14 @@ test("implements the requested campus gameplay safeguards", async () => {
   assert.match(page, /const PEDESTRIAN_EVENT_BEATS = 16/);
   assert.match(page, /const PEDESTRIAN_ITEM_CLEARANCE_BEATS = 4/);
   assert.match(page, /PEDESTRIAN_DANGER_WINDOW_MS/);
-  assert.match(page, /前方人行横道/);
+  assert.match(page, /grannyBeats: number\[\]/);
+  assert.match(page, /grannyBeats: PRECOMPUTED_CHART\.gameplay\.grannyBeats\.slice\(0, 1\)/);
+  assert.match(page, /有行人经过，小心/);
+  assert.equal(page.match(/有行人经过，小心/g)?.length, 1);
+  assert.doesNotMatch(
+    page,
+    /横穿|前方人行横道|老人正在|观察老人位置|再次礼让|行人已安全通过/,
+  );
   assert.match(page, /roadYFromProgress\(approachProgress\)/);
   assert.match(page, /pedestrianXAtDepth\([\s\S]*?crossingProgress/);
   assert.match(page, /if \(!shouldSpawnKnowledge \|\| isPedestrianClearance\) return/);
@@ -159,19 +166,29 @@ test("implements the requested campus gameplay safeguards", async () => {
   assert.match(page, /const ROAD_WIDTH = GAME_WIDTH - ROAD_SAFE_INSET \* 2/);
   assert.match(page, /const ROAD_BOTTOM_DEPTH/);
   assert.match(page, /laneBoundaryXAtDepth\(boundary, ROAD_BOTTOM_DEPTH\)/);
-  assert.match(page, /for \(let boundary = 0; boundary <= 5/);
+  assert.match(page, /for \(const boundary of \[0, 5\]\)/);
   assert.match(
     page,
-    /for \(let lane = 0; lane < 5; lane \+= 1\)[\s\S]*?laneXAtDepth\(lane, startDepth\)[\s\S]*?laneXAtDepth\(lane, endDepth\)/,
+    /for \(let boundary = 1; boundary < 5; boundary \+= 1\)[\s\S]*?laneBoundaryXAtDepth\(boundary, startDepth\)[\s\S]*?laneBoundaryXAtDepth\(boundary, endDepth\)/,
   );
+  assert.doesNotMatch(
+    page,
+    /laneXAtDepth\(lane, startDepth\)[\s\S]*?laneXAtDepth\(lane, endDepth\)/,
+  );
+  assert.doesNotMatch(page, /fillRect\(ROAD_LEFT \+ 10, PLAYER_Y - 4/);
+  assert.doesNotMatch(page, /fillRect\(laneCenter\(lane\) - 18/);
   assert.match(
     page,
     /ctx\.drawImage\(images\.road, 0, 0, GAME_WIDTH, GAME_HEIGHT\)/,
   );
-  assert.match(page, /const CROSSWALK_STRIPE_COUNT = 7/);
+  assert.match(page, /roadDashTextureShear = -29 \/ 404/);
+  assert.match(page, /ctx\.clip\(\)[\s\S]*?ctx\.transform\([\s\S]*?roadDashTextureShear/);
+  assert.match(page, /const CROSSWALK_BAR_COUNT = 10/);
+  assert.match(page, /const CROSSWALK_SIDE_PADDING = 0\.035/);
+  assert.match(page, /const CROSSWALK_BAR_GAP = 0\.028/);
   assert.match(
     page,
-    /laneBoundaryXAtDepth\(0, crosswalkFarDepth\)[\s\S]*?laneBoundaryXAtDepth\(5, crosswalkFarDepth\)[\s\S]*?laneBoundaryXAtDepth\(5, crosswalkNearDepth\)[\s\S]*?laneBoundaryXAtDepth\(0, crosswalkNearDepth\)/,
+    /roadXAtFraction\(barStart, crosswalkFarDepth\)[\s\S]*?roadXAtFraction\(barEnd, crosswalkFarDepth\)[\s\S]*?roadXAtFraction\(barEnd, crosswalkNearDepth\)[\s\S]*?roadXAtFraction\(barStart, crosswalkNearDepth\)/,
   );
 
   const gameWidth = 480;
@@ -205,6 +222,17 @@ test("implements the requested campus gameplay safeguards", async () => {
     playerBoundaries.map((x) => Number(atDepth(x, bottomDepth).toFixed(3))),
     [-103.887, 33.668, 171.223, 308.777, 446.332, 583.887],
   );
+  for (const depth of [0.1, 0.5, 1, bottomDepth]) {
+    for (let lane = 0; lane < 5; lane += 1) {
+      const centerAtDepth = atDepth(playerCenters[lane], depth);
+      const leftAtDepth = atDepth(playerBoundaries[lane], depth);
+      const rightAtDepth = atDepth(playerBoundaries[lane + 1], depth);
+      assert.equal(
+        Number(centerAtDepth.toFixed(8)),
+        Number(((leftAtDepth + rightAtDepth) / 2).toFixed(8)),
+      );
+    }
+  }
   const largestVehicleHalfWidth = (100 * 1.045) / 2;
   assert.ok(playerCenters[0] - largestVehicleHalfWidth > 0);
   assert.ok(playerCenters[4] + largestVehicleHalfWidth < gameWidth);
@@ -215,6 +243,33 @@ test("implements the requested campus gameplay safeguards", async () => {
   assert.equal(playerCenters[2], vanishX);
   assert.ok(playerCenters[2] - playerCenters[1] > 56);
   assert.ok(playerCenters[3] - playerCenters[2] > 56);
+
+  const crosswalkBarCount = 10;
+  const crosswalkSidePadding = 0.035;
+  const crosswalkBarGap = 0.028;
+  const crosswalkBarWidth =
+    (1 -
+      crosswalkSidePadding * 2 -
+      crosswalkBarGap * (crosswalkBarCount - 1)) /
+    crosswalkBarCount;
+  const crosswalkBars = Array.from({ length: crosswalkBarCount }, (_, bar) => {
+    const start =
+      crosswalkSidePadding + bar * (crosswalkBarWidth + crosswalkBarGap);
+    return { start, end: start + crosswalkBarWidth };
+  });
+  assert.ok(crosswalkBarWidth > 0);
+  assert.ok(crosswalkBars[0].start >= crosswalkSidePadding);
+  assert.ok(crosswalkBars.at(-1).end <= 1 - crosswalkSidePadding + 1e-12);
+  for (let bar = 1; bar < crosswalkBars.length; bar += 1) {
+    assert.ok(crosswalkBars[bar].start > crosswalkBars[bar - 1].end);
+  }
+  const firstBarFarWidth =
+    atDepth(roadLeft + roadWidth * crosswalkBars[0].end, 0.35) -
+    atDepth(roadLeft + roadWidth * crosswalkBars[0].start, 0.35);
+  const firstBarNearWidth =
+    atDepth(roadLeft + roadWidth * crosswalkBars[0].end, 1) -
+    atDepth(roadLeft + roadWidth * crosswalkBars[0].start, 1);
+  assert.ok(firstBarNearWidth > firstBarFarWidth);
 
   const smoothstep = (progress) => progress * progress * (3 - 2 * progress);
   const pedestrianX = (direction, crossingProgress, depth) => {
@@ -280,6 +335,10 @@ test("ships the direct-start mobile copy and QR placeholder", async () => {
   assert.match(page, /升级开学载具/);
   assert.match(page, /从0开始收集知识，自行车也可以升级成校车/);
   assert.match(page, /疯狂汲取知识/);
+  assert.match(
+    styles,
+    /\.story-route strong,\s*\.story-mission strong\s*\{\s*color: #0b678f;\s*font-weight: 900;\s*text-shadow: none;/,
+  );
   assert.match(page, /知识数量x最高连击次数=你的新学期人设/);
   assert.match(page, /游戏BGM《恭喜你发现了宝藏》——TF家族/);
   assert.match(page, /share-card-qr-placeholder/);

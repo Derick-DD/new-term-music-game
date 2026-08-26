@@ -194,8 +194,7 @@
   "gameplay": {
     "travelBeats": 4,
     "grannyBeats": [
-      62,
-      124
+      62
     ],
     "lanePattern": [
       2,
