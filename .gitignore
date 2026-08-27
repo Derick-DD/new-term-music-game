@@ -18,6 +18,19 @@
 /.vinext/
 /out/
 
+# generated Sites build and local delivery artifacts
+/dist/
+/deliverables/
+/*.zip
+/releases/*.zip
+/releases/*-dev-preview.svg
+/releases/fan-bus-rhythm-rush-h5-*/
+
+# local presentation/report workspaces (not application source)
+/.ppt_master_python/
+/presentation_outputs/
+/report_outputs/
+
 # misc
 .DS_Store
 *.pem
@@ -43,3 +56,6 @@ next-env.d.ts
 /work/
 /data/*.sqlite
 /data/*.sqlite-*
+
+# Keep public/ versioned: it contains the Activity bridge/configuration and all
+# local runtime images, audio fallbacks, QR/share artwork, and theme assets.

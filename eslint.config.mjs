@@ -11,6 +11,13 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "dist/**",
+    "deliverables/**",
+    "releases/**",
+    ".ppt_master_python/**",
+    "presentation_outputs/**",
+    "report_outputs/**",
+    "projects/**",
     "next-env.d.ts",
   ]),
 ]);
