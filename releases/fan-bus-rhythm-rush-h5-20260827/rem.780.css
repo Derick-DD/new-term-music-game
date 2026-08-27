@@ -1,0 +1,57 @@
+html {
+    font-size: 100px;
+}
+
+/*普通手机 竖屏*/
+@media screen and (orientation:portrait) {
+    html {
+        font-size: 25.64102564102564vw;
+    }
+
+    /*设计稿780宽度*/
+}
+
+/*普通手机 横屏*/
+@media screen and (orientation:landscape) {
+    html {
+        font-size: 25.64102564102564vh;
+    }
+
+    /*设计稿780高度*/
+}
+
+/*Pad类型-横屏*/
+@media screen and (min-width:1000px) and (orientation:landscape) {
+    html {
+        font-size: 110px;
+    }
+}
+
+/*Pad类型-竖屏*/
+@media screen and (min-width:768px) and (orientation:portrait) {
+    html {
+        font-size: 110px;
+    }
+}
+
+/* 折叠屏手机 屏幕展开的时候横竖屏的rem根字号都一样*/
+@media screen and (device-width:677px) and (device-height: 764px),
+(device-width: 764px) and (device-height: 677px),
+/* 华为 Mate X2 */
+(device-width:734px) and (device-height: 827px),
+(device-width: 827px) and (device-height: 734px),
+/* 华为 Mate XS */
+(device-width:902px) and (device-height: 677px),
+(device-width: 677px) and (device-height: 902px),
+/* 小米 Mix Fold */
+(device-width:699px) and (device-height: 652px),
+(device-width: 652px) and (device-height: 699px),
+/* oppo Find N */
+(device-width:674px) and (device-height: 842px),
+(device-width: 842px) and (device-height: 674px)
+/* 三星 fold */
+    {
+    html {
+        font-size: 110px;
+    }
+}
