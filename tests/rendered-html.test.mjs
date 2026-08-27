@@ -97,13 +97,16 @@ test("preloads required images and maps drag distance directly to the car", asyn
   assert.match(page, /joystickFrameRef/);
   assert.match(page, /window\.requestAnimationFrame\(\(\) =>/);
   assert.match(page, /getCoalescedEvents/);
-  assert.match(page, /roadPixelsPerControlPixel/);
   assert.match(
     page,
-    /\(laneCenter\(4\) - laneCenter\(0\)\) \/ \(drag\.maxTravel \* 2\)/,
+    /drag\.startOffset \+ \(clientX - drag\.startClientX\)/,
   );
+  assert.match(page, /\(normalizedOffset \+ 1\) \/ 2/);
+  assert.match(page, /const startOffset = syncJoystickVisual/);
+  assert.match(page, /syncJoystickVisual\(busXRef\.current\)/);
   assert.match(page, /busXRef\.current = nextX/);
-  assert.match(page, /translate3d\(\$\{nextOffset\}px, 0, 0\)/);
+  assert.match(page, /translate3d\(\$\{offset\}px, 0, 0\)/);
+  assert.doesNotMatch(page, /startBusX|roadPixelsPerControlPixel/);
   assert.doesNotMatch(
     page,
     /JOYSTICK_REPEAT_MS|JOYSTICK_MAX_SPEED_PX_PER_SECOND|setJoystickOffset/,

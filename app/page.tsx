@@ -763,9 +763,10 @@ export default function Home() {
   const joystickDragRef = useRef<{
     pointerId: number;
     startClientX: number;
-    startBusX: number;
+    startOffset: number;
     maxTravel: number;
   } | null>(null);
+  const joystickMaxTravelRef = useRef(JOYSTICK_MIN_TRAVEL_PX);
   const joystickPendingClientXRef = useRef<number | null>(null);
   const joystickFrameRef = useRef<number | null>(null);
   const lastPerfectSoundAtRef = useRef(-Infinity);
@@ -1941,6 +1942,43 @@ export default function Home() {
     [],
   );
 
+  const measureJoystickTravel = useCallback((target?: HTMLElement | null) => {
+    const base = target ?? joystickBaseRef.current;
+    if (!base) return joystickMaxTravelRef.current;
+    const bounds = base.getBoundingClientRect();
+    const knobWidth =
+      joystickKnobRef.current?.getBoundingClientRect().width ??
+      JOYSTICK_KNOB_SIZE_PX;
+    const maxTravel = Math.max(
+      JOYSTICK_MIN_TRAVEL_PX,
+      (bounds.width - knobWidth) / 2 - 8,
+    );
+    joystickMaxTravelRef.current = maxTravel;
+    return maxTravel;
+  }, []);
+
+  const syncJoystickVisual = useCallback(
+    (busX: number, measuredTravel?: number) => {
+      const maxTravel = measuredTravel ?? measureJoystickTravel();
+      const roadSpan = laneCenter(4) - laneCenter(0);
+      const normalized = Math.max(
+        -1,
+        Math.min(1, ((busX - laneCenter(0)) / roadSpan) * 2 - 1),
+      );
+      const offset = normalized * maxTravel;
+      joystickBaseRef.current?.setAttribute(
+        "aria-valuenow",
+        String(Math.round(normalized * 100)),
+      );
+      if (joystickKnobRef.current) {
+        joystickKnobRef.current.style.transform =
+          `translate3d(${offset}px, 0, 0)`;
+      }
+      return offset;
+    },
+    [measureJoystickTravel],
+  );
+
   const stopJoystick = useCallback(() => {
     if (joystickFrameRef.current !== null) {
       window.cancelAnimationFrame(joystickFrameRef.current);
@@ -1949,11 +1987,8 @@ export default function Home() {
     joystickPointerRef.current = null;
     joystickDragRef.current = null;
     joystickPendingClientXRef.current = null;
-    joystickBaseRef.current?.setAttribute("aria-valuenow", "0");
-    if (joystickKnobRef.current) {
-      joystickKnobRef.current.style.transform = "translate3d(0, 0, 0)";
-    }
-  }, []);
+    syncJoystickVisual(busXRef.current);
+  }, [syncJoystickVisual]);
 
   const endTutorial = useCallback(() => {
     if (!tutorialActiveRef.current) return;
@@ -2161,6 +2196,7 @@ export default function Home() {
         busXRef.current +=
           (laneCenter(laneRef.current) - busXRef.current) *
           Math.min(1, delta * 14);
+        syncJoystickVisual(busXRef.current);
       }
 
       if (magnetUntilRef.current > 0 && elapsed >= magnetUntilRef.current) {
@@ -2518,6 +2554,7 @@ export default function Home() {
       showToast,
       spawnBeat,
       stopJoystick,
+      syncJoystickVisual,
       triggerDamageVariation,
     ],
   );
@@ -2971,32 +3008,19 @@ export default function Home() {
       const drag = joystickDragRef.current;
       if (!drag || drag.pointerId !== joystickPointerRef.current) return;
 
-      const rawOffset = clientX - drag.startClientX;
+      const rawOffset = drag.startOffset + (clientX - drag.startClientX);
       const nextOffset = Math.max(
         -drag.maxTravel,
         Math.min(drag.maxTravel, rawOffset),
       );
-      const roadPixelsPerControlPixel =
-        (laneCenter(4) - laneCenter(0)) / (drag.maxTravel * 2);
+      const normalizedOffset = nextOffset / drag.maxTravel;
       const previousX = busXRef.current;
-      const nextX = Math.max(
-        laneCenter(0),
-        Math.min(
-          laneCenter(4),
-          drag.startBusX + nextOffset * roadPixelsPerControlPixel,
-        ),
-      );
+      const nextX =
+        laneCenter(0) +
+        ((normalizedOffset + 1) / 2) * (laneCenter(4) - laneCenter(0));
       busXRef.current = nextX;
 
-      const normalizedOffset = nextOffset / drag.maxTravel;
-      target.setAttribute(
-        "aria-valuenow",
-        String(Math.round(normalizedOffset * 100)),
-      );
-      if (joystickKnobRef.current) {
-        joystickKnobRef.current.style.transform =
-          `translate3d(${nextOffset}px, 0, 0)`;
-      }
+      syncJoystickVisual(nextX, drag.maxTravel);
 
       if (Math.abs(nextX - previousX) > 0.01) {
         const nextLane = laneForX(nextX);
@@ -3007,26 +3031,23 @@ export default function Home() {
         registerTutorialMove();
       }
     },
-    [addBurst, registerTutorialMove],
+    [addBurst, registerTutorialMove, syncJoystickVisual],
   );
 
   const beginJoystickDrag = useCallback(
     (pointerId: number, clientX: number, target: HTMLElement) => {
       stopJoystick();
-      const bounds = target.getBoundingClientRect();
-      const maxTravel = Math.max(
-        JOYSTICK_MIN_TRAVEL_PX,
-        (bounds.width - JOYSTICK_KNOB_SIZE_PX) / 2 - 8,
-      );
+      const maxTravel = measureJoystickTravel(target);
+      const startOffset = syncJoystickVisual(busXRef.current, maxTravel);
       joystickPointerRef.current = pointerId;
       joystickDragRef.current = {
         pointerId,
         startClientX: clientX,
-        startBusX: busXRef.current,
+        startOffset,
         maxTravel,
       };
     },
-    [stopJoystick],
+    [measureJoystickTravel, stopJoystick, syncJoystickVisual],
   );
 
   const updateJoystick = useCallback(
