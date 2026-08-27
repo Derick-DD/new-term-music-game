@@ -45,6 +45,7 @@ declare global {
     Music?: {
       browser?: { music?: boolean };
     };
+    QMPlayer?: unknown;
   }
 }
 
@@ -98,8 +99,16 @@ const SONG_ID = 380208811;
 const PLAYBACK_CONFIRM_TIMEOUT_MS = 8_000;
 
 function requireActivityMusic() {
-  const music = window.Activity?.music;
-  if (!music) throw new Error("Activity.music / QMPlayer 暂不可用");
+  if (!window.Activity) {
+    throw new Error("Activity Skill 运行时未加载，请刷新后重试");
+  }
+  const music = window.Activity.music;
+  if (!music) {
+    throw new Error("Activity.music 播放能力未注册，请刷新后重试");
+  }
+  if (typeof window.QMPlayer !== "function") {
+    throw new Error("QMPlayer 播放脚本未加载，请检查网络后重试");
+  }
   return music;
 }
 

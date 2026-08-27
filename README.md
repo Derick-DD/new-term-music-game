@@ -1,8 +1,8 @@
 # 开学冲冲冲！
 
 QQ 音乐开学季移动端节奏游戏。项目只有一套业务源码：`app/` 与
-`public/`。部署版不是重写页面，而是通过 Next.js `output: "export"` 将当前
-源码构建为纯静态 HTML、CSS、JavaScript 与图片资源。
+`public/`。部署版不是重写页面，而是由 Vite 直接把当前页面源码构建为纯静态
+HTML、CSS、JavaScript 与图片资源；最终产物不包含 Next 运行时或 `_next/`。
 
 ## 音乐播放
 
@@ -24,11 +24,11 @@ npm test
 `npm run build:static` 执行以下固定链路：
 
 ```text
-当前 app/ + public/ → next build 静态导出 → out/ → 自动校验与来源清单
+当前 app/ + public/ → Vite 浏览器静态构建 → out/ → 自动校验与来源清单
 ```
 
 构建入口会先清理 macOS 自动生成的 `.DS_Store`；校验器随后会拒绝音频文件、
-残留的 `.DS_Store`、缺失的 Activity/QMPlayer 接口、错误歌曲
+残留的 `.DS_Store`、Next 运行时、缺失的 Activity/QMPlayer 接口、错误歌曲
 ID、缺失的当前玩法/分享文案，以及任何不能与 `public/` 原文件逐字节对应的
 Activity 配置文件。校验通过后会生成 `out/static-build-manifest.json`，记录本次
 参与构建的所有源码 SHA-256 和静态产物树 SHA-256。

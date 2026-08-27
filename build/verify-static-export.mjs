@@ -9,7 +9,7 @@ const OUT = path.join(ROOT, "out");
 const MANIFEST_NAME = "static-build-manifest.json";
 const AUDIO_PATTERN = /\.(?:aac|flac|m4a|mp3|ogg|wav)$/i;
 const IMAGE_PATTERN = /\.(?:gif|jpe?g|png|svg|webp)$/i;
-const SOURCE_ROOTS = ["app", "public", "build", "worker"];
+const SOURCE_ROOTS = ["app", "public", "static", "build", "worker"];
 const SOURCE_FILES = [
   "next.config.ts",
   "package.json",
@@ -17,6 +17,7 @@ const SOURCE_FILES = [
   "postcss.config.mjs",
   "tsconfig.json",
   "vite.config.ts",
+  "vite.static.config.ts",
 ];
 
 function sha256(buffer) {
@@ -103,8 +104,9 @@ const allOutputPaths = await walk(OUT);
 const artifactPaths = allOutputPaths.filter((file) => path.basename(file) !== MANIFEST_NAME);
 const artifacts = await describeTree(artifactPaths, OUT);
 assert(artifacts.some((file) => file.path === "index.html"), "缺少静态入口 out/index.html");
-assert(artifacts.some((file) => file.path.startsWith("_next/static/") && file.path.endsWith(".js")), "缺少 Next 静态 JavaScript");
-assert(artifacts.some((file) => file.path.startsWith("_next/static/") && file.path.endsWith(".css")), "缺少 Next 静态 CSS");
+assert(artifacts.some((file) => file.path.startsWith("assets/") && file.path.endsWith(".js")), "缺少浏览器静态 JavaScript");
+assert(artifacts.some((file) => file.path.startsWith("assets/") && file.path.endsWith(".css")), "缺少浏览器静态 CSS");
+assert(artifacts.every((file) => !file.path.startsWith("_next/")), "静态产物仍包含 Next 运行时目录");
 assert(artifacts.every((file) => !AUDIO_PATTERN.test(file.path)), "静态产物中存在音频文件");
 assert(artifacts.every((file) => !file.path.endsWith("/.DS_Store") && file.path !== ".DS_Store"), "静态产物中存在 .DS_Store");
 
@@ -124,6 +126,7 @@ const searchable = (
 ).join("\n");
 
 for (const marker of [
+  "qmfe-unity-report/iife/index.js",
   "music-2.4.0.min.js",
   "qmplayer.music.js",
   "Activity.registerCapability(\"music\"",
@@ -137,6 +140,31 @@ for (const marker of [
   assert(searchable.includes(marker), `静态产物缺少当前代码标记：${marker}`);
 }
 
+for (const marker of ["/_next/", "__next_s", "__next_f"]) {
+  assert(!searchable.includes(marker), `静态产物仍包含 Next 运行时标记：${marker}`);
+}
+
+const html = await readFile(path.join(OUT, "index.html"), "utf8");
+const orderedScripts = [
+  "polyfill.min.js",
+  "qmfe-unity-report/iife/index.js",
+  "music-2.4.0.min.js",
+  "fixTopBar.js",
+  "qmfe-unity-ad/iife/index.js",
+  "qmplayer.music.js",
+  "activity-sites.config.js?v=",
+  "activity-bridge.js?v=",
+];
+let previousIndex = -1;
+for (const script of orderedScripts) {
+  const index = html.indexOf(script);
+  assert(index > previousIndex, `Activity 脚本顺序错误或缺少：${script}`);
+  previousIndex = index;
+}
+assert(!html.includes("__ACTIVITY_CONFIG_VERSION__"), "Activity 配置缓存版本未生成");
+assert(!html.includes("__ACTIVITY_RUNTIME_VERSION__"), "Activity 运行时缓存版本未生成");
+assert(!/<script[^>]+y\.qq\.com[^>]+crossorigin/i.test(html), "Sites 跨域 Activity 经典脚本不应启用 CORS 模式");
+
 for (const forbidden of [
   "Music user CDN is unavailable",
   "Activity.user",
@@ -147,7 +175,7 @@ for (const forbidden of [
 
 const manifest = {
   schemaVersion: 1,
-  buildType: "next-static-export",
+  buildType: "vite-static-export-no-next",
   generatedAt: new Date().toISOString(),
   sourceGitCommit,
   sourceInputsClean: sourceGitStatus === "",

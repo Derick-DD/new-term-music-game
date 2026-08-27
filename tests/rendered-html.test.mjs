@@ -4,6 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "out");
@@ -42,27 +43,31 @@ function treeSha256(files) {
   return sha256(Buffer.from(files.map((file) => `${file.path}\0${file.sha256}\n`).join("")));
 }
 
-test("builds the current Next application directly as a static export", async () => {
-  const [packageSource, nextConfig, viteConfig] = await Promise.all([
+test("builds the current application as a static export without Next runtime", async () => {
+  const [packageSource, staticIndex, staticViteConfig, sitesViteConfig] = await Promise.all([
     readFile(path.join(ROOT, "package.json"), "utf8"),
-    readFile(path.join(ROOT, "next.config.ts"), "utf8"),
+    readFile(path.join(ROOT, "static", "index.html"), "utf8"),
+    readFile(path.join(ROOT, "vite.static.config.ts"), "utf8"),
     readFile(path.join(ROOT, "vite.config.ts"), "utf8"),
   ]);
   const packageFile = JSON.parse(packageSource);
 
   assert.equal(
     packageFile.scripts["build:static"],
-    "node build/clean-static-input.mjs && next build && node build/verify-static-export.mjs",
+    "node build/clean-static-input.mjs && vite build --config vite.static.config.ts && node build/verify-static-export.mjs",
   );
-  assert.match(nextConfig, /output:\s*"export"/);
-  assert.match(viteConfig, /publicDir:\s*"out"/);
+  assert.match(staticViteConfig, /root:\s*resolve\(ROOT, "static"\)/);
+  assert.match(sitesViteConfig, /publicDir:\s*"out"/);
+  assert.match(staticIndex, /qmfe-unity-report\/iife\/index\.js/);
+  assert.match(staticIndex, /activity-bridge\.js\?v=__ACTIVITY_RUNTIME_VERSION__/);
+  assert.doesNotMatch(staticIndex, /crossorigin/);
   assert.doesNotMatch(packageSource, /prepare-activity-static|releases\/fan-bus/);
 });
 
 test("uses Activity.music for song 380208811 without membership checks or local audio", async () => {
-  const [page, layout, bridge, config, chartSource] = await Promise.all([
+  const [page, staticIndex, bridge, config, chartSource] = await Promise.all([
     readFile(path.join(ROOT, "app", "page.tsx"), "utf8"),
-    readFile(path.join(ROOT, "app", "layout.tsx"), "utf8"),
+    readFile(path.join(ROOT, "static", "index.html"), "utf8"),
     readFile(path.join(ROOT, "public", "activity-bridge.js"), "utf8"),
     readFile(path.join(ROOT, "public", "activity-sites.config.js"), "utf8"),
     readFile(path.join(ROOT, "app", "data", "congratulations-treasure.chart.json"), "utf8"),
@@ -79,13 +84,62 @@ test("uses Activity.music for song 380208811 without membership checks or local 
   assert.match(page, /music\.on\("error"/);
   assert.match(bridge, /Activity\.registerCapability\("music"/);
   assert.match(bridge, /new window\.QMPlayer/);
-  assert.match(layout, /music-2\.4\.0\.min\.js/);
-  assert.match(layout, /qmplayer\.music\.js/);
+  assert.match(staticIndex, /music-2\.4\.0\.min\.js/);
+  assert.match(staticIndex, /qmplayer\.music\.js/);
+  assert.match(page, /typeof window\.QMPlayer !== "function"/);
   assert.doesNotMatch(`${page}\n${config}\n${bridge}`, /Activity\.user|queryProfile|requiredMembership|vipStatus|svipStatus/);
   assert.doesNotMatch(page, /new\s+Audio\s*\(|AudioContext|webkitAudioContext|localSrc/);
   assert.equal(chart.audio.songId, 380208811);
   assert.equal(chart.audio.localSrc, undefined);
   assert.equal(sourceFiles.some((file) => AUDIO_PATTERN.test(file)), false);
+});
+
+test("registers Activity.music locally and forwards the configured song id to QMPlayer", async () => {
+  const bridge = await readFile(
+    path.join(ROOT, "public", "activity-bridge.js"),
+    "utf8",
+  );
+  const played = [];
+  const sandbox = {
+    console,
+    Promise,
+    setTimeout,
+    clearTimeout,
+    location: {
+      hostname: "localhost",
+      pathname: "/",
+      search: "",
+      href: "http://localhost/",
+      origin: "http://localhost",
+    },
+    ACTIVITY_CONFIG: {
+      webview: {
+        topBar: { enabled: false },
+        outsideLaunch: { enabled: false },
+      },
+      music: { player: {} },
+    },
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  vm.runInNewContext(bridge, sandbox);
+  assert.ok(sandbox.Activity?.music, "Activity.music should not depend on a client injection");
+
+  sandbox.QMPlayer = function QMPlayer() {};
+  sandbox.QMPlayer.prototype.play = function play(song) {
+    played.push(song);
+    return Promise.resolve();
+  };
+  sandbox.QMPlayer.prototype.pause = function pause() {
+    return Promise.resolve();
+  };
+  sandbox.QMPlayer.prototype.on = function on() {};
+  sandbox.QMPlayer.prototype.off = function off() {};
+  sandbox.Activity.configure(sandbox.ACTIVITY_CONFIG);
+
+  await sandbox.Activity.music.play({ id: 380208811 }, 0);
+  assert.deepEqual(played, [380208811]);
 });
 
 test("retains the current gameplay, tutorial, control, lane, and share changes", async () => {
@@ -123,7 +177,7 @@ test("records and verifies the exact current source and pure-static artifact tre
   const manifest = JSON.parse(
     await readFile(path.join(OUT, "static-build-manifest.json"), "utf8"),
   );
-  assert.equal(manifest.buildType, "next-static-export");
+  assert.equal(manifest.buildType, "vite-static-export-no-next");
   assert.equal(manifest.guarantees.currentApplicationSource, true);
   assert.equal(manifest.guarantees.staticOnly, true);
   assert.equal(manifest.guarantees.bundledAudio, false);
@@ -142,6 +196,7 @@ test("records and verifies the exact current source and pure-static artifact tre
   assert.equal(treeSha256(artifacts), manifest.artifactTreeSha256);
   assert.equal(artifacts.some((file) => AUDIO_PATTERN.test(file.path)), false);
   assert.equal(artifacts.some((file) => file.path.endsWith(".DS_Store")), false);
+  assert.equal(artifacts.some((file) => file.path.startsWith("_next/")), false);
 });
 
 test("publishes every verified out artifact byte-for-byte through Sites", async () => {
