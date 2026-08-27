@@ -27,7 +27,8 @@ npm test
 当前 app/ + public/ → next build 静态导出 → out/ → 自动校验与来源清单
 ```
 
-校验器会拒绝音频文件、`.DS_Store`、缺失的 Activity/QMPlayer 接口、错误歌曲
+构建入口会先清理 macOS 自动生成的 `.DS_Store`；校验器随后会拒绝音频文件、
+残留的 `.DS_Store`、缺失的 Activity/QMPlayer 接口、错误歌曲
 ID、缺失的当前玩法/分享文案，以及任何不能与 `public/` 原文件逐字节对应的
 Activity 配置文件。校验通过后会生成 `out/static-build-manifest.json`，记录本次
 参与构建的所有源码 SHA-256 和静态产物树 SHA-256。

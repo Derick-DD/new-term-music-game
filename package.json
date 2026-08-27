@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "npm run build:static && npm run build:sites",
-    "build:static": "next build && node build/verify-static-export.mjs",
+    "build:static": "node build/clean-static-input.mjs && next build && node build/verify-static-export.mjs",
     "build:sites": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite build",
     "start": "vite preview",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",

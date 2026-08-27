@@ -52,7 +52,7 @@ test("builds the current Next application directly as a static export", async ()
 
   assert.equal(
     packageFile.scripts["build:static"],
-    "next build && node build/verify-static-export.mjs",
+    "node build/clean-static-input.mjs && next build && node build/verify-static-export.mjs",
   );
   assert.match(nextConfig, /output:\s*"export"/);
   assert.match(viteConfig, /publicDir:\s*"out"/);
