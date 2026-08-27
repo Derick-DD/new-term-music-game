@@ -45,6 +45,11 @@ declare global {
     Music?: {
       browser?: { music?: boolean };
     };
+    ACTIVITY_QQ_MUSIC_SDK?: {
+      enabled: boolean;
+      hostname: string;
+      reason: string;
+    };
     QMPlayer?: unknown;
   }
 }
@@ -105,6 +110,9 @@ function requireActivityMusic() {
   const music = window.Activity.music;
   if (!music) {
     throw new Error("Activity.music 播放能力未注册，请刷新后重试");
+  }
+  if (window.ACTIVITY_QQ_MUSIC_SDK?.enabled === false) {
+    throw new Error("当前预览域名已关闭 QQ 音乐拉端与播放脚本，请在 QQ 音乐正式域名测试歌曲");
   }
   if (typeof window.QMPlayer !== "function") {
     throw new Error("QMPlayer 播放脚本未加载，请检查网络后重试");

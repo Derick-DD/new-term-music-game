@@ -123,6 +123,11 @@
   }
 
   function requirePlayer() {
+    if (window.ACTIVITY_QQ_MUSIC_SDK && window.ACTIVITY_QQ_MUSIC_SDK.enabled === false) {
+      var unavailable = new Error("QQ Music SDK is disabled on this host to prevent outside-app redirects.");
+      unavailable.code = "UNSUPPORTED_QQ_MUSIC_HOST";
+      throw unavailable;
+    }
     if (typeof window.QMPlayer !== "function") throw new Error("QMPlayer CDN is unavailable.");
     if (!player) player = new window.QMPlayer(compactOptions(Activity.getConfig("music.player") || {}));
     return player;

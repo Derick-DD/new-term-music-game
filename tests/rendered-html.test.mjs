@@ -44,9 +44,10 @@ function treeSha256(files) {
 }
 
 test("builds the current application as a static export without Next runtime", async () => {
-  const [packageSource, staticIndex, staticViteConfig, sitesViteConfig] = await Promise.all([
+  const [packageSource, staticIndex, sdkLoader, staticViteConfig, sitesViteConfig] = await Promise.all([
     readFile(path.join(ROOT, "package.json"), "utf8"),
     readFile(path.join(ROOT, "static", "index.html"), "utf8"),
+    readFile(path.join(ROOT, "public", "activity-sdk-loader.js"), "utf8"),
     readFile(path.join(ROOT, "vite.static.config.ts"), "utf8"),
     readFile(path.join(ROOT, "vite.config.ts"), "utf8"),
   ]);
@@ -59,16 +60,20 @@ test("builds the current application as a static export without Next runtime", a
   assert.match(staticViteConfig, /root:\s*resolve\(ROOT, "static"\)/);
   assert.match(sitesViteConfig, /publicDir:\s*"out"/);
   assert.match(staticIndex, /qmfe-unity-report\/iife\/index\.js/);
+  assert.match(staticIndex, /activity-sdk-loader\.js\?v=__ACTIVITY_SDK_LOADER_VERSION__/);
   assert.match(staticIndex, /activity-bridge\.js\?v=__ACTIVITY_RUNTIME_VERSION__/);
   assert.doesNotMatch(staticIndex, /qmfe-unity-ad/);
+  assert.doesNotMatch(staticIndex, /<script[^>]+music-2\.4\.0/);
+  assert.doesNotMatch(staticIndex, /<script[^>]+qmplayer\.music\.js/);
+  assert.match(sdkLoader, /outside-qq-music-host/);
   assert.doesNotMatch(staticIndex, /crossorigin/);
   assert.doesNotMatch(packageSource, /prepare-activity-static|releases\/fan-bus/);
 });
 
 test("uses Activity.music for song 380208811 without membership checks or local audio", async () => {
-  const [page, staticIndex, bridge, config, chartSource] = await Promise.all([
+  const [page, sdkLoader, bridge, config, chartSource] = await Promise.all([
     readFile(path.join(ROOT, "app", "page.tsx"), "utf8"),
-    readFile(path.join(ROOT, "static", "index.html"), "utf8"),
+    readFile(path.join(ROOT, "public", "activity-sdk-loader.js"), "utf8"),
     readFile(path.join(ROOT, "public", "activity-bridge.js"), "utf8"),
     readFile(path.join(ROOT, "public", "activity-sites.config.js"), "utf8"),
     readFile(path.join(ROOT, "app", "data", "congratulations-treasure.chart.json"), "utf8"),
@@ -91,14 +96,51 @@ test("uses Activity.music for song 380208811 without membership checks or local 
   assert.match(bridge, /Activity\.registerCapability\("music"/);
   assert.match(bridge, /new window\.QMPlayer/);
   assert.doesNotMatch(bridge, /QMPlugin/);
-  assert.match(staticIndex, /music-2\.4\.0\.min\.js/);
-  assert.match(staticIndex, /qmplayer\.music\.js/);
+  assert.match(sdkLoader, /music-2\.4\.0\.min\.js/);
+  assert.match(sdkLoader, /qmplayer\.music\.js/);
+  assert.match(page, /当前预览域名已关闭 QQ 音乐拉端与播放脚本/);
   assert.match(page, /typeof window\.QMPlayer !== "function"/);
   assert.doesNotMatch(`${page}\n${config}\n${bridge}`, /Activity\.user|queryProfile|requiredMembership|vipStatus|svipStatus/);
   assert.doesNotMatch(page, /new\s+Audio\s*\(|AudioContext|webkitAudioContext|localSrc/);
   assert.equal(chart.audio.songId, 380208811);
   assert.equal(chart.audio.localSrc, undefined);
   assert.equal(sourceFiles.some((file) => AUDIO_PATTERN.test(file)), false);
+});
+
+test("loads Music and QMPlayer only on QQ Music hosts", async () => {
+  const loader = await readFile(
+    path.join(ROOT, "public", "activity-sdk-loader.js"),
+    "utf8",
+  );
+
+  function runLoader(hostname) {
+    const writes = [];
+    const sandbox = {
+      location: { hostname },
+      document: { write: (value) => writes.push(value) },
+    };
+    sandbox.window = sandbox;
+    vm.runInNewContext(loader, sandbox);
+    return { state: sandbox.ACTIVITY_QQ_MUSIC_SDK, writes };
+  }
+
+  const sites = runLoader("fan-bus-rhythm-rush-campus.derick-dcr.chatgpt.site");
+  assert.equal(sites.state.enabled, false);
+  assert.equal(sites.state.reason, "outside-qq-music-host");
+  assert.equal(sites.writes.some((value) => value.includes("music-2.4.0")), false);
+  assert.equal(sites.writes.some((value) => value.includes("qmplayer.music.js")), false);
+  assert.equal(sites.writes.some((value) => value.includes("fixTopBar.js")), true);
+
+  const production = runLoader("fastest.y.qq.com");
+  assert.equal(production.state.enabled, true);
+  assert.deepEqual(
+    production.writes.map((value) => value.match(/src="([^"]+)/)?.[1]),
+    [
+      "https://y.qq.com/lib/commercial/h5/music-2.4.0.min.js?max_age=604800",
+      "https://y.qq.com/component/m/fixTopBar/dist/fixTopBar.js?max_age=2592000",
+      "https://y.qq.com/component/m/qmplayer/qmplayer.music.js?max_age=604800",
+    ],
+  );
 });
 
 test("registers Activity.music locally and forwards the configured song id to QMPlayer", async () => {

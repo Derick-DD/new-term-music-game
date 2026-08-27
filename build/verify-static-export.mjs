@@ -111,6 +111,7 @@ assert(artifacts.every((file) => !AUDIO_PATTERN.test(file.path)), "静态产物�
 assert(artifacts.every((file) => !file.path.endsWith("/.DS_Store") && file.path !== ".DS_Store"), "静态产物中存在 .DS_Store");
 
 await Promise.all([
+  assertExactPublicCopy("activity-sdk-loader.js"),
   assertExactPublicCopy("activity-bridge.js"),
   assertExactPublicCopy("activity-sites.config.js"),
   assertExactPublicCopy("assets/campus-season/campus-share-qr.svg"),
@@ -124,6 +125,10 @@ const activityBridgeSource = await readFile(
   path.join(ROOT, "public", "activity-bridge.js"),
   "utf8",
 );
+const activitySdkLoaderSource = await readFile(
+  path.join(ROOT, "public", "activity-sdk-loader.js"),
+  "utf8",
+);
 assert(
   /outsideLaunch\s*:\s*\{\s*enabled\s*:\s*false\s*\}/.test(activityConfigSource),
   "Sites 测试版本必须禁用 outsideLaunch，避免端外重定向",
@@ -131,6 +136,11 @@ assert(
 assert(
   !activityBridgeSource.includes("QMPlugin"),
   "Sites 测试版本不得保留 QMPlugin 端外拉起实现",
+);
+assert(
+  activitySdkLoaderSource.includes("outside-qq-music-host") &&
+    activitySdkLoaderSource.includes('hostname.slice(-7) === ".qq.com"'),
+  "QQ 音乐 SDK 必须按部署 hostname 门控",
 );
 
 const searchableExtensions = new Set([".css", ".html", ".js", ".json", ".svg", ".txt"]);
@@ -165,9 +175,7 @@ const html = await readFile(path.join(OUT, "index.html"), "utf8");
 const orderedScripts = [
   "polyfill.min.js",
   "qmfe-unity-report/iife/index.js",
-  "music-2.4.0.min.js",
-  "fixTopBar.js",
-  "qmplayer.music.js",
+  "activity-sdk-loader.js?v=",
   "activity-sites.config.js?v=",
   "activity-bridge.js?v=",
 ];
@@ -179,8 +187,18 @@ for (const script of orderedScripts) {
 }
 assert(!html.includes("__ACTIVITY_CONFIG_VERSION__"), "Activity 配置缓存版本未生成");
 assert(!html.includes("__ACTIVITY_RUNTIME_VERSION__"), "Activity 运行时缓存版本未生成");
+assert(!html.includes("__ACTIVITY_SDK_LOADER_VERSION__"), "Activity SDK 加载器缓存版本未生成");
 assert(!/<script[^>]+y\.qq\.com[^>]+crossorigin/i.test(html), "Sites 跨域 Activity 经典脚本不应启用 CORS 模式");
 assert(!html.includes("qmfe-unity-ad"), "Sites 测试版本不得加载端外拉起 CDN");
+assert(!/<script[^>]+(?:music-2\.4\.0\.min\.js|qmplayer\.music\.js)[^>]*>/i.test(html), "受限 QQ 音乐 SDK 不得由入口无条件加载");
+
+const gatedScripts = ["music-2.4.0.min.js", "fixTopBar.js", "qmplayer.music.js"];
+let previousGatedIndex = -1;
+for (const script of gatedScripts) {
+  const index = activitySdkLoaderSource.indexOf(script);
+  assert(index > previousGatedIndex, `Activity SDK 门控脚本顺序错误或缺少：${script}`);
+  previousGatedIndex = index;
+}
 
 for (const forbidden of [
   "Music user CDN is unavailable",

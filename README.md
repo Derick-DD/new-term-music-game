@@ -12,9 +12,12 @@ HTML、CSS、JavaScript 与图片资源；最终产物不包含 Next 运行时�
 - 权限策略：不查询登录、VIP 或 SVIP；最终能否播放只以 QMPlayer 的真实
   `play` / `error` 事件为准
 - 失败策略：不回退本地 MP3，也不把任何音频文件放进静态产物
-- Sites 测试版本：`webview.outsideLaunch.enabled=false`，同时不加载
-  `qmfe-unity-ad`、不创建 `QMPlugin`，因此不会触发端外拉起或 `y.qq.com`
-  回退跳转；QMPlayer 播放链路保持不变
+- `webview.outsideLaunch.enabled=false`，同时不加载 `qmfe-unity-ad`、不创建
+  `QMPlugin`
+- 同一份静态产物按 hostname 加载官方 SDK：`qq.com`（包括
+  `fastest.y.qq.com`）加载 `Music + QMPlayer`；ChatGPT Sites 等非 QQ 音乐
+  域名只加载 `fixTopBar`，避免 `Music` 的域名保护逻辑拉端。此时页面可预览，
+  但官方歌曲播放与端内分享必须在 QQ 音乐正式/预览域名验收
 
 ## 构建、验证与 Sites 适配
 
