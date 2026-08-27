@@ -48,10 +48,18 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <Script
-          src="https://y.qq.com/lib/commercial/h5/music-2.4.0.min.js?max_age=604800"
+          src="https://y.qq.com/lib/h5/preact.js?max_age=2592000"
           strategy="beforeInteractive"
           crossOrigin="anonymous"
         />
+        <Script
+          src="https://y.qq.com/lib/h5/music.js?max_age=604800"
+          strategy="beforeInteractive"
+          crossOrigin="anonymous"
+        />
+        <Script id="qq-music-global-compat" strategy="beforeInteractive">
+          {`window.Music = window.Music || window.M;`}
+        </Script>
         <Script
           src="https://y.qq.com/component/m/fixTopBar/dist/fixTopBar.js?max_age=2592000"
           strategy="beforeInteractive"

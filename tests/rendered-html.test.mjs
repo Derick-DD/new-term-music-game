@@ -140,7 +140,20 @@ test("adapts QQ Music chrome, native sharing, rules, and fixed-height result flo
   );
   assert.doesNotMatch(shareResultSource, /navigator\.share/);
   assert.doesNotMatch(page, /Music\.client|callShareImg/);
-  assert.match(layout, /music-2\.4\.0\.min\.js/);
+  const polyfillLoader =
+    "https://y.qq.com/lib/commercial/h5/polyfill.min.js?max_age=2592000";
+  const preactLoader =
+    "https://y.qq.com/lib/h5/preact.js?max_age=2592000";
+  const musicLoader = "https://y.qq.com/lib/h5/music.js?max_age=604800";
+  assert.match(layout, new RegExp(preactLoader.replace(/[.?]/g, "\\$&")));
+  assert.match(layout, new RegExp(musicLoader.replace(/[.?]/g, "\\$&")));
+  assert.doesNotMatch(layout, /music-2\.4\.0\.min\.js/);
+  assert.match(layout, /window\.Music = window\.Music \|\| window\.M/);
+  assert.ok(layout.indexOf(polyfillLoader) < layout.indexOf(preactLoader));
+  assert.ok(layout.indexOf(preactLoader) < layout.indexOf(musicLoader));
+  assert.ok(
+    layout.indexOf(musicLoader) < layout.indexOf("qq-music-global-compat"),
+  );
   assert.match(layout, /fixTopBar\.js/);
   assert.match(layout, /activity-sites\.config\.js/);
   assert.match(layout, /activity-bridge\.js/);
