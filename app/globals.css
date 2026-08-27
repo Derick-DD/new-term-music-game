@@ -3398,6 +3398,71 @@ button:focus-visible {
   opacity: 0.5;
 }
 
+.mobile-save-preview {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding:
+    max(18px, env(safe-area-inset-top))
+    max(14px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom))
+    max(14px, env(safe-area-inset-left));
+  background: rgba(10, 17, 32, 0.92);
+}
+
+.mobile-save-preview > section {
+  position: relative;
+  width: min(88vw, 390px);
+  padding: 52px 12px 12px;
+  border: 2px solid var(--ink);
+  background: #fffaf1;
+  box-shadow: 6px 7px 0 rgba(69, 200, 237, 0.72);
+}
+
+.mobile-save-preview p {
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.mobile-save-preview p strong {
+  color: #b32260;
+  font-weight: 900;
+}
+
+.mobile-save-preview-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: #ffd84d;
+}
+
+.mobile-save-preview-close > img {
+  width: 17px;
+  height: 17px;
+}
+
+.mobile-save-preview-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 2px solid var(--ink);
+  -webkit-touch-callout: default;
+  user-select: auto;
+}
+
 .failed-overlay {
   overflow-y: auto;
   padding: 18px 24px;
@@ -6722,5 +6787,285 @@ body {
   .stage-icon {
     width: 76px;
     height: 76px;
+  }
+}
+
+/* First-run calibration: edge-only coaching over the live beat clock. */
+.game-screen canvas {
+  touch-action: none;
+}
+
+.tutorial-guide {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: #17223a;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 250, 241, 0.94) 0,
+    rgba(255, 250, 241, 0.72) 19%,
+    transparent 31%
+  );
+}
+
+.tutorial-guide-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 13px 0;
+}
+
+.tutorial-guide-top > div {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.tutorial-guide-top small {
+  color: #087e72;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.tutorial-guide-top strong {
+  color: #17223a;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.tutorial-guide-top button {
+  min-width: 56px;
+  min-height: 34px;
+  border: 2px solid #17223a;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #28364d;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.tutorial-guide-top button:hover,
+.tutorial-guide-top button:focus-visible {
+  background: #ffd84d;
+  outline: none;
+}
+
+.tutorial-coach-card {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 26px);
+  margin: 10px 13px 0;
+  border: 2px solid #17223a;
+  border-radius: 14px;
+  background: rgba(255, 250, 241, 0.94);
+  padding: 8px 10px;
+  box-shadow: 4px 4px 0 rgba(23, 34, 58, 0.9);
+}
+
+.tutorial-coach-card > span {
+  display: grid;
+  min-height: 38px;
+  place-items: center;
+  border: 2px solid #17223a;
+  border-radius: 10px;
+  background: #d9fff4;
+  color: #087e72;
+  font-family: "Arial Black", "PingFang SC", sans-serif;
+  font-size: 16px;
+  letter-spacing: -0.04em;
+}
+
+.tutorial-guide.is-hit .tutorial-coach-card > span {
+  background: #ffd84d;
+  color: #8a5700;
+}
+
+.tutorial-guide.is-complete .tutorial-coach-card > span {
+  background: #23cfb2;
+  color: white;
+}
+
+.tutorial-coach-card > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.tutorial-coach-card small {
+  color: #b52f69;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.tutorial-coach-card strong {
+  color: #17223a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tutorial-step-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 10px;
+  color: #52617a;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.tutorial-step-status > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  background: rgba(255, 250, 241, 0.82);
+  padding: 3px 7px 3px 4px;
+}
+
+.tutorial-step-status i {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-style: normal;
+}
+
+.tutorial-step-status > b {
+  width: 24px;
+  height: 2px;
+  background: rgba(23, 34, 58, 0.3);
+}
+
+.tutorial-step-status .is-current {
+  color: #b52f69;
+}
+
+.tutorial-step-status .is-done {
+  color: #087e72;
+}
+
+.tutorial-guide > p {
+  width: max-content;
+  margin: 7px auto 0;
+  border-radius: 999px;
+  background: rgba(23, 34, 58, 0.76);
+  padding: 4px 9px;
+  color: white;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.joystick-control.is-tutorial-focus,
+.hit-button.is-tutorial-focus {
+  position: relative;
+  z-index: 2;
+  opacity: 1;
+  animation: tutorial-control-focus 820ms ease-in-out infinite alternate !important;
+}
+
+.joystick-control.is-tutorial-focus {
+  border-color: #23cfb2;
+  box-shadow:
+    inset 0 0 0 2px rgba(35, 207, 178, 0.24),
+    0 0 0 3px rgba(35, 207, 178, 0.18),
+    0 0 22px rgba(35, 207, 178, 0.58);
+}
+
+.hit-button.is-tutorial-focus {
+  box-shadow:
+    5px 6px 0 #17223a,
+    0 0 0 4px rgba(255, 216, 77, 0.34),
+    0 0 25px rgba(255, 216, 77, 0.82) !important;
+}
+
+.tutorial-guide.is-complete {
+  animation: tutorial-guide-finish 620ms ease forwards;
+}
+
+.tutorial-guide.is-complete .tutorial-coach-card {
+  grid-template-columns: 48px auto;
+  width: max-content;
+  max-width: calc(100% - 26px);
+  margin-inline: auto;
+  background: #d9fff4;
+}
+
+@keyframes tutorial-control-focus {
+  from {
+    filter: brightness(1);
+    transform: translateY(0);
+  }
+  to {
+    filter: brightness(1.08);
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes tutorial-guide-finish {
+  0%,
+  64% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 780px) {
+  .tutorial-guide-top {
+    margin: 8px 9px 0;
+  }
+
+  .tutorial-guide-top strong {
+    font-size: 17px;
+  }
+
+  .tutorial-guide-top button {
+    min-height: 32px;
+  }
+
+  .tutorial-coach-card {
+    grid-template-columns: 50px minmax(0, 1fr);
+    width: calc(100% - 18px);
+    margin: 7px 9px 0;
+    padding: 6px 8px;
+  }
+
+  .tutorial-coach-card > span {
+    min-height: 34px;
+    font-size: 14px;
+  }
+
+  .tutorial-coach-card strong {
+    font-size: 11px;
+  }
+
+  .tutorial-step-status {
+    margin-top: 7px;
+  }
+
+  .tutorial-guide > p {
+    margin-top: 5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .joystick-control.is-tutorial-focus,
+  .hit-button.is-tutorial-focus,
+  .tutorial-guide.is-complete {
+    animation: none !important;
   }
 }

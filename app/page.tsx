@@ -45,6 +45,13 @@ const JOYSTICK_REPEAT_MS = 220;
 const STADIUM_SCORE_THRESHOLD = 6_500;
 const OBSTACLE_COLLISION_BEFORE = 36;
 const OBSTACLE_COLLISION_AFTER = 40;
+const TUTORIAL_TIMEOUT_MS = 9_000;
+const TUTORIAL_OBSTACLE_SPAWN_BEAT = 1;
+const TUTORIAL_OBSTACLE_TARGET_BEAT = 6;
+const TUTORIAL_STAR_SPAWN_BEAT = 6;
+const TUTORIAL_STAR_TARGET_BEAT = 10;
+const TUTORIAL_COMPLETE_HOLD_MS = 620;
+const SWIPE_MOVE_THRESHOLD_PX = 32;
 
 function triggerHaptic(pattern: number | number[]) {
   if (
@@ -71,6 +78,7 @@ function halfBeatDelayMs(beatTimesMs: number[], targetBeat: number) {
 
 type GameStatus =
   "ready" | "playing" | "paused" | "lucky" | "finished" | "failed";
+type TutorialPhase = "move" | "hit" | "complete";
 type EntityType = "fan" | "obstacle" | "lucky" | "magnet" | "invincible";
 type ObstacleType = "cone" | "pothole" | "barrier";
 type ToastTone = "cyan" | "pink" | "gold" | "danger";
@@ -99,6 +107,7 @@ type Entity = {
   spawnAt: number;
   hitAt: number;
   obstacle?: ObstacleType;
+  tutorial?: boolean;
   handled: boolean;
 };
 
@@ -492,15 +501,27 @@ async function createShareCardBlob(data: ShareCardData) {
 }
 
 function downloadShareCard(blob: Blob, song: string) {
-  const safeSong = song.replace(/[\\/:*?"<>|]/g, "-").slice(0, 36);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `开学冲冲冲-${safeSong || "校园成绩"}.png`;
+  anchor.download = getShareCardFileName(song);
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+
+function getShareCardFileName(song: string) {
+  const safeSong = song.replace(/[\\/:*?"<>|]/g, "-").slice(0, 36);
+  return `开学冲冲冲-${safeSong || "校园成绩"}.png`;
+}
+
+function isMobileSaveTarget() {
+  return (
+    navigator.maxTouchPoints > 0 ||
+    window.matchMedia?.("(pointer: coarse)").matches ||
+    window.matchMedia?.("(max-width: 780px)").matches
+  );
 }
 
 function laneCenter(lane: number) {
@@ -677,6 +698,12 @@ export default function Home() {
   const joystickDirectionRef = useRef<-1 | 0 | 1>(0);
   const joystickRepeatRef = useRef<number | null>(null);
   const lastPerfectSoundAtRef = useRef(-Infinity);
+  const tutorialActiveRef = useRef(false);
+  const tutorialMovedRef = useRef(false);
+  const tutorialHitRef = useRef(false);
+  const tutorialFinishAtRef = useRef(-1);
+  const tutorialSeenThisSessionRef = useRef(false);
+  const swipeStartRef = useRef<{ pointerId: number; x: number } | null>(null);
 
   const [status, setStatus] = useState<GameStatus>("ready");
   const [readyPage, setReadyPage] = useState<ReadyPage>("home");
@@ -701,6 +728,9 @@ export default function Home() {
     useState<FailureSummary | null>(null);
   const [shareCardOpen, setShareCardOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
+  const [mobileSavePreviewUrl, setMobileSavePreviewUrl] = useState<
+    string | null
+  >(null);
   const [joystickOffset, setJoystickOffset] = useState(0);
   const [noteJudgement, setNoteJudgement] = useState<NoteJudgement | null>(
     null,
@@ -714,6 +744,10 @@ export default function Home() {
     key: number;
   } | null>(null);
   const [luckyDialog, setLuckyDialog] = useState<LuckyDialog | null>(null);
+  const [tutorialPhase, setTutorialPhase] =
+    useState<TutorialPhase | null>(null);
+  const [tutorialMoved, setTutorialMoved] = useState(false);
+  const [tutorialHit, setTutorialHit] = useState(false);
   const songTitle = GAME_TRACK.name;
   const currentVehicle = getVehicle(vehicleLevel);
   const currentVehicleName = currentVehicle.name;
@@ -744,11 +778,52 @@ export default function Home() {
     [fans, maxCombo, resultTier.iconSrc, resultTier.name],
   );
 
+  useEffect(
+    () => () => {
+      if (mobileSavePreviewUrl) URL.revokeObjectURL(mobileSavePreviewUrl);
+    },
+    [mobileSavePreviewUrl],
+  );
+
+  const showMobileSavePreview = useCallback((blob: Blob) => {
+    setMobileSavePreviewUrl(URL.createObjectURL(blob));
+  }, []);
+
+  const closeShareCard = useCallback(() => {
+    setMobileSavePreviewUrl(null);
+    setShareCardOpen(false);
+  }, []);
+
   const saveShareCard = useCallback(async () => {
     setShareBusy(true);
     try {
       const blob = await createCurrentShareCard();
       if (!blob) throw new Error("Share card unavailable");
+
+      if (isMobileSaveTarget()) {
+        const file = new File([blob], getShareCardFileName(songTitle), {
+          type: "image/png",
+        });
+        if (navigator.share && navigator.canShare?.({ files: [file] })) {
+          try {
+            await navigator.share({
+              title: "开学冲冲冲！校园成绩",
+              files: [file],
+            });
+            showToast("请在系统菜单中选择“存储图像”", "cyan");
+            return;
+          } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+              return;
+            }
+          }
+        }
+
+        showMobileSavePreview(blob);
+        showToast("请长按图片，选择保存到照片", "gold");
+        return;
+      }
+
       downloadShareCard(blob, songTitle);
       showToast("成绩卡已保存，可以分享给好友啦", "cyan");
     } catch {
@@ -756,7 +831,7 @@ export default function Home() {
     } finally {
       setShareBusy(false);
     }
-  }, [createCurrentShareCard, showToast, songTitle]);
+  }, [createCurrentShareCard, showMobileSavePreview, showToast, songTitle]);
 
   const shareResult = useCallback(async () => {
     setShareBusy(true);
@@ -779,8 +854,13 @@ export default function Home() {
         await navigator.share(shareData);
         showToast("分享面板已打开", "cyan");
       } else {
-        downloadShareCard(blob, songTitle);
-        showToast("当前设备未能打开分享面板，已保存成绩卡", "gold");
+        if (isMobileSaveTarget()) {
+          showMobileSavePreview(blob);
+          showToast("请长按图片，选择保存到照片", "gold");
+        } else {
+          downloadShareCard(blob, songTitle);
+          showToast("当前设备未能打开分享面板，已保存成绩卡", "gold");
+        }
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
@@ -793,6 +873,7 @@ export default function Home() {
     fans,
     maxCombo,
     resultTier.name,
+    showMobileSavePreview,
     showToast,
     songTitle,
   ]);
@@ -1466,6 +1547,17 @@ export default function Home() {
           );
         ctx.save();
         ctx.translate(Math.round(x), Math.round(entity.y));
+        if (entity.tutorial && entity.type === "obstacle") {
+          ctx.beginPath();
+          ctx.arc(0, -spriteSize / 2, spriteSize * 0.62 + pulse * 3, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(244, 126, 173, 0.16)";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255, 216, 77, 0.96)";
+          ctx.lineWidth = Math.max(2, spriteSize * 0.055);
+          ctx.setLineDash([6, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
         if (entity.type !== "obstacle") {
           const haloColor =
             entity.type === "lucky"
@@ -1486,11 +1578,25 @@ export default function Home() {
 
         if (entity.type === "fan") {
           const timingDistance = Math.abs(entity.hitAt - elapsed);
-          if (timingDistance < 260) {
-            const ringScale = 1 + timingDistance / 520;
+          const isTutorialRingVisible =
+            entity.tutorial &&
+            elapsed >= entity.spawnAt &&
+            elapsed <= entity.hitAt + MISS_WINDOW;
+          if (timingDistance < 260 || isTutorialRingVisible) {
+            const tutorialTravelRemaining = Math.max(
+              0,
+              Math.min(
+                1,
+                (entity.hitAt - elapsed) /
+                  Math.max(1, entity.hitAt - entity.spawnAt),
+              ),
+            );
+            const ringScale = entity.tutorial
+              ? 1 + tutorialTravelRemaining * 1.15
+              : 1 + timingDistance / 520;
             ctx.strokeStyle =
               timingDistance < 110 ? "#ffd84d" : "rgba(69, 200, 237, 0.86)";
-            ctx.lineWidth = timingDistance < 110 ? 5 : 3;
+            ctx.lineWidth = timingDistance < 110 ? 5 : entity.tutorial ? 4 : 3;
             ctx.beginPath();
             ctx.arc(
               0,
@@ -1503,6 +1609,18 @@ export default function Home() {
           }
           if (images.knowledgeStar?.complete && images.knowledgeStar.naturalWidth) {
             drawRoadSprite(images.knowledgeStar);
+          }
+          if (entity.tutorial && timingDistance < 330) {
+            ctx.fillStyle = "rgba(255, 216, 77, 0.96)";
+            ctx.strokeStyle = "#17223a";
+            ctx.lineWidth = 2;
+            ctx.fillRect(-39, 8, 78, 24);
+            ctx.strokeRect(-39, 8, 78, 24);
+            ctx.fillStyle = "#17223a";
+            ctx.font =
+              '900 12px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
+            ctx.textAlign = "center";
+            ctx.fillText("按 HIT", 0, 24);
           }
         } else if (
           entity.type === "lucky" &&
@@ -1696,6 +1814,30 @@ export default function Home() {
     setJoystickOffset(0);
   }, []);
 
+  const endTutorial = useCallback(() => {
+    if (!tutorialActiveRef.current) return;
+    tutorialActiveRef.current = false;
+    tutorialFinishAtRef.current = -1;
+    tutorialSeenThisSessionRef.current = true;
+    entitiesRef.current = entitiesRef.current.filter(
+      (entity) => !entity.tutorial,
+    );
+    setTutorialPhase(null);
+  }, []);
+
+  const completeTutorialIfReady = useCallback((elapsed: number) => {
+    if (
+      !tutorialActiveRef.current ||
+      !tutorialMovedRef.current ||
+      !tutorialHitRef.current ||
+      tutorialFinishAtRef.current >= 0
+    ) {
+      return;
+    }
+    tutorialFinishAtRef.current = elapsed + TUTORIAL_COMPLETE_HOLD_MS;
+    setTutorialPhase("complete");
+  }, []);
+
   const finishGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
     statusRef.current = "finished";
@@ -1816,6 +1958,15 @@ export default function Home() {
       const track = trackRef.current;
       const beatTimes = beatTimesRef.current;
 
+      if (
+        tutorialActiveRef.current &&
+        (elapsed >= TUTORIAL_TIMEOUT_MS ||
+          (tutorialFinishAtRef.current >= 0 &&
+            elapsed >= tutorialFinishAtRef.current))
+      ) {
+        endTutorial();
+      }
+
       while (
         nextBeatRef.current < track.totalBeats &&
         elapsed >= beatTimes[nextBeatRef.current]
@@ -1823,13 +1974,15 @@ export default function Home() {
         const beat = nextBeatRef.current;
         beatRef.current = beat;
         beatPulseRef.current = 1;
-        spawnBeat(beat);
+        if (!tutorialActiveRef.current) spawnBeat(beat);
 
-        const pedestrianWarningIndex = track.grannyBeats.findIndex(
-          (targetBeat) =>
-            beat === targetBeat - PEDESTRIAN_WARNING_BEATS &&
-            !grannyWarnedBeatsRef.current.has(targetBeat),
-        );
+        const pedestrianWarningIndex = tutorialActiveRef.current
+          ? -1
+          : track.grannyBeats.findIndex(
+              (targetBeat) =>
+                beat === targetBeat - PEDESTRIAN_WARNING_BEATS &&
+                !grannyWarnedBeatsRef.current.has(targetBeat),
+            );
         if (pedestrianWarningIndex >= 0) {
           const pedestrianBeat = track.grannyBeats[pedestrianWarningIndex];
           grannyWarnedBeatsRef.current.add(pedestrianBeat);
@@ -1890,6 +2043,35 @@ export default function Home() {
           ...currentEntity,
           y: roadYFromProgress(travelProgress),
         };
+
+        if (entity.tutorial) {
+          if (entity.type === "fan") {
+            entity.lane = laneRef.current;
+            currentEntity.lane = laneRef.current;
+            if (entity.handled) continue;
+            if (elapsed > entity.hitAt + MISS_WINDOW) {
+              const nextTargetBeat = Math.min(
+                track.totalBeats - 1,
+                Math.max(entity.targetBeat + 2, nextBeatRef.current + 2),
+              );
+              const nextSpawnBeat = Math.max(
+                0,
+                Math.min(nextTargetBeat - 3, beatTimes.length - 1),
+              );
+              entity.targetBeat = nextTargetBeat;
+              entity.spawnAt = Math.max(elapsed, beatTimes[nextSpawnBeat]);
+              entity.hitAt = beatTimes[nextTargetBeat];
+              entity.y = ROAD_HORIZON_Y;
+            }
+          }
+          if (
+            !entity.handled &&
+            elapsed <= entity.hitAt + ENTITY_DESPAWN_AFTER_MS
+          ) {
+            nextEntities.push(entity);
+          }
+          continue;
+        }
 
         if (entity.type === "fan") {
           const magnetDistance = Math.hypot(
@@ -2183,6 +2365,7 @@ export default function Home() {
       addFloatText,
       checkVehicleUpgrade,
       drawGame,
+      endTutorial,
       failGame,
       finishGame,
       playObstacleImpact,
@@ -2205,9 +2388,48 @@ export default function Home() {
       songRef.current && !songRef.current.paused
         ? songRef.current.currentTime * 1000
         : performance.now() - startTimeRef.current;
+
+    if (tutorialActiveRef.current) {
+      const tutorialCandidate = entitiesRef.current
+        .filter(
+          (entity) =>
+            entity.tutorial &&
+            entity.type === "fan" &&
+            !entity.handled &&
+            Math.abs(elapsed - entity.hitAt) <= MISS_WINDOW,
+        )
+        .sort(
+          (first, second) =>
+            Math.abs(elapsed - first.hitAt) - Math.abs(elapsed - second.hitAt),
+        )[0];
+
+      if (!tutorialCandidate) {
+        showToast("等圆环收紧到星星时，再按 HIT", "gold");
+        triggerHaptic(10);
+        return;
+      }
+
+      tutorialCandidate.handled = true;
+      tutorialHitRef.current = true;
+      setTutorialHit(true);
+      if (!tutorialMovedRef.current) setTutorialPhase("move");
+      showJudgement("PERFECT", "练习成功 · 本次不计分");
+      const x = laneCenter(laneRef.current);
+      addBurst(x, PLAYER_Y - 22, "#ffe66d", 26);
+      addFloatText(x, PLAYER_Y - 64, "节拍命中!", "#ffe66d");
+      beatPulseRef.current = 1.65;
+      collectFlashRef.current = 1;
+      screenPunchRef.current = 0.8;
+      playPerfectHit();
+      triggerHaptic([18, 16, 28]);
+      completeTutorialIfReady(elapsed);
+      return;
+    }
+
     const candidate = entitiesRef.current
       .filter(
         (entity) =>
+          !entity.tutorial &&
           entity.type === "fan" &&
           !entity.handled &&
           entity.lane === laneRef.current &&
@@ -2288,6 +2510,7 @@ export default function Home() {
     addBurst,
     addFloatText,
     checkVehicleUpgrade,
+    completeTutorialIfReady,
     playFanHit,
     playPerfectHit,
     showJudgement,
@@ -2300,6 +2523,7 @@ export default function Home() {
       showToast("歌曲仍在准备中，请稍候", "pink");
       return;
     }
+    const shouldRunTutorial = !tutorialSeenThisSessionRef.current;
     triggerHaptic(1);
     stopJoystick();
     if (animationRef.current) {
@@ -2353,7 +2577,41 @@ export default function Home() {
     nextBeatRef.current = 0;
     entityIdRef.current = 0;
     lastObstacleTargetBeatRef.current = -Infinity;
-    entitiesRef.current = [];
+    tutorialActiveRef.current = shouldRunTutorial;
+    tutorialMovedRef.current = false;
+    tutorialHitRef.current = false;
+    tutorialFinishAtRef.current = -1;
+    entitiesRef.current = shouldRunTutorial
+      ? [
+          {
+            id: entityIdRef.current++,
+            type: "obstacle",
+            obstacle: "cone",
+            lane: 2,
+            y: ROAD_HORIZON_Y,
+            targetBeat: TUTORIAL_OBSTACLE_TARGET_BEAT,
+            spawnAt:
+              beatTimesRef.current[TUTORIAL_OBSTACLE_SPAWN_BEAT] ?? 500,
+            hitAt:
+              beatTimesRef.current[TUTORIAL_OBSTACLE_TARGET_BEAT] ?? 3_000,
+            tutorial: true,
+            handled: false,
+          },
+          {
+            id: entityIdRef.current++,
+            type: "fan",
+            lane: 2,
+            y: ROAD_HORIZON_Y,
+            targetBeat: TUTORIAL_STAR_TARGET_BEAT,
+            spawnAt:
+              beatTimesRef.current[TUTORIAL_STAR_SPAWN_BEAT] ?? 3_000,
+            hitAt:
+              beatTimesRef.current[TUTORIAL_STAR_TARGET_BEAT] ?? 5_000,
+            tutorial: true,
+            handled: false,
+          },
+        ]
+      : [];
     particlesRef.current = [];
     floatTextRef.current = [];
     pedestrianRef.current = null;
@@ -2387,6 +2645,9 @@ export default function Home() {
     setLuckyDialog(null);
     setShareCardOpen(false);
     setShareBusy(false);
+    setTutorialPhase(shouldRunTutorial ? "move" : null);
+    setTutorialMoved(false);
+    setTutorialHit(false);
     resetSongTone();
 
     song.pause();
@@ -2528,8 +2789,14 @@ export default function Home() {
       if (nextLane === laneRef.current) return;
       laneRef.current = nextLane;
       addBurst(laneCenter(nextLane), PLAYER_Y + 32, "#72f1ff", 4);
+      if (tutorialActiveRef.current && !tutorialMovedRef.current) {
+        tutorialMovedRef.current = true;
+        setTutorialMoved(true);
+        if (!tutorialHitRef.current) setTutorialPhase("hit");
+        completeTutorialIfReady(fallbackElapsedRef.current);
+      }
     },
-    [addBurst],
+    [addBurst, completeTutorialIfReady],
   );
 
   const steerWithJoystick = useCallback(
@@ -2613,6 +2880,14 @@ export default function Home() {
     setShareCardOpen(false);
     setShareBusy(false);
     setFailureSummary(null);
+    tutorialActiveRef.current = false;
+    tutorialMovedRef.current = false;
+    tutorialHitRef.current = false;
+    tutorialFinishAtRef.current = -1;
+    setTutorialPhase(null);
+    setTutorialMoved(false);
+    setTutorialHit(false);
+    swipeStartRef.current = null;
     entitiesRef.current = [];
     lastObstacleTargetBeatRef.current = -Infinity;
     pedestrianRef.current = null;
@@ -3024,6 +3299,30 @@ export default function Home() {
               width={GAME_WIDTH}
               height={GAME_HEIGHT}
               aria-label="五车道节奏躲避游戏画面"
+              aria-describedby={tutorialPhase ? "tutorial-instruction" : undefined}
+              onPointerDown={(event) => {
+                if (statusRef.current !== "playing") return;
+                swipeStartRef.current = {
+                  pointerId: event.pointerId,
+                  x: event.clientX,
+                };
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerUp={(event) => {
+                const swipeStart = swipeStartRef.current;
+                swipeStartRef.current = null;
+                if (!swipeStart || swipeStart.pointerId !== event.pointerId) {
+                  return;
+                }
+                const distance = event.clientX - swipeStart.x;
+                if (Math.abs(distance) >= SWIPE_MOVE_THRESHOLD_PX) {
+                  event.preventDefault();
+                  move(distance < 0 ? -1 : 1);
+                }
+              }}
+              onPointerCancel={() => {
+                swipeStartRef.current = null;
+              }}
             />
 
             {(magnetRemaining > 0 || invincibleRemaining > 0) && (
@@ -3092,6 +3391,70 @@ export default function Home() {
               >
                 <strong>{noteJudgement.quality}</strong>
                 <span>{noteJudgement.detail}</span>
+              </div>
+            )}
+
+            {status === "playing" && tutorialPhase && (
+              <div
+                className={`tutorial-guide is-${tutorialPhase}`}
+                aria-live="polite"
+              >
+                <div className="tutorial-guide-top">
+                  <div>
+                    <small>CALIBRATION / 练习不计分</small>
+                    <strong>先热个身</strong>
+                  </div>
+                  <button type="button" onClick={endTutorial}>
+                    跳过
+                  </button>
+                </div>
+
+                <div className="tutorial-coach-card" id="tutorial-instruction">
+                  <span aria-hidden="true">
+                    {tutorialPhase === "move"
+                      ? "← →"
+                      : tutorialPhase === "hit"
+                        ? "HIT"
+                        : "✓"}
+                  </span>
+                  <div>
+                    <small>
+                      {tutorialPhase === "move"
+                        ? "STEP 1 / 躲避"
+                        : tutorialPhase === "hit"
+                          ? "STEP 2 / 收集"
+                          : "READY"}
+                    </small>
+                    <strong>
+                      {tutorialPhase === "move"
+                        ? "左右移动或滑动，躲开落下的障碍"
+                        : tutorialPhase === "hit"
+                          ? "圆环收紧到星星时，按 HIT"
+                          : "开始！"}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="tutorial-step-status" aria-label="新手练习进度">
+                  <span className={tutorialMoved ? "is-done" : "is-current"}>
+                    <i>{tutorialMoved ? "✓" : "1"}</i>
+                    左右移动
+                  </span>
+                  <b aria-hidden="true" />
+                  <span
+                    className={
+                      tutorialHit
+                        ? "is-done"
+                        : tutorialMoved
+                          ? "is-current"
+                          : ""
+                    }
+                  >
+                    <i>{tutorialHit ? "✓" : "2"}</i>
+                    合拍 HIT
+                  </span>
+                </div>
+                <p>音乐与正式节拍正在同步播放</p>
               </div>
             )}
 
@@ -3360,14 +3723,14 @@ export default function Home() {
                     aria-label="开学人设分享卡"
                     onPointerDown={(event) => {
                       if (event.target === event.currentTarget && !shareBusy) {
-                        setShareCardOpen(false);
+                        closeShareCard();
                       }
                     }}
                   >
                     <section className="share-card-shell">
                       <button
                         className="share-card-close"
-                        onClick={() => setShareCardOpen(false)}
+                        onClick={closeShareCard}
                         aria-label="关闭成绩卡"
                         disabled={shareBusy}
                       >
@@ -3433,6 +3796,42 @@ export default function Home() {
                           保存图片
                         </button>
                       </div>
+                      {mobileSavePreviewUrl && (
+                        <div
+                          className="mobile-save-preview"
+                          role="dialog"
+                          aria-modal="true"
+                          aria-label="长按保存成绩卡"
+                          onPointerDown={(event) => {
+                            if (event.target === event.currentTarget) {
+                              setMobileSavePreviewUrl(null);
+                            }
+                          }}
+                        >
+                          <section>
+                            <button
+                              className="mobile-save-preview-close"
+                              onClick={() => setMobileSavePreviewUrl(null)}
+                              aria-label="关闭图片预览"
+                            >
+                              <img
+                                src={UI_ICONS.close}
+                                alt=""
+                                aria-hidden="true"
+                              />
+                            </button>
+                            <p>
+                              <strong>长按下方图片</strong>
+                              ，选择“存储到照片”或“保存图片”
+                            </p>
+                            <img
+                              className="mobile-save-preview-image"
+                              src={mobileSavePreviewUrl}
+                              alt={`开学冲冲冲成绩卡：${resultTier.name}，${fans * maxCombo} 分`}
+                            />
+                          </section>
+                        </div>
+                      )}
                     </section>
                   </div>
                 )}
@@ -3487,7 +3886,7 @@ export default function Home() {
 
           <div className="mobile-controls">
             <div
-              className={`joystick-control ${status !== "playing" ? "is-disabled" : ""}`}
+              className={`joystick-control ${status !== "playing" ? "is-disabled" : ""} ${tutorialPhase === "move" ? "is-tutorial-focus" : ""}`}
               aria-label="左右换道摇杆"
             >
               <div
@@ -3542,7 +3941,7 @@ export default function Home() {
               <small>DRAG TO STEER</small>
             </div>
             <button
-              className="hit-button"
+              className={`hit-button ${tutorialPhase === "hit" ? "is-tutorial-focus" : ""}`}
               onPointerDown={(event) => {
                 event.preventDefault();
                 hitNote();

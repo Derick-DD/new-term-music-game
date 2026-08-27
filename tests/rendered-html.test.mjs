@@ -401,6 +401,11 @@ test("ships the direct-start mobile copy and QR placeholder", async () => {
   assert.match(page, /游戏BGM《恭喜你发现了宝藏》——TF家族/);
   assert.match(page, /share-card-qr-placeholder/);
   assert.match(page, /二维码占位/);
+  assert.match(page, /navigator\.canShare\?\.\(\{ files: \[file\] \}\)/);
+  assert.match(page, /请在系统菜单中选择“存储图像”/);
+  assert.match(page, /请长按图片，选择保存到照片/);
+  assert.match(page, /className="mobile-save-preview-image"/);
+  assert.match(styles, /\.mobile-save-preview-image \{[\s\S]*?-webkit-touch-callout: default/);
   assert.doesNotMatch(page, /准备出发|首校园主题曲|级载具进化/);
   assert.doesNotMatch(page, /排行榜|leaderboard|知识星|BPM|01:26|完整版/);
   assert.doesNotMatch(exportedHtml, /排行榜|知识星|BPM|01:26|完整版/);
