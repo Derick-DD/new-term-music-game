@@ -12,7 +12,7 @@
 | --- | --- | --- | --- | --- |
 | 首页 | 原页面活动标题、手绘校园主视觉、本机 BEST/BANK、主题曲卡片 | 首次进入并行预加载全部页面图片与谱面；全部成功后才开放开局 | 任一必需图片或谱面失败时显示重新加载；主题曲不提供本地音频回退 | 保留的原页面 DOM/CSS、本地图片与 `assets/game-chart.json` |
 | 玩法页 | 升级、节拍、隐藏人设、安全提示 | 返回首页或直接开始 | 开始时仍校验谱面与在线播放器 | 纯前端交互 |
-| 在线主题曲 | 《恭喜你发现了宝藏》、TF家族、歌曲 ID | 登录后用 `Activity.user.queryProfile` 查询 VIP/SVIP，再用 `Activity.music.play` 播放；必须收到真实 `play` 事件才开局 | 明确非会员时阻止播放；会员查询异常时交由 QMPlayer 校验实际版权；`error` 或 8 秒未收到 `play` 均失败；仅 `localhost + debug=1` 可无声模拟 | `music.songs[0].id=380208811`、`user.requiredMembership=vip` |
+| 在线主题曲 | 《恭喜你发现了宝藏》、TF家族、歌曲 ID | QQ 音乐用户态可用时先用 `Activity.user.queryProfile` 查询 VIP/SVIP，再用 `Activity.music.play` 播放；必须收到真实 `play` 事件才开局 | 明确非会员或取消登录时阻止播放；站外缺少 `Music.user`、会员查询异常时交由 QMPlayer 校验实际版权；`error` 或 8 秒未收到 `play` 均失败；仅 `localhost + debug=1` 可无声模拟 | `music.songs[0].id=380208811`、`user.requiredMembership=vip` |
 | 新手练习 | 强提示的换道与 HIT 两步引导 | 明确提示按住摇杆持续拖动、圆环重合时点击 HIT；每个会话展示一次 | 9 秒自动结束；练习不计分 | `sessionStorage` 仅保存本会话标记 |
 | 核心游戏 | 五车道校园道路、载具、知识星星、障碍、进度 | 摇杆按住后以 `requestAnimationFrame` 连续换道、画布滑动、键盘换道和 HIT；按谱面判定 PERFECT/GREAT/GOOD/MISS | 松手、取消、失去指针捕获或离开游戏态时立即停止持续换道 | 本地谱面；移动端 Canvas 480×720 内部坐标 |
 | 载具升级 | 自行车、摩托车、小轿车、校车 | 按知识命中、PERFECT 和最高连击自动升级 | 校车为最高等级 | 本地车辆图片与固定升级条件 |
@@ -73,13 +73,13 @@
 - `Activity.music.play(song, 0)`：以歌曲 ID 380208811 开始播放；QMPlayer 自行选择客户端内或 H5 播放实现。
 - `Activity.music.pause()` / `resume()`：暂停弹层、锦囊、页面隐藏、失败和完成时同步节拍时钟。
 - `Activity.music.on()`：实际 play/pause/ended/error 更新游戏和播放上报。
-- `Activity.user.requireLogin()` / `queryProfile()`：使用当前 QQ 音乐会话登录并读取 `isVip`、`isSuperVip`；不保存 UIN、GUID 或 token。
+- `Activity.user.requireLogin()` / `queryProfile()`：QQ 音乐用户态可用时使用当前会话登录并读取 `isVip`、`isSuperVip`；不保存 UIN、GUID 或 token。站外环境没有 `Music.user` 时跳过这一步，并由 QMPlayer 的真实 `play` / `error` 事件决定是否可开局。
 - `Activity.share.init()` / `on()`：初始化链接分享并以客户端实际 share 回调作为分享上报唯一来源。
 - `Activity.share.call()`：专用 Web 分享面板接口；本活动的个性化成绩卡使用更匹配的 `drawCanvas()` / `callImage()` 专用图片分享接口。
 - `Activity.webview` 自动初始化：隐藏 Header 页面安全区和端外打开 QQ 音乐提示。
 - `Activity.report`：页面、曝光、点击、分享与播放事件。
 
-本活动不要求登录，不调用用户资产写入、投票、任务、广告、领奖、下载或视频能力。
+本活动仅在 QQ 音乐用户态可用时要求登录以预检会员；不调用用户资产写入、投票、任务、广告、领奖、下载或视频能力。
 
 ## Scheme 与导航
 
@@ -124,6 +124,7 @@
 - 当前 Skill 只定义 dev 发布映射，没有生产 stage。`sharing.image`、`sharing.url`、`reporting.pageName` 当前使用确定的 dev 路径，正式发布前必须由部署负责人替换为最终地址并复验分享回流。
 - QMPlayer 受控接口没有公开 `currentTime`、seek、volume 或 WebAudio 节点。游戏在 `Activity.music.play/resume` 成功后用单调时钟驱动同一份 120 BPM 谱面，并在每次 pause/resume 时同步冻结；真机仍需检查歌曲实际首帧延迟与 86 秒谱面的偏差。
 - VIP/SVIP 查询只描述账号会员身份，不能代表歌曲在地区、设备、数字专辑或其他版权条件下一定可播；最终以 QMPlayer 的真实 `play`/`error` 事件为准。本 Skill 没有提升权限或绕过会员版权的接口。
+- `Music.user` 只在 QQ 音乐用户态可用；ChatGPT Sites 等站外域名缺少该能力时，页面不会把 `Music user CDN is unavailable` 当作播放失败，而是跳过会员预检并继续让 QMPlayer 验证在线歌曲权限。
 - 线上播放失败时不允许把预制 MP3 放入 Activity H5 作为版权兜底；可接受的产品方案只有提示用户登录/开通相应权限、由运营更换可播歌曲，或在 localhost 调试时使用无声谱面模拟。
 - SOUND OFF 不能独立静音而保持歌曲时间轴，因此游戏内切换为关闭声音时会同步暂停游戏；继续时重新调用 `Activity.music.resume()`。这是防止节拍漂移的安全降级。
 - 原版本受击后的厚/细 WebAudio 滤镜不能合法作用于 QMPlayer，已改为持续 8 拍的视觉状态与提示，歌曲播放速度和节拍不变。

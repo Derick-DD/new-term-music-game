@@ -71,6 +71,9 @@ test("uses the reviewed Activity.music and QMPlayer playback contract", async ()
   assert.match(app, /Activity\.music\.on\("play"/);
   assert.match(app, /Activity\.music\.on\("error"/);
   assert.match(app, /Activity\.user\.queryProfile\(\)/);
+  assert.match(app, /Promise\.resolve\(\)[\s\S]*Activity\.user\.requireLogin/);
+  assert.match(app, /QQ 音乐用户态不可用或会员状态查询失败，将交由 QMPlayer 校验实际播放权限/);
+  assert.match(app, /Login was not completed\|Login is required/);
   assert.doesNotMatch(app, /new\s+Audio\s*\(|AudioContext|new\s+QMPlayer|Music\.client/);
   assert.match(runtime, /Activity\.registerCapability\("music"/);
   assert.match(runtime, /new window\.QMPlayer/);

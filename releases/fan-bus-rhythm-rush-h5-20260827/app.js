@@ -1081,33 +1081,34 @@
 
   function ensureVipPlaybackAccess() {
     if (!Activity.user) return Promise.resolve(null);
-    var loginPromise;
-    if (Activity.user.isLogin()) {
-      loginPromise = Promise.resolve();
-    } else {
-      loginPromise = Activity.user.requireLogin({ noConfirm: false, forceLogin: true })
-        .catch(function (error) {
-          error.code = "LOGIN_REQUIRED";
+    return Promise.resolve()
+      .then(function () {
+        if (Activity.user.isLogin()) return null;
+        return Activity.user.requireLogin({ noConfirm: false, forceLogin: true });
+      })
+      .then(function () {
+        return Activity.user.queryProfile();
+      })
+      .then(function (profile) {
+        if (!profile.isVip && !profile.isSuperVip) {
+          var error = new Error("该主题曲需要 QQ 音乐 VIP 播放权限，请使用已开通会员的账号重试。");
+          error.code = "VIP_REQUIRED";
           throw error;
-        });
-    }
-    return loginPromise.then(function () {
-      return Activity.user.queryProfile()
-        .then(function (profile) {
-          if (!profile.isVip && !profile.isSuperVip) {
-            var error = new Error("该主题曲需要 QQ 音乐 VIP 播放权限，请使用已开通会员的账号重试。");
-            error.code = "VIP_REQUIRED";
-            throw error;
-          }
-          return profile;
-        })
-        .catch(function (error) {
-          if (error && error.code === "VIP_REQUIRED") throw error;
-          console.warn("会员状态查询失败，将交由 QMPlayer 校验实际播放权限", error);
-          showToast("会员状态暂不可确认 · 正在验证实际播放权限", "gold");
-          return null;
-        });
-    });
+        }
+        return profile;
+      })
+      .catch(function (error) {
+        var message = error && error.message ? error.message : "";
+        if (error && error.code === "VIP_REQUIRED") throw error;
+        if (/Login was not completed|Login is required/i.test(message)) {
+          error.code = "LOGIN_REQUIRED";
+          error.message = "请先登录 QQ 音乐账号，再验证会员歌曲播放权限。";
+          throw error;
+        }
+        console.warn("QQ 音乐用户态不可用或会员状态查询失败，将交由 QMPlayer 校验实际播放权限", error);
+        showToast("会员状态暂不可确认 · 正在验证在线播放权限", "gold");
+        return null;
+      });
   }
 
   function playAndConfirm(songToPlay) {
