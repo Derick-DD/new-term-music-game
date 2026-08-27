@@ -84,7 +84,7 @@ test("uses one fixed audio file and preserves the versioned timing data", async 
   assert.doesNotMatch(page, /decodeAudioData|type="file"|handleSongUpload/);
 });
 
-test("preloads required images and uses low-sensitivity analog steering", async () => {
+test("preloads required images and maps drag distance directly to the car", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("app/page.tsx", ROOT), "utf8"),
     readFile(new URL("app/globals.css", ROOT), "utf8"),
@@ -95,19 +95,65 @@ test("preloads required images and uses low-sensitivity analog steering", async 
   assert.match(page, /if \(!assetsReady\)/);
   assert.match(page, /assetsLoading \|\| songLoading/);
   assert.match(page, /joystickFrameRef/);
-  assert.match(page, /window\.requestAnimationFrame\(continueSteering\)/);
+  assert.match(page, /window\.requestAnimationFrame\(\(\) =>/);
   assert.match(page, /getCoalescedEvents/);
-  assert.match(page, /JOYSTICK_DEAD_ZONE_RATIO = 0\.2/);
-  assert.match(page, /JOYSTICK_RESPONSE_CURVE = 1\.45/);
-  assert.match(page, /JOYSTICK_MAX_SPEED_PX_PER_SECOND = 180/);
-  assert.match(page, /joystickVelocityRef\.current \+=/);
+  assert.match(page, /roadPixelsPerControlPixel/);
+  assert.match(
+    page,
+    /\(laneCenter\(4\) - laneCenter\(0\)\) \/ \(drag\.maxTravel \* 2\)/,
+  );
   assert.match(page, /busXRef\.current = nextX/);
   assert.match(page, /translate3d\(\$\{nextOffset\}px, 0, 0\)/);
-  assert.doesNotMatch(page, /JOYSTICK_REPEAT_MS|setJoystickOffset/);
-  assert.match(page, /按住下方摇杆并向左右拖动/);
-  assert.match(styles, /transition: transform 60ms linear/);
+  assert.doesNotMatch(
+    page,
+    /JOYSTICK_REPEAT_MS|JOYSTICK_MAX_SPEED_PX_PER_SECOND|setJoystickOffset/,
+  );
+  assert.match(page, /按住底部摇杆左右拖动/);
+  assert.match(styles, /transition: none/);
   assert.match(styles, /will-change: transform/);
-  assert.match(styles, /\.tutorial-guide[\s\S]*?rgba\(23, 34, 58, 0\.52\)/);
+  assert.match(styles, /\.tutorial-game-callouts/);
+});
+
+test("adapts QQ Music chrome, native sharing, rules, and compact result flow", async () => {
+  const [page, styles, layout, activityConfig, activityBridge] =
+    await Promise.all([
+      readFile(new URL("app/page.tsx", ROOT), "utf8"),
+      readFile(new URL("app/globals.css", ROOT), "utf8"),
+      readFile(new URL("app/layout.tsx", ROOT), "utf8"),
+      readFile(new URL("public/activity-sites.config.js", ROOT), "utf8"),
+      readFile(new URL("public/activity-bridge.js", ROOT), "utf8"),
+    ]);
+
+  assert.match(page, /searchParams\.set\("_hidehd", "1"\)/);
+  assert.match(page, /searchParams\.set\("_miniplayer", "1"\)/);
+  assert.match(page, /Activity\?\.share/);
+  assert.match(page, /activityShare\.callImage\(base64, nativeShareOptions\)/);
+  assert.match(page, /已打开 QQ 音乐端内分享/);
+  assert.doesNotMatch(page, /Music\.client|callShareImg/);
+  assert.match(layout, /music-2\.4\.0\.min\.js/);
+  assert.match(layout, /fixTopBar\.js/);
+  assert.match(layout, /activity-sites\.config\.js/);
+  assert.match(layout, /activity-bridge\.js/);
+  assert.match(activityConfig, /_miniplayer/);
+  assert.match(activityConfig, /className: "\.activity-page"/);
+  assert.match(activityBridge, /Activity\.share =/);
+  assert.match(activityBridge, /callShareImg/);
+
+  assert.match(page, /const startFromReady = useCallback/);
+  assert.match(page, /className="secondary-button rules-home-button"/);
+  assert.match(page, /onClick=\{\(\) => setReadyPage\("home"\)\}/);
+  assert.match(page, /disabled=\{assetsLoading \|\| songLoading\}/g);
+  assert.match(page, /className="tutorial-game-callouts"/);
+  assert.match(styles, /\.tutorial-guide \{\s*background: transparent/);
+  assert.match(styles, /\.tutorial-game-callouts \{[\s\S]*?top: 48%/);
+  assert.match(
+    styles,
+    /\.share-card-shell \{[\s\S]*?grid-template-rows: minmax\(0, 1fr\) auto/,
+  );
+
+  assert.match(page, /marker < 5/);
+  assert.match(page, /marker \/ 5 \+ roadFlow/);
+  assert.match(page, /phase \+ 0\.09 \+ phase \* 0\.12/);
 });
 
 test("implements the requested campus gameplay safeguards", async () => {

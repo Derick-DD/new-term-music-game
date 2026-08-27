@@ -6,6 +6,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import treasureChart from "./data/congratulations-treasure.chart.json";
 
+type ActivityShareApi = {
+  init?: (options?: Record<string, unknown>) => unknown;
+  call?: (options?: Record<string, unknown>) => Promise<unknown>;
+  callImage?: (
+    base64: string,
+    options?: Record<string, unknown>,
+  ) => Promise<unknown>;
+  on?: (callback: (result: unknown) => void) => unknown;
+  off?: (callback?: (result: unknown) => void) => unknown;
+};
+
+declare global {
+  interface Window {
+    ACTIVITY_CONFIG?: Record<string, unknown>;
+    Activity?: {
+      configure?: (config?: Record<string, unknown>) => unknown;
+      share?: ActivityShareApi;
+    };
+    Music?: {
+      browser?: { music?: boolean };
+    };
+  }
+}
+
 const GAME_WIDTH = 480;
 const GAME_HEIGHT = 720;
 const ROAD_SAFE_INSET = 8;
@@ -40,11 +64,8 @@ const SECOND_MAGNET_CHANCE = 0.25;
 const VEHICLE_VISUAL_SCALE = 1.2;
 const VEHICLE_EFFECT_CENTER_Y = -46 * VEHICLE_VISUAL_SCALE;
 const MIN_OBSTACLE_BEAT_GAP = 3;
-const JOYSTICK_DEAD_ZONE_RATIO = 0.2;
-const JOYSTICK_RESPONSE_CURVE = 1.45;
-const JOYSTICK_MAX_SPEED_PX_PER_SECOND = 180;
-const JOYSTICK_VELOCITY_RESPONSE = 8;
-const JOYSTICK_MAX_FRAME_DELTA_MS = 34;
+const JOYSTICK_KNOB_SIZE_PX = 62;
+const JOYSTICK_MIN_TRAVEL_PX = 28;
 const STADIUM_SCORE_THRESHOLD = 6_500;
 const OBSTACLE_COLLISION_BEFORE = 36;
 const OBSTACLE_COLLISION_AFTER = 40;
@@ -417,6 +438,26 @@ function loadBrowserImage(src: string) {
   });
 }
 
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Read failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function withQqMusicDisplayParams(rawUrl: string) {
+  const url = new URL(rawUrl, window.location.href);
+  url.searchParams.set("_hidehd", "1");
+  url.searchParams.set("_miniplayer", "1");
+  return url.href;
+}
+
+function isQqMusicClient() {
+  return Boolean(window.Music?.browser?.music);
+}
+
 async function createShareCardBlob(data: ShareCardData) {
   await document.fonts?.ready;
   const [brandIcon, tierIcon, shareQr] = await Promise.all([
@@ -719,10 +760,14 @@ export default function Home() {
   const joystickBaseRef = useRef<HTMLDivElement | null>(null);
   const joystickKnobRef = useRef<HTMLElement | null>(null);
   const joystickPointerRef = useRef<number | null>(null);
-  const joystickInputRef = useRef(0);
-  const joystickVelocityRef = useRef(0);
+  const joystickDragRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startBusX: number;
+    maxTravel: number;
+  } | null>(null);
+  const joystickPendingClientXRef = useRef<number | null>(null);
   const joystickFrameRef = useRef<number | null>(null);
-  const joystickLastFrameAtRef = useRef(0);
   const lastPerfectSoundAtRef = useRef(-Infinity);
   const tutorialActiveRef = useRef(false);
   const tutorialMovedRef = useRef(false);
@@ -796,6 +841,36 @@ export default function Home() {
     toastTimerRef.current = window.setTimeout(() => setToast(null), 820);
   }, []);
 
+  useEffect(() => {
+    const currentUrl = new URL(window.location.href);
+    if (
+      currentUrl.searchParams.get("_hidehd") === "1" &&
+      currentUrl.searchParams.get("_miniplayer") === "1"
+    ) {
+      return;
+    }
+    window.location.replace(withQqMusicDisplayParams(currentUrl.href));
+  }, []);
+
+  useEffect(() => {
+    const activity = window.Activity;
+    if (!activity) return;
+    activity.configure?.(window.ACTIVITY_CONFIG);
+
+    const handleClientShare = () => {
+      showToast("QQ 音乐分享已完成", "cyan");
+    };
+    try {
+      activity.share?.init?.({});
+      activity.share?.on?.(handleClientShare);
+    } catch {
+      return;
+    }
+    return () => {
+      activity.share?.off?.(handleClientShare);
+    };
+  }, [showToast]);
+
   const createCurrentShareCard = useCallback(
     () =>
       createShareCardBlob({
@@ -834,7 +909,11 @@ export default function Home() {
         const file = new File([blob], getShareCardFileName(songTitle), {
           type: "image/png",
         });
-        if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        if (
+          !isQqMusicClient() &&
+          navigator.share &&
+          navigator.canShare?.({ files: [file] })
+        ) {
           try {
             await navigator.share({
               title: "开学冲冲冲！校园成绩",
@@ -868,11 +947,39 @@ export default function Home() {
     try {
       const blob = await createCurrentShareCard();
       if (!blob) throw new Error("Share card unavailable");
+      const score = fans * maxCombo;
+      const shareText = `我在《${songTitle}》拿到 ${score} 分，解锁新学期人设「${resultTier.name}」！`;
+
+      const activityShare = window.Activity?.share;
+      if (activityShare?.callImage) {
+        const base64 = await blobToDataUrl(blob);
+        const nativeShareOptions = {
+          title: "开学冲冲冲！校园成绩",
+          desc: shareText,
+          link: withQqMusicDisplayParams(window.location.href),
+          previewMode: 1,
+          shareform: "campus.result",
+        };
+        try {
+          await activityShare.callImage(base64, nativeShareOptions);
+          showToast("已打开 QQ 音乐端内分享", "cyan");
+          return;
+        } catch {
+          if (activityShare.call) {
+            try {
+              await activityShare.call(nativeShareOptions);
+              showToast("已打开 QQ 音乐端内分享", "cyan");
+              return;
+            } catch {
+              // Continue to the browser share fallback outside QQ Music.
+            }
+          }
+        }
+      }
+
       const file = new File([blob], "campus-season-result.png", {
         type: "image/png",
       });
-      const score = fans * maxCombo;
-      const shareText = `我在《${songTitle}》拿到 ${score} 分，解锁新学期人设「${resultTier.name}」！`;
       if (navigator.share) {
         const shareData: ShareData = {
           title: "开学冲冲冲！校园成绩",
@@ -1449,9 +1556,9 @@ export default function Home() {
       }
 
       for (let boundary = 1; boundary < 5; boundary += 1) {
-        for (let marker = 0; marker < 7; marker += 1) {
-          const phase = (marker / 7 + roadFlow) % 1;
-          const endPhase = Math.min(1, phase + 0.045 + phase * 0.055);
+        for (let marker = 0; marker < 5; marker += 1) {
+          const phase = (marker / 5 + roadFlow) % 1;
+          const endPhase = Math.min(1, phase + 0.09 + phase * 0.12);
           const startDepth = Math.pow(phase, 1.45) * ROAD_BOTTOM_DEPTH;
           const endDepth = Math.pow(endPhase, 1.45) * ROAD_BOTTOM_DEPTH;
           ctx.beginPath();
@@ -1463,7 +1570,7 @@ export default function Home() {
             laneBoundaryXAtDepth(boundary, endDepth),
             roadYAtDepth(endDepth),
           );
-          ctx.strokeStyle = `rgba(255, 250, 239, ${Math.min(0.86, 0.48 + startDepth * 0.26)})`;
+          ctx.strokeStyle = `rgba(255, 250, 239, ${Math.min(0.76, 0.36 + startDepth * 0.22)})`;
           ctx.lineWidth = 1.2 + phase * 2.2;
           ctx.stroke();
         }
@@ -1840,9 +1947,8 @@ export default function Home() {
       joystickFrameRef.current = null;
     }
     joystickPointerRef.current = null;
-    joystickInputRef.current = 0;
-    joystickVelocityRef.current = 0;
-    joystickLastFrameAtRef.current = 0;
+    joystickDragRef.current = null;
+    joystickPendingClientXRef.current = null;
     joystickBaseRef.current?.setAttribute("aria-valuenow", "0");
     if (joystickKnobRef.current) {
       joystickKnobRef.current.style.transform = "translate3d(0, 0, 0)";
@@ -2722,6 +2828,16 @@ export default function Home() {
     stopJoystick,
   ]);
 
+  const startFromReady = useCallback(() => {
+    if (assetsError) {
+      setAssetsReloadKey((value) => value + 1);
+      return;
+    }
+    if (!assetsReady) return;
+    if (songReady) void startGame();
+    else void loadFixedSong();
+  }, [assetsError, assetsReady, loadFixedSong, songReady, startGame]);
+
   const pauseGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
     statusRef.current = "paused";
@@ -2850,65 +2966,37 @@ export default function Home() {
     [addBurst, registerTutorialMove],
   );
 
-  const startJoystickSteering = useCallback(() => {
-    if (statusRef.current !== "playing") return;
-    if (joystickFrameRef.current !== null) {
-      window.cancelAnimationFrame(joystickFrameRef.current);
-    }
-    joystickLastFrameAtRef.current = performance.now();
+  const applyJoystickPosition = useCallback(
+    (clientX: number, target: HTMLElement) => {
+      const drag = joystickDragRef.current;
+      if (!drag || drag.pointerId !== joystickPointerRef.current) return;
 
-    const continueSteering = (now: number) => {
-      if (
-        joystickPointerRef.current === null ||
-        statusRef.current !== "playing"
-      ) {
-        joystickFrameRef.current = null;
-        return;
-      }
-
-      const elapsedMs = Math.min(
-        JOYSTICK_MAX_FRAME_DELTA_MS,
-        Math.max(0, now - joystickLastFrameAtRef.current),
+      const rawOffset = clientX - drag.startClientX;
+      const nextOffset = Math.max(
+        -drag.maxTravel,
+        Math.min(drag.maxTravel, rawOffset),
       );
-      joystickLastFrameAtRef.current = now;
-
-      const rawInput = joystickInputRef.current;
-      const inputMagnitude = Math.abs(rawInput);
-      const shapedInput =
-        inputMagnitude <= JOYSTICK_DEAD_ZONE_RATIO
-          ? 0
-          : Math.sign(rawInput) *
-            Math.pow(
-              (inputMagnitude - JOYSTICK_DEAD_ZONE_RATIO) /
-                (1 - JOYSTICK_DEAD_ZONE_RATIO),
-              JOYSTICK_RESPONSE_CURVE,
-            );
-      const targetVelocity =
-        shapedInput * JOYSTICK_MAX_SPEED_PX_PER_SECOND;
-      const velocityBlend =
-        1 -
-        Math.exp(
-          -(elapsedMs / 1_000) * JOYSTICK_VELOCITY_RESPONSE,
-        );
-      joystickVelocityRef.current +=
-        (targetVelocity - joystickVelocityRef.current) * velocityBlend;
-
-      if (
-        shapedInput === 0 &&
-        Math.abs(joystickVelocityRef.current) < 0.5
-      ) {
-        joystickVelocityRef.current = 0;
-      }
-
+      const roadPixelsPerControlPixel =
+        (laneCenter(4) - laneCenter(0)) / (drag.maxTravel * 2);
       const previousX = busXRef.current;
       const nextX = Math.max(
         laneCenter(0),
         Math.min(
           laneCenter(4),
-          previousX + joystickVelocityRef.current * (elapsedMs / 1_000),
+          drag.startBusX + nextOffset * roadPixelsPerControlPixel,
         ),
       );
       busXRef.current = nextX;
+
+      const normalizedOffset = nextOffset / drag.maxTravel;
+      target.setAttribute(
+        "aria-valuenow",
+        String(Math.round(normalizedOffset * 100)),
+      );
+      if (joystickKnobRef.current) {
+        joystickKnobRef.current.style.transform =
+          `translate3d(${nextOffset}px, 0, 0)`;
+      }
 
       if (Math.abs(nextX - previousX) > 0.01) {
         const nextLane = laneForX(nextX);
@@ -2918,34 +3006,42 @@ export default function Home() {
         }
         registerTutorialMove();
       }
+    },
+    [addBurst, registerTutorialMove],
+  );
 
-      joystickFrameRef.current =
-        window.requestAnimationFrame(continueSteering);
-    };
-
-    joystickFrameRef.current =
-      window.requestAnimationFrame(continueSteering);
-  }, [addBurst, registerTutorialMove]);
+  const beginJoystickDrag = useCallback(
+    (pointerId: number, clientX: number, target: HTMLElement) => {
+      stopJoystick();
+      const bounds = target.getBoundingClientRect();
+      const maxTravel = Math.max(
+        JOYSTICK_MIN_TRAVEL_PX,
+        (bounds.width - JOYSTICK_KNOB_SIZE_PX) / 2 - 8,
+      );
+      joystickPointerRef.current = pointerId;
+      joystickDragRef.current = {
+        pointerId,
+        startClientX: clientX,
+        startBusX: busXRef.current,
+        maxTravel,
+      };
+    },
+    [stopJoystick],
+  );
 
   const updateJoystick = useCallback(
     (clientX: number, target: HTMLElement) => {
-      const bounds = target.getBoundingClientRect();
-      const rawOffset = clientX - (bounds.left + bounds.width / 2);
-      const maxTravel = Math.max(28, (bounds.width - 62) / 2 - 8);
-      const nextOffset = Math.max(-maxTravel, Math.min(maxTravel, rawOffset));
-      const normalizedInput = nextOffset / maxTravel;
-
-      joystickInputRef.current = normalizedInput;
-      target.setAttribute(
-        "aria-valuenow",
-        String(Math.round(normalizedInput * 100)),
-      );
-      if (joystickKnobRef.current) {
-        joystickKnobRef.current.style.transform =
-          `translate3d(${nextOffset}px, 0, 0)`;
-      }
+      joystickPendingClientXRef.current = clientX;
+      if (joystickFrameRef.current !== null) return;
+      joystickFrameRef.current = window.requestAnimationFrame(() => {
+        joystickFrameRef.current = null;
+        const pendingClientX = joystickPendingClientXRef.current;
+        joystickPendingClientXRef.current = null;
+        if (pendingClientX === null) return;
+        applyJoystickPosition(pendingClientX, target);
+      });
     },
-    [],
+    [applyJoystickPosition],
   );
 
   const returnToStart = useCallback(() => {
@@ -3169,10 +3265,19 @@ export default function Home() {
 
   const isHomePage = status === "ready" && readyPage === "home";
   const isRulesPage = status === "ready" && readyPage === "rules";
+  const readyStartLabel = assetsLoading
+    ? `资源加载中 ${assetsProgress}%`
+    : assetsError
+      ? "重新加载资源"
+      : songLoading
+        ? "音乐加载中…"
+        : songReady
+          ? "走进校园"
+          : "重新加载音乐";
 
   return (
     <main
-      className={`arcade-page ${isHomePage ? "is-home-page" : ""} ${
+      className={`activity-page arcade-page ${isHomePage ? "is-home-page" : ""} ${
         isRulesPage ? "is-rules-page" : ""
       }`}
     >
@@ -3228,29 +3333,11 @@ export default function Home() {
               <div className="home-actions">
                 <button
                   className="home-start-button"
-                  onClick={() => {
-                    if (assetsError) {
-                      setAssetsReloadKey((value) => value + 1);
-                      return;
-                    }
-                    if (!assetsReady) return;
-                    if (songReady) void startGame();
-                    else void loadFixedSong();
-                  }}
+                  onClick={startFromReady}
                   disabled={assetsLoading || songLoading}
                   autoFocus
                 >
-                  <span>
-                    {assetsLoading
-                      ? `资源加载中 ${assetsProgress}%`
-                      : assetsError
-                        ? "重新加载资源"
-                        : songLoading
-                      ? "音乐加载中…"
-                      : songReady
-                        ? "走进校园"
-                        : "重新加载音乐"}
-                  </span>
+                  <span>{readyStartLabel}</span>
                   <img
                     className="home-play-icon"
                     src={UI_ICONS.play}
@@ -3571,30 +3658,41 @@ export default function Home() {
                   </button>
                 </div>
 
-                <div className="tutorial-coach-card" id="tutorial-instruction">
-                  <span aria-hidden="true">
-                    {tutorialPhase === "move"
-                      ? "← →"
-                      : tutorialPhase === "hit"
-                        ? "HIT"
-                        : "✓"}
+                <div
+                  className="tutorial-game-callouts"
+                  id="tutorial-instruction"
+                >
+                  <span
+                    className={
+                      tutorialPhase === "move" ? "is-active" : "is-done"
+                    }
+                  >
+                    <b>01</b>
+                    <strong>按住底部摇杆左右拖动</strong>
+                    <small>摇杆拖到哪里，小车就跟到哪里</small>
                   </span>
-                  <div>
-                    <small>
-                      {tutorialPhase === "move"
-                        ? "STEP 1 / 躲避"
-                        : tutorialPhase === "hit"
-                          ? "STEP 2 / 收集"
-                          : "READY"}
-                    </small>
-                    <strong>
-                      {tutorialPhase === "move"
-                        ? "按住下方摇杆并向左右拖动，持续移动小车躲开障碍"
-                        : tutorialPhase === "hit"
-                          ? "星星圆环重合时，立即按右下角 HIT"
-                          : "开始！"}
-                    </strong>
-                  </div>
+                  <span
+                    className={
+                      tutorialPhase === "move" ? "is-active" : "is-done"
+                    }
+                  >
+                    <b>02</b>
+                    <strong>看准车道，避开障碍</strong>
+                    <small>松手后小车会停稳在最近车道</small>
+                  </span>
+                  <span
+                    className={
+                      tutorialPhase === "hit"
+                        ? "is-active"
+                        : tutorialHit
+                          ? "is-done"
+                          : ""
+                    }
+                  >
+                    <b>03</b>
+                    <strong>圆环重合时按 HIT</strong>
+                    <small>踩准节拍即可收集知识</small>
+                  </span>
                 </div>
 
                 <div className="tutorial-step-status" aria-label="新手练习进度">
@@ -3664,16 +3762,25 @@ export default function Home() {
                   <strong>安全提示</strong>
                   <small>看到斑马线提示请提前换道，礼让正在过马路的行人。</small>
                 </div>
-                <button
-                  className="primary-button rules-start-button"
-                  onClick={() =>
-                    songReady ? void startGame() : void loadFixedSong()
-                  }
-                  disabled={songLoading}
-                >
-                  <img src={UI_ICONS.play} alt="" aria-hidden="true" />
-                  {songLoading ? "音乐加载中…" : "开始游戏"}
-                </button>
+                <div className="rules-actions">
+                  <button
+                    className="primary-button rules-start-button"
+                    onClick={startFromReady}
+                    disabled={assetsLoading || songLoading}
+                  >
+                    <img src={UI_ICONS.play} alt="" aria-hidden="true" />
+                    {readyStartLabel}
+                  </button>
+                  <button
+                    className="secondary-button rules-home-button"
+                    onClick={() => setReadyPage("home")}
+                  >
+                    返回首页
+                  </button>
+                </div>
+                {(assetsError || songError) && (
+                  <p className="rules-load-status">{assetsError || songError}</p>
+                )}
               </div>
             )}
 
@@ -4069,11 +4176,13 @@ export default function Home() {
                 onPointerDown={(event) => {
                   if (statusRef.current !== "playing") return;
                   event.preventDefault();
-                  joystickPointerRef.current = event.pointerId;
                   event.currentTarget.focus({ preventScroll: true });
                   event.currentTarget.setPointerCapture(event.pointerId);
-                  updateJoystick(event.clientX, event.currentTarget);
-                  startJoystickSteering();
+                  beginJoystickDrag(
+                    event.pointerId,
+                    event.clientX,
+                    event.currentTarget,
+                  );
                 }}
                 onPointerMove={(event) => {
                   if (joystickPointerRef.current !== event.pointerId) return;
@@ -4088,6 +4197,10 @@ export default function Home() {
                 onPointerUp={(event) => {
                   if (joystickPointerRef.current === event.pointerId) {
                     event.preventDefault();
+                    applyJoystickPosition(
+                      event.clientX,
+                      event.currentTarget,
+                    );
                     stopJoystick();
                   }
                 }}

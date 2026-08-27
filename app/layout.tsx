@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 
 const title = "开学冲冲冲！";
@@ -40,7 +41,34 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <Script
+          src="https://y.qq.com/lib/commercial/h5/polyfill.min.js?max_age=2592000"
+          strategy="beforeInteractive"
+          crossOrigin="anonymous"
+        />
+        <Script
+          src="https://y.qq.com/lib/commercial/h5/music-2.4.0.min.js?max_age=604800"
+          strategy="beforeInteractive"
+          crossOrigin="anonymous"
+        />
+        <Script
+          src="https://y.qq.com/component/m/fixTopBar/dist/fixTopBar.js?max_age=2592000"
+          strategy="beforeInteractive"
+          crossOrigin="anonymous"
+        />
+        <Script
+          src="https://y.qq.com/component/m/qmfe-unity-ad/iife/index.js?max_age=604800&v=20201223"
+          strategy="beforeInteractive"
+          crossOrigin="anonymous"
+        />
+        <Script
+          src="/activity-sites.config.js"
+          strategy="beforeInteractive"
+        />
+        <Script src="/activity-bridge.js" strategy="beforeInteractive" />
+        {children}
+      </body>
     </html>
   );
 }
