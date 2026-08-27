@@ -398,11 +398,15 @@ test("implements the requested campus gameplay safeguards", async () => {
   assert.doesNotMatch(page, /capacity|满载|BUS FULL|开学校车大巴/);
 });
 
-test("ships the direct-start mobile copy and QR placeholder", async () => {
-  const [page, styles, exportedHtml] = await Promise.all([
+test("ships the direct-start mobile copy and activity QR", async () => {
+  const [page, styles, exportedHtml, qrAsset] = await Promise.all([
     readFile(new URL("app/page.tsx", ROOT), "utf8"),
     readFile(new URL("app/globals.css", ROOT), "utf8"),
     readFile(new URL("out/index.html", ROOT), "utf8"),
+    readFile(
+      new URL("public/assets/campus-season/campus-share-qr.svg", ROOT),
+      "utf8",
+    ),
   ]);
 
   assert.match(page, /type ReadyPage = "home" \| "rules"/);
@@ -417,8 +421,17 @@ test("ships the direct-start mobile copy and QR placeholder", async () => {
   );
   assert.match(page, /知识数量x最高连击次数=你的新学期人设/);
   assert.match(page, /游戏BGM《恭喜你发现了宝藏》——TF家族/);
-  assert.match(page, /share-card-qr-placeholder/);
-  assert.match(page, /二维码占位/);
+  assert.match(page, /share-card-qr/);
+  assert.match(page, /campus-share-qr\.svg/);
+  assert.match(
+    page,
+    /https:\/\/y\.qq\.com\/viber_pub\/campus_gogogo\/index\.html/,
+  );
+  assert.match(page, /drawContainedImage\(context, shareQr/);
+  assert.match(page, /扫码进入活动/);
+  assert.doesNotMatch(page, /二维码占位/);
+  assert.match(qrAsset, /<svg/);
+  assert.match(qrAsset, /id="qr-path"/);
   assert.match(page, /navigator\.canShare\?\.\(\{ files: \[file\] \}\)/);
   assert.match(page, /请在系统菜单中选择“存储图像”/);
   assert.match(page, /请长按图片，选择保存到照片/);
@@ -433,7 +446,7 @@ test("ships the direct-start mobile copy and QR placeholder", async () => {
   assert.match(styles, /height: 100dvh/);
   assert.match(styles, /env\(safe-area-inset-bottom\)/);
   assert.match(styles, /\.story-title::before,[\s\S]*?display: none/);
-  assert.match(styles, /\.share-card-qr-placeholder/);
+  assert.match(styles, /\.share-card-qr/);
   assert.match(styles, /\.home-copy h1 span \{\s*color: #168daa/);
   assert.match(styles, /\.home-copy h1 strong \{\s*color: #e54a86/);
   assert.match(

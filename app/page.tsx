@@ -341,6 +341,10 @@ const OUTCOME_ICONS = {
   genius: "/assets/campus-season/icons/outcome-genius-penguin.png",
 } as const;
 
+const SHARE_TARGET_URL =
+  "https://y.qq.com/viber_pub/campus_gogogo/index.html";
+const SHARE_QR_ASSET = "/assets/campus-season/campus-share-qr.svg";
+
 const REQUIRED_IMAGE_URLS = Array.from(
   new Set([
     "/assets/campus-season/campus-hero.png",
@@ -351,6 +355,7 @@ const REQUIRED_IMAGE_URLS = Array.from(
     "/assets/campus-season/icons/outcome-hidden-achiever.png",
     "/assets/campus-season/icons/outcome-scholar.png",
     "/assets/campus-season/icons/outcome-slacker-fish.png",
+    SHARE_QR_ASSET,
     ...Object.values(CAMPUS_ASSETS),
     ...Object.values(UI_ICONS),
     ...Object.values(OUTCOME_ICONS),
@@ -411,9 +416,10 @@ function loadBrowserImage(src: string) {
 
 async function createShareCardBlob(data: ShareCardData) {
   await document.fonts?.ready;
-  const [brandIcon, tierIcon] = await Promise.all([
+  const [brandIcon, tierIcon, shareQr] = await Promise.all([
     loadBrowserImage(UI_ICONS.star),
     loadBrowserImage(data.tierIconSrc),
+    loadBrowserImage(SHARE_QR_ASSET),
   ]);
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
@@ -497,18 +503,11 @@ async function createShareCardBlob(data: ShareCardData) {
   context.font = '900 58px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText(`${data.fans} / ×${data.maxCombo}`, 124, 1286);
 
-  context.strokeStyle = "#17223a";
-  context.lineWidth = 12;
-  const qrCorners = [
-    [712, 1168],
-    [904, 1168],
-    [712, 1260],
-  ];
-  qrCorners.forEach(([x, y]) => context.strokeRect(x, y, 44, 44));
+  drawContainedImage(context, shareQr, 758, 1150, 154, 154);
   context.textAlign = "center";
   context.fillStyle = "#52617a";
   context.font = '700 20px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("二维码占位", 835, 1322);
+  context.fillText("扫码进入活动", 835, 1329);
   context.fillText("这次开学，我的隐藏人设被发现了", 540, 1370);
 
   return new Promise<Blob | null>((resolve) => {
@@ -3871,15 +3870,19 @@ export default function Home() {
                             <small>知识 / 最高连击</small>
                             <strong>{fans} / ×{maxCombo}</strong>
                           </div>
-                          <div
-                            className="share-card-qr-placeholder"
-                            aria-label="二维码占位，后续替换为活动网址"
+                          <a
+                            className="share-card-qr"
+                            href={SHARE_TARGET_URL}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label="扫描二维码或点击打开 QQ 音乐活动"
                           >
-                            <i />
-                            <i />
-                            <i />
-                            <small>二维码占位</small>
-                          </div>
+                            <img
+                              src={SHARE_QR_ASSET}
+                              alt="QQ 音乐开学冲冲冲活动二维码"
+                            />
+                            <small>扫码进入活动</small>
+                          </a>
                         </div>
                         <p>这次开学，我的隐藏人设被发现了。</p>
                       </article>

@@ -3297,42 +3297,28 @@ button:focus-visible {
   font-size: 12px;
 }
 
-.share-card-qr-placeholder {
-  position: relative;
-  display: grid;
+.share-card-qr {
+  display: flex;
+  flex-direction: column;
   min-height: 86px;
-  place-items: end center;
+  align-items: center;
+  justify-content: center;
   border: 2px solid var(--ink);
   background: #fff;
-  padding: 5px;
+  padding: 4px;
   color: var(--ink);
+  text-decoration: none;
 }
 
-.share-card-qr-placeholder i {
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  border: 4px solid currentColor;
+.share-card-qr img {
+  display: block;
+  width: 62px;
+  height: 62px;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
-.share-card-qr-placeholder i:nth-child(1) {
-  top: 7px;
-  left: 7px;
-}
-
-.share-card-qr-placeholder i:nth-child(2) {
-  top: 7px;
-  right: 7px;
-}
-
-.share-card-qr-placeholder i:nth-child(3) {
-  bottom: 23px;
-  left: 7px;
-}
-
-.share-card-qr-placeholder small {
-  position: relative;
-  z-index: 1;
+.share-card-qr small {
   color: #43526c;
   font-size: 7px;
   font-weight: 800;
@@ -6121,7 +6107,7 @@ body {
   font-size: 17px;
 }
 
-.share-card-qr-placeholder small {
+.share-card-qr small {
   font-size: 9px;
 }
 
@@ -6578,7 +6564,7 @@ body {
     grid-template-columns: minmax(0, 1fr) 88px;
   }
 
-  .share-card-qr-placeholder {
+  .share-card-qr {
     min-height: 88px;
   }
 }
