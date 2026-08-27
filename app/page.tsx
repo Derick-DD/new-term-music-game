@@ -40,8 +40,11 @@ const SECOND_MAGNET_CHANCE = 0.25;
 const VEHICLE_VISUAL_SCALE = 1.2;
 const VEHICLE_EFFECT_CENTER_Y = -46 * VEHICLE_VISUAL_SCALE;
 const MIN_OBSTACLE_BEAT_GAP = 3;
-const JOYSTICK_FIRST_REPEAT_MS = 120;
-const JOYSTICK_REPEAT_MS = 105;
+const JOYSTICK_DEAD_ZONE_RATIO = 0.2;
+const JOYSTICK_RESPONSE_CURVE = 1.45;
+const JOYSTICK_MAX_SPEED_PX_PER_SECOND = 180;
+const JOYSTICK_VELOCITY_RESPONSE = 8;
+const JOYSTICK_MAX_FRAME_DELTA_MS = 34;
 const STADIUM_SCORE_THRESHOLD = 6_500;
 const OBSTACLE_COLLISION_BEFORE = 36;
 const OBSTACLE_COLLISION_AFTER = 40;
@@ -607,6 +610,10 @@ function clampLane(lane: number) {
   return Math.max(0, Math.min(4, lane));
 }
 
+function laneForX(x: number) {
+  return clampLane(Math.round((x - laneCenter(0)) / LANE_WIDTH));
+}
+
 function getConcertTier(fans: number, maxCombo = 0): ConcertTier {
   const concertScore = fans * maxCombo;
   if (concertScore >= STADIUM_SCORE_THRESHOLD) {
@@ -709,10 +716,13 @@ export default function Home() {
   const toastTimerRef = useRef<number | null>(null);
   const judgementTimerRef = useRef<number | null>(null);
   const lastHitInputAtRef = useRef(-Infinity);
+  const joystickBaseRef = useRef<HTMLDivElement | null>(null);
+  const joystickKnobRef = useRef<HTMLElement | null>(null);
   const joystickPointerRef = useRef<number | null>(null);
-  const joystickDirectionRef = useRef<-1 | 0 | 1>(0);
+  const joystickInputRef = useRef(0);
+  const joystickVelocityRef = useRef(0);
   const joystickFrameRef = useRef<number | null>(null);
-  const joystickNextMoveAtRef = useRef(0);
+  const joystickLastFrameAtRef = useRef(0);
   const lastPerfectSoundAtRef = useRef(-Infinity);
   const tutorialActiveRef = useRef(false);
   const tutorialMovedRef = useRef(false);
@@ -752,7 +762,6 @@ export default function Home() {
   const [mobileSavePreviewUrl, setMobileSavePreviewUrl] = useState<
     string | null
   >(null);
-  const [joystickOffset, setJoystickOffset] = useState(0);
   const [noteJudgement, setNoteJudgement] = useState<NoteJudgement | null>(
     null,
   );
@@ -1831,9 +1840,13 @@ export default function Home() {
       joystickFrameRef.current = null;
     }
     joystickPointerRef.current = null;
-    joystickDirectionRef.current = 0;
-    joystickNextMoveAtRef.current = 0;
-    setJoystickOffset(0);
+    joystickInputRef.current = 0;
+    joystickVelocityRef.current = 0;
+    joystickLastFrameAtRef.current = 0;
+    joystickBaseRef.current?.setAttribute("aria-valuenow", "0");
+    if (joystickKnobRef.current) {
+      joystickKnobRef.current.style.transform = "translate3d(0, 0, 0)";
+    }
   }, []);
 
   const endTutorial = useCallback(() => {
@@ -2038,9 +2051,11 @@ export default function Home() {
         setBeatIndex(beat);
       }
 
-      busXRef.current +=
-        (laneCenter(laneRef.current) - busXRef.current) *
-        Math.min(1, delta * 14);
+      if (joystickPointerRef.current === null) {
+        busXRef.current +=
+          (laneCenter(laneRef.current) - busXRef.current) *
+          Math.min(1, delta * 14);
+      }
 
       if (magnetUntilRef.current > 0 && elapsed >= magnetUntilRef.current) {
         magnetUntilRef.current = -1;
@@ -2815,6 +2830,14 @@ export default function Home() {
     animationRef.current = window.requestAnimationFrame(gameLoop);
   }, [gameLoop, showToast]);
 
+  const registerTutorialMove = useCallback(() => {
+    if (!tutorialActiveRef.current || tutorialMovedRef.current) return;
+    tutorialMovedRef.current = true;
+    setTutorialMoved(true);
+    if (!tutorialHitRef.current) setTutorialPhase("hit");
+    completeTutorialIfReady(fallbackElapsedRef.current);
+  }, [completeTutorialIfReady]);
+
   const move = useCallback(
     (direction: -1 | 1) => {
       if (statusRef.current !== "playing") return;
@@ -2822,70 +2845,107 @@ export default function Home() {
       if (nextLane === laneRef.current) return;
       laneRef.current = nextLane;
       addBurst(laneCenter(nextLane), PLAYER_Y + 32, "#72f1ff", 4);
-      if (tutorialActiveRef.current && !tutorialMovedRef.current) {
-        tutorialMovedRef.current = true;
-        setTutorialMoved(true);
-        if (!tutorialHitRef.current) setTutorialPhase("hit");
-        completeTutorialIfReady(fallbackElapsedRef.current);
-      }
+      registerTutorialMove();
     },
-    [addBurst, completeTutorialIfReady],
+    [addBurst, registerTutorialMove],
   );
 
-  const steerWithJoystick = useCallback(
-    (direction: -1 | 0 | 1) => {
+  const startJoystickSteering = useCallback(() => {
+    if (statusRef.current !== "playing") return;
+    if (joystickFrameRef.current !== null) {
+      window.cancelAnimationFrame(joystickFrameRef.current);
+    }
+    joystickLastFrameAtRef.current = performance.now();
+
+    const continueSteering = (now: number) => {
       if (
-        direction === joystickDirectionRef.current ||
+        joystickPointerRef.current === null ||
         statusRef.current !== "playing"
       ) {
+        joystickFrameRef.current = null;
         return;
       }
-      if (joystickFrameRef.current !== null) {
-        window.cancelAnimationFrame(joystickFrameRef.current);
-        joystickFrameRef.current = null;
+
+      const elapsedMs = Math.min(
+        JOYSTICK_MAX_FRAME_DELTA_MS,
+        Math.max(0, now - joystickLastFrameAtRef.current),
+      );
+      joystickLastFrameAtRef.current = now;
+
+      const rawInput = joystickInputRef.current;
+      const inputMagnitude = Math.abs(rawInput);
+      const shapedInput =
+        inputMagnitude <= JOYSTICK_DEAD_ZONE_RATIO
+          ? 0
+          : Math.sign(rawInput) *
+            Math.pow(
+              (inputMagnitude - JOYSTICK_DEAD_ZONE_RATIO) /
+                (1 - JOYSTICK_DEAD_ZONE_RATIO),
+              JOYSTICK_RESPONSE_CURVE,
+            );
+      const targetVelocity =
+        shapedInput * JOYSTICK_MAX_SPEED_PX_PER_SECOND;
+      const velocityBlend =
+        1 -
+        Math.exp(
+          -(elapsedMs / 1_000) * JOYSTICK_VELOCITY_RESPONSE,
+        );
+      joystickVelocityRef.current +=
+        (targetVelocity - joystickVelocityRef.current) * velocityBlend;
+
+      if (
+        shapedInput === 0 &&
+        Math.abs(joystickVelocityRef.current) < 0.5
+      ) {
+        joystickVelocityRef.current = 0;
       }
-      joystickDirectionRef.current = direction;
-      if (direction === 0) return;
 
-      move(direction);
-      joystickNextMoveAtRef.current =
-        performance.now() + JOYSTICK_FIRST_REPEAT_MS;
+      const previousX = busXRef.current;
+      const nextX = Math.max(
+        laneCenter(0),
+        Math.min(
+          laneCenter(4),
+          previousX + joystickVelocityRef.current * (elapsedMs / 1_000),
+        ),
+      );
+      busXRef.current = nextX;
 
-      const continueSteering = (now: number) => {
-        if (
-          joystickDirectionRef.current !== direction ||
-          joystickPointerRef.current === null ||
-          statusRef.current !== "playing"
-        ) {
-          joystickFrameRef.current = null;
-          return;
+      if (Math.abs(nextX - previousX) > 0.01) {
+        const nextLane = laneForX(nextX);
+        if (nextLane !== laneRef.current) {
+          laneRef.current = nextLane;
+          addBurst(nextX, PLAYER_Y + 32, "#72f1ff", 2);
         }
-        if (now >= joystickNextMoveAtRef.current) {
-          move(direction);
-          joystickNextMoveAtRef.current = now + JOYSTICK_REPEAT_MS;
-        }
-        joystickFrameRef.current =
-          window.requestAnimationFrame(continueSteering);
-      };
+        registerTutorialMove();
+      }
+
       joystickFrameRef.current =
         window.requestAnimationFrame(continueSteering);
-    },
-    [move],
-  );
+    };
+
+    joystickFrameRef.current =
+      window.requestAnimationFrame(continueSteering);
+  }, [addBurst, registerTutorialMove]);
 
   const updateJoystick = useCallback(
     (clientX: number, target: HTMLElement) => {
       const bounds = target.getBoundingClientRect();
       const rawOffset = clientX - (bounds.left + bounds.width / 2);
-      const maxTravel = Math.max(36, (bounds.width - 64) / 2 - 7);
-      const deadZone = Math.max(12, maxTravel * 0.24);
+      const maxTravel = Math.max(28, (bounds.width - 62) / 2 - 8);
       const nextOffset = Math.max(-maxTravel, Math.min(maxTravel, rawOffset));
-      setJoystickOffset(nextOffset);
-      steerWithJoystick(
-        nextOffset < -deadZone ? -1 : nextOffset > deadZone ? 1 : 0,
+      const normalizedInput = nextOffset / maxTravel;
+
+      joystickInputRef.current = normalizedInput;
+      target.setAttribute(
+        "aria-valuenow",
+        String(Math.round(normalizedInput * 100)),
       );
+      if (joystickKnobRef.current) {
+        joystickKnobRef.current.style.transform =
+          `translate3d(${nextOffset}px, 0, 0)`;
+      }
     },
-    [steerWithJoystick],
+    [],
   );
 
   const returnToStart = useCallback(() => {
@@ -3996,13 +4056,15 @@ export default function Home() {
               aria-label="左右换道摇杆"
             >
               <div
+                ref={joystickBaseRef}
                 className="joystick-base"
                 role="slider"
                 tabIndex={status === "playing" ? 0 : -1}
-                aria-label="拖动摇杆左右换道"
-                aria-valuemin={-1}
-                aria-valuemax={1}
-                aria-valuenow={joystickDirectionRef.current}
+                aria-label="按住并平滑拖动摇杆控制车辆"
+                aria-valuemin={-100}
+                aria-valuemax={100}
+                aria-valuenow={0}
+                aria-orientation="horizontal"
                 aria-disabled={status !== "playing"}
                 onPointerDown={(event) => {
                   if (statusRef.current !== "playing") return;
@@ -4011,6 +4073,7 @@ export default function Home() {
                   event.currentTarget.focus({ preventScroll: true });
                   event.currentTarget.setPointerCapture(event.pointerId);
                   updateJoystick(event.clientX, event.currentTarget);
+                  startJoystickSteering();
                 }}
                 onPointerMove={(event) => {
                   if (joystickPointerRef.current !== event.pointerId) return;
@@ -4030,6 +4093,15 @@ export default function Home() {
                 }}
                 onPointerCancel={stopJoystick}
                 onLostPointerCapture={stopJoystick}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowLeft") {
+                    event.preventDefault();
+                    move(-1);
+                  } else if (event.key === "ArrowRight") {
+                    event.preventDefault();
+                    move(1);
+                  }
+                }}
               >
                 <span className="joystick-track" aria-hidden="true">
                   <i />
@@ -4039,8 +4111,8 @@ export default function Home() {
                   <i />
                 </span>
                 <b
+                  ref={joystickKnobRef}
                   className="joystick-knob"
-                  style={{ transform: `translateX(${joystickOffset}px)` }}
                   aria-hidden="true"
                 >
                   <img

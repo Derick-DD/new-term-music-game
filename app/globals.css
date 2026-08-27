@@ -3634,7 +3634,8 @@ button:focus-visible {
   box-shadow:
     0 5px 0 #176b8d,
     0 0 12px rgba(114, 241, 255, 0.35);
-  transition: transform 80ms ease-out;
+  transition: transform 60ms linear;
+  will-change: transform;
   pointer-events: none;
 }
 

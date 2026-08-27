@@ -84,7 +84,7 @@ test("uses one fixed audio file and preserves the versioned timing data", async 
   assert.doesNotMatch(page, /decodeAudioData|type="file"|handleSongUpload/);
 });
 
-test("preloads required images and keeps mobile steering active while held", async () => {
+test("preloads required images and uses low-sensitivity analog steering", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("app/page.tsx", ROOT), "utf8"),
     readFile(new URL("app/globals.css", ROOT), "utf8"),
@@ -97,8 +97,16 @@ test("preloads required images and keeps mobile steering active while held", asy
   assert.match(page, /joystickFrameRef/);
   assert.match(page, /window\.requestAnimationFrame\(continueSteering\)/);
   assert.match(page, /getCoalescedEvents/);
-  assert.match(page, /JOYSTICK_REPEAT_MS = 105/);
+  assert.match(page, /JOYSTICK_DEAD_ZONE_RATIO = 0\.2/);
+  assert.match(page, /JOYSTICK_RESPONSE_CURVE = 1\.45/);
+  assert.match(page, /JOYSTICK_MAX_SPEED_PX_PER_SECOND = 180/);
+  assert.match(page, /joystickVelocityRef\.current \+=/);
+  assert.match(page, /busXRef\.current = nextX/);
+  assert.match(page, /translate3d\(\$\{nextOffset\}px, 0, 0\)/);
+  assert.doesNotMatch(page, /JOYSTICK_REPEAT_MS|setJoystickOffset/);
   assert.match(page, /按住下方摇杆并向左右拖动/);
+  assert.match(styles, /transition: transform 60ms linear/);
+  assert.match(styles, /will-change: transform/);
   assert.match(styles, /\.tutorial-guide[\s\S]*?rgba\(23, 34, 58, 0\.52\)/);
 });
 
