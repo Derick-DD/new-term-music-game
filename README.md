@@ -12,8 +12,9 @@ HTML、CSS、JavaScript 与图片资源；最终产物不包含 Next 运行时�
 - 权限策略：不查询登录、VIP 或 SVIP；最终能否播放只以 QMPlayer 的真实
   `play` / `error` 事件为准
 - 失败策略：不回退本地 MP3，也不把任何音频文件放进静态产物
-- Sites 测试版本：`webview.outsideLaunch.enabled=false`，不触发端外拉起或
-  `y.qq.com` 回退跳转
+- Sites 测试版本：`webview.outsideLaunch.enabled=false`，同时不加载
+  `qmfe-unity-ad`、不创建 `QMPlugin`，因此不会触发端外拉起或 `y.qq.com`
+  回退跳转；QMPlayer 播放链路保持不变
 
 ## 构建、验证与 Sites 适配
 

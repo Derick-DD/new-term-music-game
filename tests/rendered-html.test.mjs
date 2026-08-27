@@ -60,6 +60,7 @@ test("builds the current application as a static export without Next runtime", a
   assert.match(sitesViteConfig, /publicDir:\s*"out"/);
   assert.match(staticIndex, /qmfe-unity-report\/iife\/index\.js/);
   assert.match(staticIndex, /activity-bridge\.js\?v=__ACTIVITY_RUNTIME_VERSION__/);
+  assert.doesNotMatch(staticIndex, /qmfe-unity-ad/);
   assert.doesNotMatch(staticIndex, /crossorigin/);
   assert.doesNotMatch(packageSource, /prepare-activity-static|releases\/fan-bus/);
 });
@@ -89,6 +90,7 @@ test("uses Activity.music for song 380208811 without membership checks or local 
   assert.match(page, /music\.on\("error"/);
   assert.match(bridge, /Activity\.registerCapability\("music"/);
   assert.match(bridge, /new window\.QMPlayer/);
+  assert.doesNotMatch(bridge, /QMPlugin/);
   assert.match(staticIndex, /music-2\.4\.0\.min\.js/);
   assert.match(staticIndex, /qmplayer\.music\.js/);
   assert.match(page, /typeof window\.QMPlayer !== "function"/);
@@ -130,6 +132,9 @@ test("registers Activity.music locally and forwards the configured song id to QM
 
   vm.runInNewContext(bridge, sandbox);
   assert.ok(sandbox.Activity?.music, "Activity.music should not depend on a client injection");
+  const outsideLaunch = await sandbox.Activity.webview.initOutsideLaunch();
+  assert.equal(outsideLaunch.initialized, false);
+  assert.equal(outsideLaunch.reason, "disabled-for-sites-testing");
 
   sandbox.QMPlayer = function QMPlayer() {};
   sandbox.QMPlayer.prototype.play = function play(song) {

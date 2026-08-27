@@ -120,9 +120,17 @@ const activityConfigSource = await readFile(
   path.join(ROOT, "public", "activity-sites.config.js"),
   "utf8",
 );
+const activityBridgeSource = await readFile(
+  path.join(ROOT, "public", "activity-bridge.js"),
+  "utf8",
+);
 assert(
   /outsideLaunch\s*:\s*\{\s*enabled\s*:\s*false\s*\}/.test(activityConfigSource),
   "Sites 测试版本必须禁用 outsideLaunch，避免端外重定向",
+);
+assert(
+  !activityBridgeSource.includes("QMPlugin"),
+  "Sites 测试版本不得保留 QMPlugin 端外拉起实现",
 );
 
 const searchableExtensions = new Set([".css", ".html", ".js", ".json", ".svg", ".txt"]);
@@ -159,7 +167,6 @@ const orderedScripts = [
   "qmfe-unity-report/iife/index.js",
   "music-2.4.0.min.js",
   "fixTopBar.js",
-  "qmfe-unity-ad/iife/index.js",
   "qmplayer.music.js",
   "activity-sites.config.js?v=",
   "activity-bridge.js?v=",
@@ -173,11 +180,14 @@ for (const script of orderedScripts) {
 assert(!html.includes("__ACTIVITY_CONFIG_VERSION__"), "Activity 配置缓存版本未生成");
 assert(!html.includes("__ACTIVITY_RUNTIME_VERSION__"), "Activity 运行时缓存版本未生成");
 assert(!/<script[^>]+y\.qq\.com[^>]+crossorigin/i.test(html), "Sites 跨域 Activity 经典脚本不应启用 CORS 模式");
+assert(!html.includes("qmfe-unity-ad"), "Sites 测试版本不得加载端外拉起 CDN");
 
 for (const forbidden of [
   "Music user CDN is unavailable",
   "Activity.user",
   "congratulations-treasure-tf-family.mp3",
+  "QMPlugin",
+  "qmfe-unity-ad",
 ]) {
   assert(!searchable.includes(forbidden), `静态产物仍包含已禁用内容：${forbidden}`);
 }
