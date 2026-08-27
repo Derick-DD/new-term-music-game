@@ -1,136 +1,157 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PACKAGE = path.join(
-  ROOT,
-  "releases",
-  "fan-bus-rhythm-rush-h5-20260827",
-);
-const REQUIRED_ROOT_FILES = [
-  "index.html",
-  "reset.css",
-  "rem.780.css",
-  "style.css",
-  "activity.config.js",
-  "activity.project.json",
-  "runtime.js",
-  "app.js",
-  "README.md",
-];
+const OUT = path.join(ROOT, "out");
+const DIST = path.join(ROOT, "dist", "client");
 const AUDIO_PATTERN = /\.(?:aac|flac|m4a|mp3|ogg|wav)$/i;
+const IMAGE_PATTERN = /\.(?:gif|jpe?g|png|svg|webp)$/i;
+
+function sha256(buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
+}
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
-  for (const entry of entries) {
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const fullPath = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...(await walk(fullPath)));
-    else files.push(fullPath);
+    else if (entry.isFile()) files.push(fullPath);
   }
   return files;
 }
 
-test("ships the Activity H5 Builder output contract without bundled audio", async () => {
-  const files = await walk(PACKAGE);
-  const relativeFiles = files.map((file) => path.relative(PACKAGE, file));
-
-  for (const requiredFile of REQUIRED_ROOT_FILES) {
-    assert.ok(relativeFiles.includes(requiredFile), `missing ${requiredFile}`);
+async function treeEntries(directory, excluded = new Set()) {
+  const files = await walk(directory);
+  const entries = [];
+  for (const fullPath of files) {
+    const relativePath = path.relative(directory, fullPath).split(path.sep).join("/");
+    if (excluded.has(relativePath)) continue;
+    const buffer = await readFile(fullPath);
+    entries.push({ path: relativePath, bytes: buffer.byteLength, sha256: sha256(buffer) });
   }
-  assert.equal(relativeFiles.some((file) => AUDIO_PATTERN.test(file)), false);
-  assert.equal(relativeFiles.some((file) => /(?:^|\/)package\.json$/.test(file)), false);
-  assert.equal(relativeFiles.some((file) => /\.(?:jsx?|tsx?)$/i.test(file) && !/\.js$/i.test(file)), false);
+  return entries;
+}
 
-  const project = JSON.parse(
-    await readFile(path.join(PACKAGE, "activity.project.json"), "utf8"),
-  );
-  assert.equal(project.schemaVersion, 1);
-  assert.equal(project.target, "h5");
-  assert.equal(project.entryFile, "index.html");
-});
+function treeSha256(files) {
+  return sha256(Buffer.from(files.map((file) => `${file.path}\0${file.sha256}\n`).join("")));
+}
 
-test("uses the reviewed Activity.music and QMPlayer playback contract", async () => {
-  const [index, config, app, runtime, chartSource] = await Promise.all([
-    readFile(path.join(PACKAGE, "index.html"), "utf8"),
-    readFile(path.join(PACKAGE, "activity.config.js"), "utf8"),
-    readFile(path.join(PACKAGE, "app.js"), "utf8"),
-    readFile(path.join(PACKAGE, "runtime.js"), "utf8"),
-    readFile(path.join(PACKAGE, "assets", "game-chart.json"), "utf8"),
+test("builds the current Next application directly as a static export", async () => {
+  const [packageSource, nextConfig, viteConfig] = await Promise.all([
+    readFile(path.join(ROOT, "package.json"), "utf8"),
+    readFile(path.join(ROOT, "next.config.ts"), "utf8"),
+    readFile(path.join(ROOT, "vite.config.ts"), "utf8"),
   ]);
-  const chart = JSON.parse(chartSource);
-
-  assert.match(config, /id:\s*380208811/);
-  assert.match(config, /requiredMembership:\s*"vip"/);
-  assert.match(app, /Activity\.music\.play\(songToPlay, 0\)/);
-  assert.match(app, /Activity\.music\.pause\(\)/);
-  assert.match(app, /Activity\.music\.resume\(\)/);
-  assert.match(app, /Activity\.music\.on\("play"/);
-  assert.match(app, /Activity\.music\.on\("error"/);
-  assert.match(app, /Activity\.user\.queryProfile\(\)/);
-  assert.match(app, /Promise\.resolve\(\)[\s\S]*Activity\.user\.requireLogin/);
-  assert.match(app, /QQ 音乐用户态不可用或会员状态查询失败，将交由 QMPlayer 校验实际播放权限/);
-  assert.match(app, /Login was not completed\|Login is required/);
-  assert.doesNotMatch(app, /new\s+Audio\s*\(|AudioContext|new\s+QMPlayer|Music\.client/);
-  assert.match(runtime, /Activity\.registerCapability\("music"/);
-  assert.match(runtime, /new window\.QMPlayer/);
-  assert.match(index, /music-2\.4\.0\.min\.js/);
-  assert.match(index, /qmplayer\.music\.js/);
-  assert.doesNotMatch(index, /lib\/h5\/(?:preact|music)\.js/);
-  assert.equal(chart.audio.localSrc, undefined);
-  assert.equal(chart.audio.url, undefined);
-});
-
-test("loads canonical styles and preloads every current gameplay asset", async () => {
-  const [index, app] = await Promise.all([
-    readFile(path.join(PACKAGE, "index.html"), "utf8"),
-    readFile(path.join(PACKAGE, "app.js"), "utf8"),
-  ]);
-  const resetIndex = index.indexOf("./reset.css");
-  const remIndex = index.indexOf("./rem.780.css");
-  const styleIndex = index.indexOf("./style.css");
-  assert.ok(resetIndex >= 0 && resetIndex < remIndex && remIndex < styleIndex);
-  assert.match(app, /function loadImages\(\)/);
-  assert.match(app, /Promise\.all\(urls\.map/);
-  assert.match(app, /fetch\("\.\/assets\/game-chart\.json"/);
-
-  const references = new Set();
-  for (const source of [index, app]) {
-    for (const match of source.matchAll(/["'](\.\/assets\/[^"']+)["']/g)) {
-      references.add(match[1]);
-    }
-  }
-  for (const reference of references) {
-    const target = path.resolve(PACKAGE, reference);
-    assert.ok(target.startsWith(PACKAGE + path.sep));
-    await readFile(target);
-  }
-});
-
-test("publishes the same Skill package through Sites", async () => {
-  const [packageSource, prepareSource, sourceIndex, outIndex, deployedIndex] =
-    await Promise.all([
-      readFile(path.join(ROOT, "package.json"), "utf8"),
-      readFile(path.join(ROOT, "build", "prepare-activity-static.mjs"), "utf8"),
-      readFile(path.join(PACKAGE, "index.html")),
-      readFile(path.join(ROOT, "out", "index.html")),
-      readFile(path.join(ROOT, "dist", "client", "index.html")),
-    ]);
   const packageFile = JSON.parse(packageSource);
-  const outFiles = await walk(path.join(ROOT, "out"));
-  const deployedFiles = await walk(path.join(ROOT, "dist", "client"));
 
   assert.equal(
     packageFile.scripts["build:static"],
-    "node build/prepare-activity-static.mjs",
+    "next build && node build/verify-static-export.mjs",
   );
-  assert.match(prepareSource, /forbiddenMediaExtensions/);
-  assert.deepEqual(outIndex, sourceIndex);
-  assert.deepEqual(deployedIndex, sourceIndex);
-  assert.equal(outFiles.some((file) => AUDIO_PATTERN.test(file)), false);
-  assert.equal(deployedFiles.some((file) => AUDIO_PATTERN.test(file)), false);
+  assert.match(nextConfig, /output:\s*"export"/);
+  assert.match(viteConfig, /publicDir:\s*"out"/);
+  assert.doesNotMatch(packageSource, /prepare-activity-static|releases\/fan-bus/);
+});
+
+test("uses Activity.music for song 380208811 without membership checks or local audio", async () => {
+  const [page, layout, bridge, config, chartSource] = await Promise.all([
+    readFile(path.join(ROOT, "app", "page.tsx"), "utf8"),
+    readFile(path.join(ROOT, "app", "layout.tsx"), "utf8"),
+    readFile(path.join(ROOT, "public", "activity-bridge.js"), "utf8"),
+    readFile(path.join(ROOT, "public", "activity-sites.config.js"), "utf8"),
+    readFile(path.join(ROOT, "app", "data", "congratulations-treasure.chart.json"), "utf8"),
+  ]);
+  const chart = JSON.parse(chartSource);
+  const sourceFiles = await walk(path.join(ROOT, "public"));
+
+  assert.match(config, /id:\s*380208811/);
+  assert.match(page, /const SONG_ID = 380208811/);
+  assert.match(page, /music\.play\(/);
+  assert.match(page, /music\.resume\(\)/);
+  assert.match(page, /requireActivityMusic\(\)\.pause\(\)/);
+  assert.match(page, /music\.on\("play"/);
+  assert.match(page, /music\.on\("error"/);
+  assert.match(bridge, /Activity\.registerCapability\("music"/);
+  assert.match(bridge, /new window\.QMPlayer/);
+  assert.match(layout, /music-2\.4\.0\.min\.js/);
+  assert.match(layout, /qmplayer\.music\.js/);
+  assert.doesNotMatch(`${page}\n${config}\n${bridge}`, /Activity\.user|queryProfile|requiredMembership|vipStatus|svipStatus/);
+  assert.doesNotMatch(page, /new\s+Audio\s*\(|AudioContext|webkitAudioContext|localSrc/);
+  assert.equal(chart.audio.songId, 380208811);
+  assert.equal(chart.audio.localSrc, undefined);
+  assert.equal(sourceFiles.some((file) => AUDIO_PATTERN.test(file)), false);
+});
+
+test("retains the current gameplay, tutorial, control, lane, and share changes", async () => {
+  const [page, css, config, imageManifestSource] = await Promise.all([
+    readFile(path.join(ROOT, "app", "page.tsx"), "utf8"),
+    readFile(path.join(ROOT, "app", "globals.css"), "utf8"),
+    readFile(path.join(ROOT, "public", "activity-sites.config.js"), "utf8"),
+    readFile(path.join(ROOT, "app", "data", "static-image-assets.json"), "utf8"),
+  ]);
+  const configuredImages = JSON.parse(imageManifestSource).sort();
+  const publicImages = (await walk(path.join(ROOT, "public")))
+    .filter((file) => IMAGE_PATTERN.test(file))
+    .map((file) => `/${path.relative(path.join(ROOT, "public"), file).split(path.sep).join("/")}`)
+    .sort();
+
+  assert.match(page, /drag\.startOffset \+ \(clientX - drag\.startClientX\)/);
+  assert.match(page, /const normalizedOffset = nextOffset \/ drag\.maxTravel/);
+  assert.match(page, /syncJoystickVisual\(nextX, drag\.maxTravel\)/);
+  assert.match(page, /getCoalescedEvents/);
+  assert.match(page, /className="tutorial-game-callouts"/);
+  assert.match(page, /按住底部摇杆左右拖动/);
+  assert.match(page, /className="secondary-button rules-home-button"/);
+  assert.match(page, /for \(let marker = 0; marker < 5; marker \+= 1\)/);
+  assert.match(page, /phase \+ 0\.09 \+ phase \* 0\.12/);
+  assert.ok(page.indexOf("这次开学，我的隐藏人设被发现了") < page.indexOf('className="share-card-topline"'));
+  assert.match(css, /\.joystick-control\s*\{[\s\S]*?background:\s*#45c8ed/);
+  assert.match(css, /\.cabinet-top\s*\{[\s\S]*?overflow:\s*hidden/);
+  assert.match(css, /\.share-card-tagline/);
+  assert.match(config, /https:\/\/y\.qq\.com\/viber_pub\/campus_gogogo\/index\.html\?_hidehd=1&_miniplayer=1/);
+  assert.match(page, /Promise\.all\(\s*REQUIRED_IMAGE_URLS\.map/);
+  assert.deepEqual(configuredImages, publicImages);
+});
+
+test("records and verifies the exact current source and pure-static artifact trees", async () => {
+  const manifest = JSON.parse(
+    await readFile(path.join(OUT, "static-build-manifest.json"), "utf8"),
+  );
+  assert.equal(manifest.buildType, "next-static-export");
+  assert.equal(manifest.guarantees.currentApplicationSource, true);
+  assert.equal(manifest.guarantees.staticOnly, true);
+  assert.equal(manifest.guarantees.bundledAudio, false);
+  assert.equal(manifest.guarantees.membershipDetection, false);
+  assert.equal(manifest.guarantees.songId, 380208811);
+
+  for (const source of manifest.sourceFiles) {
+    const buffer = await readFile(path.join(ROOT, source.path));
+    assert.equal(buffer.byteLength, source.bytes, `source byte count changed: ${source.path}`);
+    assert.equal(sha256(buffer), source.sha256, `source hash changed: ${source.path}`);
+  }
+  assert.equal(treeSha256(manifest.sourceFiles), manifest.sourceTreeSha256);
+
+  const artifacts = await treeEntries(OUT, new Set(["static-build-manifest.json"]));
+  assert.equal(artifacts.length, manifest.artifactCount);
+  assert.equal(treeSha256(artifacts), manifest.artifactTreeSha256);
+  assert.equal(artifacts.some((file) => AUDIO_PATTERN.test(file.path)), false);
+  assert.equal(artifacts.some((file) => file.path.endsWith(".DS_Store")), false);
+});
+
+test("publishes every verified out artifact byte-for-byte through Sites", async () => {
+  const outFiles = await treeEntries(OUT);
+  const distFiles = await treeEntries(DIST);
+  const distByPath = new Map(distFiles.map((file) => [file.path, file]));
+
+  for (const output of outFiles) {
+    assert.deepEqual(distByPath.get(output.path), output, `Sites artifact mismatch: ${output.path}`);
+  }
+  assert.equal(distFiles.some((file) => AUDIO_PATTERN.test(file.path)), false);
   await readFile(path.join(ROOT, "dist", "server", "index.js"));
 });

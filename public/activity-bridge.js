@@ -152,6 +152,95 @@
 (function (Activity) {
   "use strict";
 
+  var player = null;
+
+  function compactOptions(value) {
+    return Object.keys(value || {}).reduce(function (result, key) {
+      if (value[key] !== undefined && value[key] !== null && value[key] !== "") result[key] = value[key];
+      return result;
+    }, {});
+  }
+
+  function requirePlayer() {
+    if (typeof window.QMPlayer !== "function") throw new Error("QMPlayer CDN is unavailable.");
+    if (!player) player = new window.QMPlayer(compactOptions(Activity.getConfig("music.player") || {}));
+    return player;
+  }
+
+  function playerPromise(callback) {
+    try {
+      var result = callback(requirePlayer());
+      return result && typeof result.then === "function" ? result : Promise.resolve(result);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  function normalizePlayerSong(song) {
+    if (typeof song === "number") {
+      if (!isFinite(song) || song <= 0) throw new Error("Song id must be a positive number.");
+      return song;
+    }
+    if (typeof song === "string") {
+      if (!song.trim()) throw new Error("Song id or mid is required.");
+      return /^\d+$/.test(song) ? Number(song) : song;
+    }
+    if (!song) throw new Error("Song id or mid is required.");
+    if (song.id !== undefined && song.id !== null && song.id !== "") {
+      var id = Number(song.id);
+      if (!isFinite(id) || id <= 0) throw new Error("Song id must be a positive number.");
+      return id;
+    }
+    if (song.mid) return String(song.mid);
+    throw new Error("Song id or mid is required.");
+  }
+
+  Activity.registerCapability("music", {
+    getConfigured: function (type) {
+      var value = Activity.getConfig("music." + type);
+      return Array.isArray(value) ? value : [];
+    },
+    play: function (songs, index, options) {
+      try {
+        var list = (Array.isArray(songs) ? songs : [songs]).map(normalizePlayerSong);
+        if (!list.length) return Promise.reject(new Error("At least one song is required for playback."));
+        var targetIndex = Number(index || 0);
+        if (!isFinite(targetIndex) || targetIndex < 0 || targetIndex >= list.length) {
+          return Promise.reject(new Error("Playback index is outside the song list."));
+        }
+        var playOptions = Object.assign({}, options || {});
+        if (list.length > 1 || targetIndex) playOptions.index = targetIndex;
+        return playerPromise(function (instance) {
+          return instance.play(list.length === 1 ? list[0] : list, playOptions);
+        });
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    },
+    pause: function () {
+      return playerPromise(function (instance) { return instance.pause(); });
+    },
+    resume: function () {
+      return playerPromise(function (instance) { return instance.play(); });
+    },
+    on: function (events, callback) {
+      var instance = requirePlayer();
+      instance.on(events, callback);
+      return instance;
+    },
+    off: function (events, callback) {
+      var instance = requirePlayer();
+      if (typeof instance.off === "function") instance.off(events, callback);
+      return instance;
+    },
+    getState: function () {
+      return requirePlayer().state || "";
+    }
+  });
+})(window.Activity);
+(function (Activity) {
+  "use strict";
+
   var externalMessage = "这不是 QQ 音乐链接，是否依然跳转？";
 
   function parseUrl(value) {
@@ -164,7 +253,7 @@
     var parsed;
     try {
       parsed = new window.URL(raw, window.location && window.location.href || "https://y.qq.com/");
-    } catch (error) {
+    } catch {
       return { url: raw, kind: "invalid", qqMusic: false, allowed: false, reason: "invalid-url" };
     }
 

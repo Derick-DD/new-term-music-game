@@ -7385,6 +7385,15 @@ body {
 }
 
 /* Final mobile frame, steering palette, and classic share-card layout. */
+.share-card-tagline {
+  margin: 0 0 7px;
+  color: #52617a;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-align: left;
+}
+
 .joystick-control {
   border-color: var(--ink);
   background: #45c8ed;
@@ -7551,6 +7560,12 @@ body {
 }
 
 @media (max-width: 380px), (max-height: 680px) and (max-width: 780px) {
+  .share-result-card > .share-card-tagline {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 11px;
+  }
+
   .share-card-venue {
     grid-template-columns: 1fr;
     min-height: 132px;

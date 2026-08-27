@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import treasureChart from "./data/congratulations-treasure.chart.json";
+import staticImageAssets from "./data/static-image-assets.json";
 
 type ActivityShareApi = {
   init?: (options?: Record<string, unknown>) => unknown;
@@ -17,12 +18,29 @@ type ActivityShareApi = {
   off?: (callback?: (result: unknown) => void) => unknown;
 };
 
+type ActivityMusicApi = {
+  getConfigured?: (type: "songs") => Array<{
+    id: number;
+    name?: string;
+    singerName?: string;
+  }>;
+  play: (
+    song: { id: number; name?: string; singerName?: string } | number,
+    index?: number,
+  ) => Promise<unknown>;
+  pause: () => Promise<unknown>;
+  resume: () => Promise<unknown>;
+  on: (events: string, callback: (event?: unknown) => void) => unknown;
+  off: (events: string, callback: (event?: unknown) => void) => unknown;
+};
+
 declare global {
   interface Window {
     ACTIVITY_CONFIG?: Record<string, unknown>;
     Activity?: {
       configure?: (config?: Record<string, unknown>) => unknown;
       share?: ActivityShareApi;
+      music?: ActivityMusicApi;
     };
     Music?: {
       browser?: { music?: boolean };
@@ -76,6 +94,127 @@ const TUTORIAL_STAR_SPAWN_BEAT = 6;
 const TUTORIAL_STAR_TARGET_BEAT = 10;
 const TUTORIAL_COMPLETE_HOLD_MS = 620;
 const SWIPE_MOVE_THRESHOLD_PX = 32;
+const SONG_ID = 380208811;
+const PLAYBACK_CONFIRM_TIMEOUT_MS = 8_000;
+
+function requireActivityMusic() {
+  const music = window.Activity?.music;
+  if (!music) throw new Error("Activity.music / QMPlayer 暂不可用");
+  return music;
+}
+
+function runConfirmedPlayback(mode: "play" | "resume") {
+  const music = requireActivityMusic();
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let timer = 0;
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      try {
+        music.off("play", handlePlay);
+        music.off("error", handleError);
+      } catch {
+        // The playback result has already been decided.
+      }
+    };
+    const complete = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
+    const handlePlay = () => complete(resolve);
+    const handleError = (event?: unknown) => {
+      const detail =
+        event && typeof event === "object"
+          ? String(
+              (event as { message?: unknown; error?: unknown; code?: unknown })
+                .message ??
+                (event as { error?: unknown }).error ??
+                (event as { code?: unknown }).code ??
+                "",
+            )
+          : "";
+      complete(() =>
+        reject(new Error(`QMPlayer 播放失败${detail ? `：${detail}` : ""}`)),
+      );
+    };
+
+    try {
+      music.on("play", handlePlay);
+      music.on("error", handleError);
+      timer = window.setTimeout(
+        () =>
+          complete(() =>
+            reject(new Error("QMPlayer 未在规定时间内确认播放")),
+          ),
+        PLAYBACK_CONFIRM_TIMEOUT_MS,
+      );
+      const action =
+        mode === "resume"
+          ? music.resume()
+          : music.play(
+              {
+                id: SONG_ID,
+                name: "恭喜你发现了宝藏",
+                singerName: "TF家族",
+              },
+              0,
+            );
+      Promise.resolve(action).catch((error) =>
+        complete(() =>
+          reject(error instanceof Error ? error : new Error(String(error))),
+        ),
+      );
+    } catch (error) {
+      complete(() =>
+        reject(error instanceof Error ? error : new Error(String(error))),
+      );
+    }
+  });
+}
+
+class ActivitySongController {
+  private elapsedMs = 0;
+  private startedAt = 0;
+
+  paused = true;
+  readonly src = `qqmusic://song/${SONG_ID}`;
+
+  get currentTime() {
+    const elapsed = this.paused
+      ? this.elapsedMs
+      : performance.now() - this.startedAt;
+    return Math.max(0, elapsed) / 1_000;
+  }
+
+  set currentTime(value: number) {
+    this.elapsedMs = Math.max(0, Number(value) || 0) * 1_000;
+    if (!this.paused) this.startedAt = performance.now() - this.elapsedMs;
+  }
+
+  get ended() {
+    return this.currentTime * 1_000 >= PRECOMPUTED_CHART.audio.durationMs;
+  }
+
+  async play() {
+    const mode = this.paused && this.elapsedMs > 0 ? "resume" : "play";
+    await runConfirmedPlayback(mode);
+    this.startedAt = performance.now() - this.elapsedMs;
+    this.paused = false;
+  }
+
+  pause() {
+    if (this.paused) return;
+    this.elapsedMs = Math.max(0, performance.now() - this.startedAt);
+    this.paused = true;
+    try {
+      void requireActivityMusic().pause().catch(() => undefined);
+    } catch {
+      // Local timer state remains paused even if the host player disappeared.
+    }
+  }
+}
 
 function triggerHaptic(pattern: number | number[]) {
   if (
@@ -212,7 +351,6 @@ type Track = {
   tempoLabel: string;
   difficulty: string;
   color: string;
-  audioSrc: string;
   mapTheme: "campus-season";
   mapLabel: string;
   totalBeats: number;
@@ -294,10 +432,6 @@ function getVehicleTaskProgress(
 }
 
 const PRECOMPUTED_CHART = treasureChart;
-const AUDIO_SOURCE_API =
-  process.env.NEXT_PUBLIC_TREASURE_AUDIO_API?.trim() ?? "";
-const DIRECT_AUDIO_URL =
-  process.env.NEXT_PUBLIC_TREASURE_AUDIO_URL?.trim() ?? "";
 const GAME_TRACK: Track = {
   id: "congratulations-treasure",
   name: PRECOMPUTED_CHART.audio.title,
@@ -307,7 +441,6 @@ const GAME_TRACK: Track = {
   tempoLabel: "OPENING SEASON",
   difficulty: "NORMAL",
   color: "#23cfb2",
-  audioSrc: PRECOMPUTED_CHART.audio.localSrc,
   mapTheme: "campus-season",
   mapLabel: "开学季校园",
   totalBeats: PRECOMPUTED_CHART.timing.beatTimesMs.length - 1,
@@ -371,15 +504,7 @@ const SHARE_QR_ASSET = "/assets/campus-season/campus-share-qr.svg";
 
 const REQUIRED_IMAGE_URLS = Array.from(
   new Set([
-    "/assets/campus-season/campus-hero.png",
-    "/assets/ui/play-icon.png",
-    "/assets/campus-season/icons/obstacle-books.png",
-    "/assets/campus-season/icons/outcome-genius.png",
-    "/assets/campus-season/icons/outcome-grind-king.png",
-    "/assets/campus-season/icons/outcome-hidden-achiever.png",
-    "/assets/campus-season/icons/outcome-scholar.png",
-    "/assets/campus-season/icons/outcome-slacker-fish.png",
-    SHARE_QR_ASSET,
+    ...staticImageAssets,
     ...Object.values(CAMPUS_ASSETS),
     ...Object.values(UI_ICONS),
     ...Object.values(OUTCOME_ICONS),
@@ -493,9 +618,13 @@ async function createShareCardBlob(data: ShareCardData) {
   context.strokeRect(48, 48, 984, 1344);
 
   context.textAlign = "left";
+  context.fillStyle = "#52617a";
+  context.font = '700 28px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
+  context.fillText("这次开学，我的隐藏人设被发现了", 92, 100);
+
   context.fillStyle = "#17223a";
   context.font = '800 30px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("CAMPUS RESULT / OPENING SEASON", 92, 125);
+  context.fillText("CAMPUS RESULT / OPENING SEASON", 92, 145);
 
   context.fillStyle = "#fff5e8";
   context.fillRect(92, 172, 96, 74);
@@ -730,11 +859,7 @@ export default function Home() {
   const particlesRef = useRef<Particle[]>([]);
   const floatTextRef = useRef<FloatText[]>([]);
   const pedestrianRef = useRef<Pedestrian | null>(null);
-  const audioRef = useRef<AudioContext | null>(null);
-  const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const lowShelfRef = useRef<BiquadFilterNode | null>(null);
-  const highShelfRef = useRef<BiquadFilterNode | null>(null);
-  const songRef = useRef<HTMLAudioElement | null>(null);
+  const songRef = useRef<ActivitySongController | null>(null);
   const mutedRef = useRef(false);
   const beatPulseRef = useRef(0);
   const shakeRef = useRef(0);
@@ -768,7 +893,6 @@ export default function Home() {
   const joystickMaxTravelRef = useRef(JOYSTICK_MIN_TRAVEL_PX);
   const joystickPendingClientXRef = useRef<number | null>(null);
   const joystickFrameRef = useRef<number | null>(null);
-  const lastPerfectSoundAtRef = useRef(-Infinity);
   const tutorialActiveRef = useRef(false);
   const tutorialMovedRef = useRef(false);
   const tutorialHitRef = useRef(false);
@@ -1049,13 +1173,6 @@ export default function Home() {
   );
 
   const resetSongTone = useCallback(() => {
-    const audio = audioRef.current;
-    if (audio) {
-      const now = audio.currentTime;
-      lowShelfRef.current?.gain.setTargetAtTime(0, now, 0.08);
-      highShelfRef.current?.gain.setTargetAtTime(0, now, 0.08);
-    }
-    if (songRef.current) songRef.current.playbackRate = 1;
     toneModeRef.current = "normal";
     arrangementUntilRef.current = -1;
     setToneMode("normal");
@@ -1094,117 +1211,13 @@ export default function Home() {
   }, [addBurst, addFloatText, showToast]);
 
   const playFanHit = useCallback((targetBeat: number) => {
-    const audio = audioRef.current;
-    if (!audio || mutedRef.current) return;
-    const now = audio.currentTime;
-    const base =
-      trackRef.current.melody[targetBeat % trackRef.current.melody.length];
-
-    [base, base * 2].forEach((frequency, index) => {
-      const sparkle = audio.createOscillator();
-      const gain = audio.createGain();
-      sparkle.type = index === 0 ? "square" : "sine";
-      sparkle.frequency.setValueAtTime(frequency, now + index * 0.045);
-      gain.gain.setValueAtTime(
-        index === 0 ? 0.085 : 0.055,
-        now + index * 0.045,
-      );
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2 + index * 0.045);
-      sparkle.connect(gain).connect(audio.destination);
-      sparkle.start(now + index * 0.045);
-      sparkle.stop(now + 0.22 + index * 0.045);
-    });
+    void targetBeat;
   }, []);
 
-  const playPerfectHit = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio || mutedRef.current) return;
-
-    const play = () => {
-      if (mutedRef.current || audio.state !== "running") return;
-      const inputAt = performance.now();
-      if (inputAt - lastPerfectSoundAtRef.current < 70) return;
-      lastPerfectSoundAtRef.current = inputAt;
-
-      const now = audio.currentTime + 0.006;
-      const sparkleBus = audio.createGain();
-      const sparkleFilter = audio.createBiquadFilter();
-      sparkleBus.gain.setValueAtTime(0.92, now);
-      sparkleFilter.type = "highpass";
-      sparkleFilter.frequency.setValueAtTime(520, now);
-      sparkleBus.connect(sparkleFilter).connect(audio.destination);
-
-      [
-        {
-          frequency: 740,
-          peak: 0.1,
-          delay: 0,
-          type: "triangle" as OscillatorType,
-        },
-        {
-          frequency: 1110,
-          peak: 0.072,
-          delay: 0.028,
-          type: "sine" as OscillatorType,
-        },
-        {
-          frequency: 1665,
-          peak: 0.042,
-          delay: 0.052,
-          type: "sine" as OscillatorType,
-        },
-      ].forEach(({ frequency, peak, delay, type }) => {
-        const sparkle = audio.createOscillator();
-        const sparkleGain = audio.createGain();
-        const startAt = now + delay;
-        sparkle.type = type;
-        sparkle.frequency.setValueAtTime(frequency, startAt);
-        sparkle.frequency.exponentialRampToValueAtTime(
-          frequency * 1.16,
-          startAt + 0.105,
-        );
-        sparkleGain.gain.setValueAtTime(0.0001, startAt);
-        sparkleGain.gain.linearRampToValueAtTime(peak, startAt + 0.008);
-        sparkleGain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.17);
-        sparkle.connect(sparkleGain).connect(sparkleBus);
-        sparkle.start(startAt);
-        sparkle.stop(startAt + 0.18);
-      });
-    };
-
-    if (audio.state !== "running") {
-      void audio
-        .resume()
-        .then(play)
-        .catch(() => undefined);
-      return;
-    }
-    play();
-  }, []);
+  const playPerfectHit = useCallback(() => undefined, []);
 
   const playObstacleImpact = useCallback((obstacle: ObstacleType) => {
-    const audio = audioRef.current;
-    if (!audio || audio.state !== "running" || mutedRef.current) return;
-
-    const now = audio.currentTime + 0.004;
-    const impact = audio.createOscillator();
-    const impactGain = audio.createGain();
-    const impactFilter = audio.createBiquadFilter();
-    const startFrequency =
-      obstacle === "barrier" ? 125 : obstacle === "pothole" ? 155 : 185;
-    const peak = obstacle === "barrier" ? 0.075 : 0.055;
-
-    impact.type = "triangle";
-    impact.frequency.setValueAtTime(startFrequency, now);
-    impact.frequency.exponentialRampToValueAtTime(52, now + 0.14);
-    impactGain.gain.setValueAtTime(0.0001, now);
-    impactGain.gain.linearRampToValueAtTime(peak, now + 0.006);
-    impactGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
-    impactFilter.type = "lowpass";
-    impactFilter.frequency.setValueAtTime(460, now);
-    impact.connect(impactGain).connect(impactFilter).connect(audio.destination);
-    impact.start(now);
-    impact.stop(now + 0.16);
+    void obstacle;
   }, []);
 
   const loadFixedSong = useCallback(async () => {
@@ -1212,97 +1225,14 @@ export default function Home() {
     setSongReady(false);
     setSongError("");
 
-    songRef.current?.pause();
-    if (audioRef.current) {
-      await audioRef.current.close();
-      audioRef.current = null;
-    }
-    mediaSourceRef.current = null;
-    lowShelfRef.current = null;
-    highShelfRef.current = null;
-
-    let sourceUrl = DIRECT_AUDIO_URL || GAME_TRACK.audioSrc;
-    let remoteFallbackUsed = false;
-    if (AUDIO_SOURCE_API) {
-      try {
-        const response = await fetch(AUDIO_SOURCE_API, { cache: "no-store" });
-        if (!response.ok) throw new Error("线上歌曲接口不可用");
-        const payload = (await response.json()) as {
-          url?: string;
-          audioId?: string;
-          chartVersion?: string;
-          audioSha256?: string;
-        };
-        if (!payload.url) throw new Error("线上歌曲接口未返回 URL");
-        if (
-          payload.audioId !== PRECOMPUTED_CHART.audio.id ||
-          payload.chartVersion !== PRECOMPUTED_CHART.chartVersion ||
-          payload.audioSha256 !== PRECOMPUTED_CHART.audio.sha256
-        ) {
-          throw new Error("线上主题曲版本不适配本次活动");
-        }
-        sourceUrl = payload.url;
-      } catch {
-        sourceUrl = GAME_TRACK.audioSrc;
-        remoteFallbackUsed = true;
-      }
-    }
-
     try {
-      const localUrl = new URL(GAME_TRACK.audioSrc, window.location.href).href;
-      const prepareSong = (url: string) =>
-        new Promise<HTMLAudioElement>((resolve, reject) => {
-          const song = new Audio();
-          const cleanup = () => {
-            song.removeEventListener("loadedmetadata", handleReady);
-            song.removeEventListener("canplay", handleReady);
-            song.removeEventListener("error", handleError);
-          };
-          const handleReady = () => {
-            cleanup();
-            const durationMs = Math.round(song.duration * 1000);
-            if (
-              Number.isFinite(durationMs) &&
-              Math.abs(durationMs - PRECOMPUTED_CHART.audio.durationMs) > 750
-            ) {
-              reject(new Error("主题曲版本与本次活动不匹配"));
-              return;
-            }
-            resolve(song);
-          };
-          const handleError = () => {
-            cleanup();
-            reject(new Error("音频文件不可用"));
-          };
-          song.preload = "auto";
-          song.muted = mutedRef.current;
-          song.playbackRate = 1;
-          song.addEventListener("loadedmetadata", handleReady);
-          song.addEventListener("canplay", handleReady);
-          song.addEventListener("error", handleError);
-          song.src = new URL(url, window.location.href).href;
-          song.load();
-        });
-
-      const requestedUrl = new URL(sourceUrl, window.location.href).href;
-      let song: HTMLAudioElement;
-      try {
-        song = await prepareSong(requestedUrl);
-      } catch (error) {
-        if (requestedUrl === localUrl) throw error;
-        remoteFallbackUsed = true;
-        song = await prepareSong(localUrl);
-      }
-      songRef.current = song;
+      requireActivityMusic();
+      songRef.current?.pause();
+      songRef.current = new ActivitySongController();
       trackRef.current = GAME_TRACK;
       beatTimesRef.current = [...PRECOMPUTED_CHART.timing.beatTimesMs];
       setSongReady(true);
-      showToast(
-        remoteFallbackUsed
-          ? "线上主题曲暂不可用 · 已切换本地主题曲"
-          : "主题曲准备完成 · 可以出发啦",
-        remoteFallbackUsed ? "gold" : "cyan",
-      );
+      showToast("在线主题曲准备完成 · 可以出发啦", "cyan");
     } catch (error) {
       songRef.current = null;
       setSongReady(false);
@@ -1431,39 +1361,6 @@ export default function Home() {
     toneModeRef.current = nextTone;
     arrangementUntilRef.current = beatRef.current + 8;
     setToneMode(nextTone);
-    if (songRef.current) {
-      // Tone filters change colour only; playbackRate stays fixed so the beat
-      // grid and the original song tempo never drift apart.
-      songRef.current.playbackRate = 1;
-    }
-
-    const audio = audioRef.current;
-    if (audio) {
-      const now = audio.currentTime;
-      lowShelfRef.current?.gain.setTargetAtTime(
-        nextTone === "thick" ? 11 : -8,
-        now,
-        0.055,
-      );
-      highShelfRef.current?.gain.setTargetAtTime(
-        nextTone === "thick" ? -9 : 11,
-        now,
-        0.055,
-      );
-    }
-
-    if (!audio || mutedRef.current) return;
-    const now = audio.currentTime;
-    const bend = audio.createOscillator();
-    const bendGain = audio.createGain();
-    bend.type = "sawtooth";
-    bend.frequency.setValueAtTime(190, now);
-    bend.frequency.exponentialRampToValueAtTime(72, now + 0.25);
-    bendGain.gain.setValueAtTime(0.09, now);
-    bendGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
-    bend.connect(bendGain).connect(audio.destination);
-    bend.start(now);
-    bend.stop(now + 0.3);
   }, []);
 
   const drawGame = useCallback(
@@ -2086,20 +1983,6 @@ export default function Home() {
     setInvincibleRemaining(0);
     resetSongTone();
 
-    const audio = audioRef.current;
-    if (audio && !mutedRef.current) {
-      const now = audio.currentTime;
-      const brake = audio.createOscillator();
-      const brakeGain = audio.createGain();
-      brake.type = "sawtooth";
-      brake.frequency.setValueAtTime(620, now);
-      brake.frequency.exponentialRampToValueAtTime(55, now + 0.42);
-      brakeGain.gain.setValueAtTime(0.12, now);
-      brakeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.44);
-      brake.connect(brakeGain).connect(audio.destination);
-      brake.start(now);
-      brake.stop(now + 0.46);
-    }
   }, [addBurst, resetSongTone, stopJoystick]);
 
   const gameLoop = useCallback(
@@ -2340,7 +2223,6 @@ export default function Home() {
           setLuckyDialog({ phase: "choice" });
           setNoteJudgement(null);
           songRef.current?.pause();
-          void audioRef.current?.suspend();
           animationRef.current = null;
           return;
         } else if (entity.type === "magnet") {
@@ -2698,42 +2580,8 @@ export default function Home() {
       window.cancelAnimationFrame(animationRef.current);
     }
 
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-    if (!audioRef.current || audioRef.current.state === "closed") {
-      audioRef.current = AudioContextClass ? new AudioContextClass() : null;
-      mediaSourceRef.current = null;
-      lowShelfRef.current = null;
-      highShelfRef.current = null;
-    }
-    const audio = audioRef.current;
-    const songOrigin = new URL(song.src, window.location.href).origin;
-    const isCrossOriginSong = songOrigin !== window.location.origin;
-    if (audio && !mediaSourceRef.current && !isCrossOriginSong) {
-      const mediaSource = audio.createMediaElementSource(song);
-      const lowShelf = audio.createBiquadFilter();
-      const highShelf = audio.createBiquadFilter();
-      lowShelf.type = "lowshelf";
-      lowShelf.frequency.value = 320;
-      lowShelf.gain.value = 0;
-      highShelf.type = "highshelf";
-      highShelf.frequency.value = 1900;
-      highShelf.gain.value = 0;
-      mediaSource
-        .connect(lowShelf)
-        .connect(highShelf)
-        .connect(audio.destination);
-      mediaSourceRef.current = mediaSource;
-      lowShelfRef.current = lowShelf;
-      highShelfRef.current = highShelf;
-    }
-
     trackRef.current = GAME_TRACK;
     beatTimesRef.current = [...PRECOMPUTED_CHART.timing.beatTimesMs];
-    statusRef.current = "playing";
-    setStatus("playing");
     setFailureSummary(null);
     laneRef.current = 2;
     busXRef.current = laneCenter(2);
@@ -2820,20 +2668,24 @@ export default function Home() {
 
     song.pause();
     song.currentTime = 0;
-    song.playbackRate = 1;
-    song.muted = mutedRef.current;
-    const resumePromise = audio?.resume() ?? Promise.resolve();
-    const playPromise = song.play();
+    mutedRef.current = false;
+    setMuted(false);
+    setSongLoading(true);
+    setSongError("");
     try {
-      await Promise.all([resumePromise, playPromise]);
-    } catch {
+      await song.play();
+    } catch (error) {
       song.pause();
-      song.muted = true;
-      mutedRef.current = true;
-      setMuted(true);
-      setSongError("主题曲暂时无法播放，已自动切换到静音节奏模式");
-      showToast("主题曲暂时无法播放 · 已启用静音节奏模式", "gold");
+      const message =
+        error instanceof Error ? error.message : "QQ 音乐在线主题曲播放失败";
+      setSongError(message);
+      setSongLoading(false);
+      showToast(message, "danger");
+      return;
     }
+    setSongLoading(false);
+    statusRef.current = "playing";
+    setStatus("playing");
     if (statusRef.current !== "playing") return;
     const now = performance.now();
     startTimeRef.current = now;
@@ -2869,7 +2721,6 @@ export default function Home() {
       animationRef.current = null;
     }
     songRef.current?.pause();
-    void audioRef.current?.suspend();
     setNoteJudgement(null);
   }, [stopJoystick]);
 
@@ -2878,16 +2729,17 @@ export default function Home() {
     const song = songRef.current;
     statusRef.current = "playing";
     setStatus("playing");
-    const resumePromise = audioRef.current?.resume() ?? Promise.resolve();
-    const playPromise = song.play();
     try {
-      await Promise.all([resumePromise, playPromise]);
-    } catch {
+      await song.play();
+    } catch (error) {
       song.pause();
-      song.muted = true;
-      mutedRef.current = true;
-      setMuted(true);
-      showToast("主题曲暂时无法继续 · 已启用静音节奏模式", "gold");
+      statusRef.current = "paused";
+      setStatus("paused");
+      showToast(
+        error instanceof Error ? error.message : "主题曲暂时无法继续",
+        "danger",
+      );
+      return;
     }
     if (statusRef.current !== "playing") return;
     const now = performance.now();
@@ -2949,23 +2801,25 @@ export default function Home() {
     statusRef.current = "playing";
     setStatus("playing");
     setLuckyDialog(null);
-    const resumePromise = audioRef.current?.resume() ?? Promise.resolve();
-    const playPromise = song.play();
     try {
-      await Promise.all([resumePromise, playPromise]);
-    } catch {
+      await song.play();
+    } catch (error) {
       song.pause();
-      song.muted = true;
-      mutedRef.current = true;
-      setMuted(true);
-      showToast("主题曲暂时无法继续 · 已启用静音节奏模式", "gold");
+      statusRef.current = "lucky";
+      setStatus("lucky");
+      setLuckyDialog(luckyDialog);
+      showToast(
+        error instanceof Error ? error.message : "主题曲暂时无法继续",
+        "danger",
+      );
+      return;
     }
     if (statusRef.current !== "playing") return;
     const now = performance.now();
     startTimeRef.current = now - fallbackElapsedRef.current;
     lastTimeRef.current = now;
     animationRef.current = window.requestAnimationFrame(gameLoop);
-  }, [gameLoop, showToast]);
+  }, [gameLoop, luckyDialog, showToast]);
 
   const registerTutorialMove = useCallback(() => {
     if (!tutorialActiveRef.current || tutorialMovedRef.current) return;
@@ -2988,7 +2842,7 @@ export default function Home() {
   );
 
   const applyJoystickPosition = useCallback(
-    (clientX: number, target: HTMLElement) => {
+    (clientX: number) => {
       const drag = joystickDragRef.current;
       if (!drag || drag.pointerId !== joystickPointerRef.current) return;
 
@@ -3035,7 +2889,7 @@ export default function Home() {
   );
 
   const updateJoystick = useCallback(
-    (clientX: number, target: HTMLElement) => {
+    (clientX: number) => {
       joystickPendingClientXRef.current = clientX;
       if (joystickFrameRef.current !== null) return;
       joystickFrameRef.current = window.requestAnimationFrame(() => {
@@ -3043,7 +2897,7 @@ export default function Home() {
         const pendingClientX = joystickPendingClientXRef.current;
         joystickPendingClientXRef.current = null;
         if (pendingClientX === null) return;
-        applyJoystickPosition(pendingClientX, target);
+        applyJoystickPosition(pendingClientX);
       });
     },
     [applyJoystickPosition],
@@ -3105,10 +2959,15 @@ export default function Home() {
   }, [resetSongTone, stopJoystick]);
 
   const toggleMute = useCallback(() => {
-    mutedRef.current = !mutedRef.current;
-    if (songRef.current) songRef.current.muted = mutedRef.current;
-    setMuted(mutedRef.current);
-  }, []);
+    const nextMuted = !mutedRef.current;
+    mutedRef.current = nextMuted;
+    setMuted(nextMuted);
+    if (nextMuted && statusRef.current === "playing") {
+      pauseGame();
+    } else if (!nextMuted && statusRef.current === "paused") {
+      void resumeGame();
+    }
+  }, [pauseGame, resumeGame]);
 
   useEffect(() => {
     void loadFixedSong();
@@ -3243,13 +3102,6 @@ export default function Home() {
       if (animationRef.current) {
         window.cancelAnimationFrame(animationRef.current);
       }
-      if (audioRef.current) {
-        void audioRef.current.close();
-        audioRef.current = null;
-      }
-      mediaSourceRef.current = null;
-      lowShelfRef.current = null;
-      highShelfRef.current = null;
       if (songRef.current) {
         songRef.current.pause();
         songRef.current = null;
@@ -4011,6 +3863,9 @@ export default function Home() {
                         <img src={UI_ICONS.close} alt="" aria-hidden="true" />
                       </button>
                       <article className="share-result-card">
+                        <p className="share-card-tagline">
+                          这次开学，我的隐藏人设被发现了
+                        </p>
                         <div className="share-card-topline">
                           CAMPUS RESULT <i />
                         </div>
@@ -4193,18 +4048,12 @@ export default function Home() {
                   event.preventDefault();
                   const samples = event.nativeEvent.getCoalescedEvents?.() ?? [];
                   const latest = samples.at(-1);
-                  updateJoystick(
-                    latest?.clientX ?? event.clientX,
-                    event.currentTarget,
-                  );
+                  updateJoystick(latest?.clientX ?? event.clientX);
                 }}
                 onPointerUp={(event) => {
                   if (joystickPointerRef.current === event.pointerId) {
                     event.preventDefault();
-                    applyJoystickPosition(
-                      event.clientX,
-                      event.currentTarget,
-                    );
+                    applyJoystickPosition(event.clientX);
                     stopJoystick();
                   }
                 }}

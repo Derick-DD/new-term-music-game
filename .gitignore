@@ -56,5 +56,5 @@ next-env.d.ts
 /data/*.sqlite
 /data/*.sqlite-*
 
-# The Skill-compliant static H5 under releases/ is application source and must
-# stay versioned. Only generated ZIP and preview QR artifacts are ignored.
+# `out/`, `dist/`, and delivery archives are generated from the current
+# versioned application source. They must never become an alternate source.
