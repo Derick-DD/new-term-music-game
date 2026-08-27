@@ -76,6 +76,11 @@ test("uses Activity.music for song 380208811 without membership checks or local 
   const sourceFiles = await walk(path.join(ROOT, "public"));
 
   assert.match(config, /id:\s*380208811/);
+  assert.match(
+    config,
+    /outsideLaunch\s*:\s*\{\s*enabled\s*:\s*false\s*\}/,
+  );
+  assert.doesNotMatch(config, /pagename|showBannerIfEmpty/);
   assert.match(page, /const SONG_ID = 380208811/);
   assert.match(page, /music\.play\(/);
   assert.match(page, /music\.resume\(\)/);

@@ -116,6 +116,15 @@ await Promise.all([
   assertExactPublicCopy("assets/campus-season/campus-share-qr.svg"),
 ]);
 
+const activityConfigSource = await readFile(
+  path.join(ROOT, "public", "activity-sites.config.js"),
+  "utf8",
+);
+assert(
+  /outsideLaunch\s*:\s*\{\s*enabled\s*:\s*false\s*\}/.test(activityConfigSource),
+  "Sites 测试版本必须禁用 outsideLaunch，避免端外重定向",
+);
+
 const searchableExtensions = new Set([".css", ".html", ".js", ".json", ".svg", ".txt"]);
 const searchable = (
   await Promise.all(

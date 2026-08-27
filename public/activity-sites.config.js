@@ -8,12 +8,7 @@
         selectors: [{ className: ".activity-page", navBar: false }]
       },
       outsideLaunch: {
-        enabled: true,
-        pagename: "fan_bus_rhythm_rush_campus",
-        type: 44,
-        showBannerIfEmpty: true,
-        disableOnLocalhost: true,
-        disableInDebug: true
+        enabled: false
       }
     },
     music: {
