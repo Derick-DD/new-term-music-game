@@ -7439,16 +7439,6 @@ body {
   stroke: var(--ink);
 }
 
-.share-card-tagline {
-  margin: 0 36px 9px 0 !important;
-  color: #28364d !important;
-  font-size: 12px !important;
-  font-weight: 800;
-  line-height: 1.35;
-  letter-spacing: 0.01em !important;
-  text-align: left !important;
-}
-
 @media (max-width: 780px) {
   .cabinet-top {
     width: 100%;
@@ -7561,12 +7551,6 @@ body {
 }
 
 @media (max-width: 380px), (max-height: 680px) and (max-width: 780px) {
-  .share-result-card > p.share-card-tagline {
-    display: block;
-    margin-bottom: 6px !important;
-    font-size: 11px !important;
-  }
-
   .share-card-venue {
     grid-template-columns: 1fr;
     min-height: 132px;

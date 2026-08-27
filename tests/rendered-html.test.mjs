@@ -131,7 +131,14 @@ test("adapts QQ Music chrome, native sharing, rules, and fixed-height result flo
   assert.match(page, /searchParams\.set\("_miniplayer", "1"\)/);
   assert.match(page, /Activity\?\.share/);
   assert.match(page, /activityShare\.callImage\(base64, nativeShareOptions\)/);
+  assert.match(page, /activityShare\.call\(nativeShareOptions\)/);
+  assert.match(page, /请在 QQ 音乐客户端内打开后分享/);
   assert.match(page, /已打开 QQ 音乐端内分享/);
+  const shareResultSource = page.slice(
+    page.indexOf("const shareResult = useCallback"),
+    page.indexOf("const showJudgement = useCallback"),
+  );
+  assert.doesNotMatch(shareResultSource, /navigator\.share/);
   assert.doesNotMatch(page, /Music\.client|callShareImg/);
   assert.match(layout, /music-2\.4\.0\.min\.js/);
   assert.match(layout, /fixTopBar\.js/);
@@ -153,12 +160,8 @@ test("adapts QQ Music chrome, native sharing, rules, and fixed-height result flo
     styles,
     /Final mobile frame[\s\S]*?\.share-card-shell \{[\s\S]*?grid-template-rows: auto auto/,
   );
-  assert.match(
-    page,
-    /className="share-card-tagline"[\s\S]*?className="share-card-topline"/,
-  );
-  assert.match(page, /隐藏人设被发现了", 540, 160/);
-  assert.doesNotMatch(page, /隐藏人设被发现了", 540, 1370/);
+  assert.doesNotMatch(page, /share-card-tagline|隐藏人设被发现了/);
+  assert.doesNotMatch(styles, /share-card-tagline/);
   assert.match(styles, /Final mobile frame[\s\S]*?background: #45c8ed/);
   assert.match(styles, /\.cabinet-top \{[\s\S]*?overflow: hidden/);
   assert.match(
@@ -495,13 +498,15 @@ test("ships the direct-start mobile copy and activity QR", async () => {
   assert.match(page, /campus-share-qr\.svg/);
   assert.match(
     page,
-    /https:\/\/y\.qq\.com\/viber_pub\/campus_gogogo\/index\.html/,
+    /https:\/\/y\.qq\.com\/viber_pub\/campus_gogogo\/index\.html\?_hidehd=1&_miniplayer=1/,
   );
   assert.match(page, /drawContainedImage\(context, shareQr/);
-  assert.match(page, /扫码进入活动/);
+  assert.match(page, /扫码进入游戏/);
+  assert.doesNotMatch(page, /扫码进入活动/);
   assert.doesNotMatch(page, /二维码占位/);
   assert.match(qrAsset, /<svg/);
   assert.match(qrAsset, /id="qr-path"/);
+  assert.match(qrAsset, /\?_hidehd=1&amp;_miniplayer=1/);
   assert.match(page, /navigator\.canShare\?\.\(\{ files: \[file\] \}\)/);
   assert.match(page, /请在系统菜单中选择“存储图像”/);
   assert.match(page, /请长按图片，选择保存到照片/);

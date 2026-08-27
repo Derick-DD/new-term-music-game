@@ -366,7 +366,7 @@ const OUTCOME_ICONS = {
 } as const;
 
 const SHARE_TARGET_URL =
-  "https://y.qq.com/viber_pub/campus_gogogo/index.html";
+  "https://y.qq.com/viber_pub/campus_gogogo/index.html?_hidehd=1&_miniplayer=1";
 const SHARE_QR_ASSET = "/assets/campus-season/campus-share-qr.svg";
 
 const REQUIRED_IMAGE_URLS = Array.from(
@@ -496,10 +496,6 @@ async function createShareCardBlob(data: ShareCardData) {
   context.fillStyle = "#17223a";
   context.font = '800 30px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText("CAMPUS RESULT / OPENING SEASON", 92, 125);
-  context.textAlign = "center";
-  context.fillStyle = "#52617a";
-  context.font = '700 24px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("这次开学，我的隐藏人设被发现了", 540, 160);
 
   context.fillStyle = "#fff5e8";
   context.fillRect(92, 172, 96, 74);
@@ -555,7 +551,7 @@ async function createShareCardBlob(data: ShareCardData) {
   context.textAlign = "center";
   context.fillStyle = "#52617a";
   context.font = '700 20px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
-  context.fillText("扫码进入活动", 835, 1329);
+  context.fillText("扫码进入游戏", 835, 1329);
 
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob(resolve, "image/png", 1);
@@ -955,57 +951,43 @@ export default function Home() {
       const shareText = `我在《${songTitle}》拿到 ${score} 分，解锁新学期人设「${resultTier.name}」！`;
 
       const activityShare = window.Activity?.share;
-      if (activityShare?.callImage) {
+      if (!isQqMusicClient() || !activityShare) {
+        showToast("请在 QQ 音乐客户端内打开后分享", "gold");
+        return;
+      }
+
+      const nativeShareOptions = {
+        title: "开学冲冲冲！校园成绩",
+        desc: shareText,
+        link: SHARE_TARGET_URL,
+        previewMode: 1,
+        shareform: "campus.result",
+      };
+
+      if (activityShare.callImage) {
         const base64 = await blobToDataUrl(blob);
-        const nativeShareOptions = {
-          title: "开学冲冲冲！校园成绩",
-          desc: shareText,
-          link: withQqMusicDisplayParams(window.location.href),
-          previewMode: 1,
-          shareform: "campus.result",
-        };
         try {
           await activityShare.callImage(base64, nativeShareOptions);
           showToast("已打开 QQ 音乐端内分享", "cyan");
           return;
         } catch {
-          if (activityShare.call) {
-            try {
-              await activityShare.call(nativeShareOptions);
-              showToast("已打开 QQ 音乐端内分享", "cyan");
-              return;
-            } catch {
-              // Continue to the browser share fallback outside QQ Music.
-            }
-          }
+          // Fall back to QQ Music's native link-share panel below.
         }
       }
 
-      const file = new File([blob], "campus-season-result.png", {
-        type: "image/png",
-      });
-      if (navigator.share) {
-        const shareData: ShareData = {
-          title: "开学冲冲冲！校园成绩",
-          text: shareText,
-        };
-        if (navigator.canShare?.({ files: [file] })) {
-          shareData.files = [file];
-        }
-        await navigator.share(shareData);
-        showToast("分享面板已打开", "cyan");
-      } else {
-        if (isMobileSaveTarget()) {
-          showMobileSavePreview(blob);
-          showToast("请长按图片，选择保存到照片", "gold");
-        } else {
-          downloadShareCard(blob, songTitle);
-          showToast("当前设备未能打开分享面板，已保存成绩卡", "gold");
+      if (activityShare.call) {
+        try {
+          await activityShare.call(nativeShareOptions);
+          showToast("已打开 QQ 音乐端内分享", "cyan");
+          return;
+        } catch {
+          // Surface one consistent failure message below.
         }
       }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      showToast("分享失败，请尝试保存成绩卡", "danger");
+
+      showToast("QQ 音乐端内分享暂不可用，请稍后重试", "danger");
+    } catch {
+      showToast("QQ 音乐端内分享暂不可用，请稍后重试", "danger");
     } finally {
       setShareBusy(false);
     }
@@ -1014,7 +996,6 @@ export default function Home() {
     fans,
     maxCombo,
     resultTier.name,
-    showMobileSavePreview,
     showToast,
     songTitle,
   ]);
@@ -4030,9 +4011,6 @@ export default function Home() {
                         <img src={UI_ICONS.close} alt="" aria-hidden="true" />
                       </button>
                       <article className="share-result-card">
-                        <p className="share-card-tagline">
-                          这次开学，我的隐藏人设被发现了。
-                        </p>
                         <div className="share-card-topline">
                           CAMPUS RESULT <i />
                         </div>
@@ -4075,7 +4053,7 @@ export default function Home() {
                               src={SHARE_QR_ASSET}
                               alt="QQ 音乐开学冲冲冲活动二维码"
                             />
-                            <small>扫码进入活动</small>
+                            <small>扫码进入游戏</small>
                           </a>
                         </div>
                       </article>
