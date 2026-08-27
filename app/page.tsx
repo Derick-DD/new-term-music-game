@@ -496,6 +496,10 @@ async function createShareCardBlob(data: ShareCardData) {
   context.fillStyle = "#17223a";
   context.font = '800 30px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText("CAMPUS RESULT / OPENING SEASON", 92, 125);
+  context.textAlign = "center";
+  context.fillStyle = "#52617a";
+  context.font = '700 24px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
+  context.fillText("这次开学，我的隐藏人设被发现了", 540, 160);
 
   context.fillStyle = "#fff5e8";
   context.fillRect(92, 172, 96, 74);
@@ -552,7 +556,6 @@ async function createShareCardBlob(data: ShareCardData) {
   context.fillStyle = "#52617a";
   context.font = '700 20px "PingFang SC", "Microsoft YaHei", Arial, sans-serif';
   context.fillText("扫码进入活动", 835, 1329);
-  context.fillText("这次开学，我的隐藏人设被发现了", 540, 1370);
 
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob(resolve, "image/png", 1);
@@ -4027,6 +4030,9 @@ export default function Home() {
                         <img src={UI_ICONS.close} alt="" aria-hidden="true" />
                       </button>
                       <article className="share-result-card">
+                        <p className="share-card-tagline">
+                          这次开学，我的隐藏人设被发现了。
+                        </p>
                         <div className="share-card-topline">
                           CAMPUS RESULT <i />
                         </div>
@@ -4072,7 +4078,6 @@ export default function Home() {
                             <small>扫码进入活动</small>
                           </a>
                         </div>
-                        <p>这次开学，我的隐藏人设被发现了。</p>
                       </article>
                       <div className="share-card-actions">
                         <button

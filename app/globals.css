@@ -7383,3 +7383,201 @@ body {
     font-size: 32px;
   }
 }
+
+/* Final mobile frame, steering palette, and classic share-card layout. */
+.joystick-control {
+  border-color: var(--ink);
+  background: #45c8ed;
+  box-shadow:
+    inset 0 -5px 0 #168daa,
+    0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+.joystick-control > small {
+  color: var(--ink);
+}
+
+.joystick-base {
+  border-color: var(--ink);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(22, 141, 170, 0.24),
+      rgba(255, 255, 255, 0.62) 28% 72%,
+      rgba(22, 141, 170, 0.24)
+    ),
+    #d8f4ff;
+  box-shadow:
+    inset 0 0 0 4px rgba(69, 200, 237, 0.42),
+    inset 0 0 16px rgba(22, 141, 170, 0.2);
+}
+
+.joystick-track i {
+  background: #168daa;
+}
+
+.joystick-track i:first-child,
+.joystick-track i:last-child {
+  background: var(--ink);
+}
+
+.joystick-knob {
+  border-color: var(--ink);
+  background: radial-gradient(
+    circle at 35% 28%,
+    #fff9d9 0 18%,
+    #45c8ed 19% 100%
+  );
+  box-shadow:
+    0 5px 0 #168daa,
+    0 0 12px rgba(69, 200, 237, 0.48);
+}
+
+.steer-glyph-rail,
+.steer-glyph-left,
+.steer-glyph-right {
+  stroke: var(--ink);
+}
+
+.share-card-tagline {
+  margin: 0 36px 9px 0 !important;
+  color: #28364d !important;
+  font-size: 12px !important;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0.01em !important;
+  text-align: left !important;
+}
+
+@media (max-width: 780px) {
+  .cabinet-top {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 15px 15px 0 0;
+  }
+
+  .cabinet-top > div:first-child {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .cabinet-tools {
+    max-width: 44px;
+  }
+
+  .pause-toggle {
+    max-width: 100%;
+  }
+
+  .share-card-backdrop {
+    place-items: center;
+    align-items: center;
+    overflow: hidden;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      9px
+      max(8px, env(safe-area-inset-bottom));
+  }
+
+  .share-card-shell {
+    grid-template-rows: auto auto;
+    width: min(94vw, 380px);
+    height: auto;
+    max-height: 100%;
+    align-self: center;
+    gap: 8px;
+    margin-inline: auto;
+    padding-top: 0;
+  }
+
+  .share-card-close {
+    top: 5px;
+    right: 5px;
+  }
+
+  .share-result-card {
+    display: grid;
+    min-height: 0;
+    overflow: hidden;
+    padding: 11px;
+  }
+
+  .share-card-topline,
+  .share-card-brand {
+    margin-bottom: 6px;
+  }
+
+  .share-card-venue {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 4px;
+    min-height: clamp(132px, 24dvh, 172px);
+    margin-top: 5px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+
+  .share-card-venue > img {
+    width: clamp(84px, 16dvh, 108px);
+    height: clamp(84px, 16dvh, 108px);
+  }
+
+  .share-card-venue small {
+    font-size: 10px;
+  }
+
+  .share-card-venue strong {
+    margin-top: 2px;
+    font-size: 20px;
+  }
+
+  .share-card-score {
+    padding: 7px 2px 5px;
+  }
+
+  .share-card-score strong {
+    font-size: clamp(32px, 6.3dvh, 42px);
+  }
+
+  .share-card-summary {
+    grid-template-columns: minmax(0, 1fr) 88px;
+  }
+
+  .share-card-qr {
+    min-height: 88px;
+  }
+
+  .share-card-qr img {
+    width: 62px;
+    height: 62px;
+  }
+
+  .share-card-actions {
+    min-height: 48px;
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 380px), (max-height: 680px) and (max-width: 780px) {
+  .share-result-card > p.share-card-tagline {
+    display: block;
+    margin-bottom: 6px !important;
+    font-size: 11px !important;
+  }
+
+  .share-card-venue {
+    grid-template-columns: 1fr;
+    min-height: 132px;
+  }
+
+  .share-card-venue > img {
+    width: 84px;
+    height: 84px;
+  }
+
+  .share-card-score strong {
+    font-size: 32px;
+  }
+}

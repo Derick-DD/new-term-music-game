@@ -117,7 +117,7 @@ test("preloads required images and maps drag distance directly to the car", asyn
   assert.match(styles, /\.tutorial-game-callouts/);
 });
 
-test("adapts QQ Music chrome, native sharing, rules, and compact result flow", async () => {
+test("adapts QQ Music chrome, native sharing, rules, and fixed-height result flow", async () => {
   const [page, styles, layout, activityConfig, activityBridge] =
     await Promise.all([
       readFile(new URL("app/page.tsx", ROOT), "utf8"),
@@ -151,8 +151,21 @@ test("adapts QQ Music chrome, native sharing, rules, and compact result flow", a
   assert.match(styles, /\.tutorial-game-callouts \{[\s\S]*?top: 48%/);
   assert.match(
     styles,
-    /\.share-card-shell \{[\s\S]*?grid-template-rows: minmax\(0, 1fr\) auto/,
+    /Final mobile frame[\s\S]*?\.share-card-shell \{[\s\S]*?grid-template-rows: auto auto/,
   );
+  assert.match(
+    page,
+    /className="share-card-tagline"[\s\S]*?className="share-card-topline"/,
+  );
+  assert.match(page, /隐藏人设被发现了", 540, 160/);
+  assert.doesNotMatch(page, /隐藏人设被发现了", 540, 1370/);
+  assert.match(styles, /Final mobile frame[\s\S]*?background: #45c8ed/);
+  assert.match(styles, /\.cabinet-top \{[\s\S]*?overflow: hidden/);
+  assert.match(
+    styles,
+    /Final mobile frame[\s\S]*?\.share-card-venue \{[\s\S]*?grid-template-columns: 1fr/,
+  );
+  assert.match(styles, /\.share-card-backdrop \{[\s\S]*?overflow: hidden/);
 
   assert.match(page, /marker < 5/);
   assert.match(page, /marker \/ 5 \+ roadFlow/);
