@@ -26,7 +26,8 @@ The following dependencies remain loaded from the official QQ Music CDN and
 are not copied into the repository or static asset archive:
 
 - `https://y.qq.com/lib/commercial/h5/polyfill.min.js`
-- `https://y.qq.com/lib/commercial/h5/music-2.4.0.min.js`
+- `https://y.qq.com/lib/h5/preact.js`
+- `https://y.qq.com/lib/h5/music.js`
 - `https://y.qq.com/component/m/fixTopBar/dist/fixTopBar.js`
 - `https://y.qq.com/component/m/qmfe-unity-ad/iife/index.js`
 
