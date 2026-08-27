@@ -8,7 +8,7 @@ const description =
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    "https://fan-bus-rhythm-rush-campus.derick-dcr.chatgpt.site",
+    "https://y.qq.com/viber_pub/campus_gogogo/",
   ),
   title,
   description,
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     url: "/",
     images: [
       {
-        url: "/og-sites.png",
+        url: "/og.png",
         width: 1734,
         height: 907,
         alt: "开学冲冲冲校园节奏游戏",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title,
     description,
-    images: ["/og-sites.png"],
+    images: ["/og.png"],
   },
 };
 
@@ -45,30 +45,32 @@ export default function RootLayout({
         <Script
           src="https://y.qq.com/lib/commercial/h5/polyfill.min.js?max_age=2592000"
           strategy="beforeInteractive"
-          crossOrigin="anonymous"
         />
         <Script
-          src="https://y.qq.com/lib/commercial/h5/music-2.4.0.min.js?max_age=604800"
+          src="https://y.qq.com/lib/h5/preact.js?max_age=2592000"
           strategy="beforeInteractive"
-          crossOrigin="anonymous"
+        />
+        <Script
+          src="https://y.qq.com/lib/h5/music.js?max_age=604800"
+          strategy="beforeInteractive"
+        />
+        <Script id="qq-music-global-compat" strategy="beforeInteractive">
+          {`window.Music = window.Music || window.M;`}
+        </Script>
+        <Script
+          src="https://y.qq.com/component/m/qmfe-unity-report/iife/index.js?max_age=2592000"
+          strategy="beforeInteractive"
         />
         <Script
           src="https://y.qq.com/component/m/fixTopBar/dist/fixTopBar.js?max_age=2592000"
           strategy="beforeInteractive"
-          crossOrigin="anonymous"
-        />
-        <Script
-          src="https://y.qq.com/component/m/qmfe-unity-ad/iife/index.js?max_age=604800&v=20201223"
-          strategy="beforeInteractive"
-          crossOrigin="anonymous"
         />
         <Script
           src="https://y.qq.com/component/m/qmplayer/qmplayer.music.js?max_age=604800"
           strategy="beforeInteractive"
-          crossOrigin="anonymous"
         />
         <Script
-          src="/activity-sites.config.js"
+          src="/activity.config.js"
           strategy="beforeInteractive"
         />
         <Script src="/activity-bridge.js" strategy="beforeInteractive" />

@@ -45,11 +45,6 @@ declare global {
     Music?: {
       browser?: { music?: boolean };
     };
-    ACTIVITY_QQ_MUSIC_SDK?: {
-      enabled: boolean;
-      hostname: string;
-      reason: string;
-    };
     QMPlayer?: unknown;
   }
 }
@@ -110,9 +105,6 @@ function requireActivityMusic() {
   const music = window.Activity.music;
   if (!music) {
     throw new Error("Activity.music 播放能力未注册，请刷新后重试");
-  }
-  if (window.ACTIVITY_QQ_MUSIC_SDK?.enabled === false) {
-    throw new Error("当前预览域名已关闭 QQ 音乐拉端与播放脚本，请在 QQ 音乐正式域名测试歌曲");
   }
   if (typeof window.QMPlayer !== "function") {
     throw new Error("QMPlayer 播放脚本未加载，请检查网络后重试");
@@ -480,48 +472,52 @@ const MAP_PALETTE = {
   windowB: "#45c8ed",
 };
 
+function activityAsset(path: string) {
+  return `.${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 const CAMPUS_ASSETS = {
-  road: "/assets/campus-season/campus-road.png",
-  bicycle: "/assets/campus-season/vehicle-bicycle.png",
-  motorcycle: "/assets/campus-season/vehicle-motorcycle.png",
-  car: "/assets/campus-season/vehicle-car.png",
-  schoolBus: "/assets/campus-season/vehicle-school-bus.png",
-  knowledgeStar: "/assets/campus-season/icons/knowledge-star.png",
-  mysterySchoolbag: "/assets/campus-season/icons/mystery-schoolbag.png",
-  magnet: "/assets/campus-season/icons/campus-magnet.png",
-  lightning: "/assets/campus-season/icons/energy-lightning.png",
-  cone: "/assets/campus-season/icons/obstacle-cone.png",
-  pothole: "/assets/campus-season/icons/obstacle-pothole.png",
-  barrier: "/assets/campus-season/icons/obstacle-barrier.png",
-  grandma: "/assets/campus-season/icons/grandma-crossing.png",
+  road: activityAsset("assets/campus-season/campus-road.png"),
+  bicycle: activityAsset("assets/campus-season/vehicle-bicycle.png"),
+  motorcycle: activityAsset("assets/campus-season/vehicle-motorcycle.png"),
+  car: activityAsset("assets/campus-season/vehicle-car.png"),
+  schoolBus: activityAsset("assets/campus-season/vehicle-school-bus.png"),
+  knowledgeStar: activityAsset("assets/campus-season/icons/knowledge-star.png"),
+  mysterySchoolbag: activityAsset("assets/campus-season/icons/mystery-schoolbag.png"),
+  magnet: activityAsset("assets/campus-season/icons/campus-magnet.png"),
+  lightning: activityAsset("assets/campus-season/icons/energy-lightning.png"),
+  cone: activityAsset("assets/campus-season/icons/obstacle-cone.png"),
+  pothole: activityAsset("assets/campus-season/icons/obstacle-pothole.png"),
+  barrier: activityAsset("assets/campus-season/icons/obstacle-barrier.png"),
+  grandma: activityAsset("assets/campus-season/icons/grandma-crossing.png"),
 } as const;
 
 const UI_ICONS = {
-  pencil: "/assets/campus-season/icons/pencil-mark.png",
-  play: "/assets/campus-season/icons/play.png",
-  pause: "/assets/campus-season/icons/pause.png",
-  restart: "/assets/campus-season/icons/restart.png",
-  close: "/assets/campus-season/icons/close.png",
-  steer: "/assets/campus-season/icons/steer.png",
-  crossing: "/assets/campus-season/icons/crossing-warning.png",
-  star: "/assets/campus-season/icons/knowledge-star.png",
+  pencil: activityAsset("assets/campus-season/icons/pencil-mark.png"),
+  play: activityAsset("assets/campus-season/icons/play.png"),
+  pause: activityAsset("assets/campus-season/icons/pause.png"),
+  restart: activityAsset("assets/campus-season/icons/restart.png"),
+  close: activityAsset("assets/campus-season/icons/close.png"),
+  steer: activityAsset("assets/campus-season/icons/steer.png"),
+  crossing: activityAsset("assets/campus-season/icons/crossing-warning.png"),
+  star: activityAsset("assets/campus-season/icons/knowledge-star.png"),
 } as const;
 
 const OUTCOME_ICONS = {
-  slacker: "/assets/campus-season/icons/outcome-slacker-fish-crayon.png",
-  scholar: "/assets/campus-season/icons/outcome-scholar-cheese.png",
-  grinder: "/assets/campus-season/icons/outcome-grind-cat-roll.png",
-  hidden: "/assets/campus-season/icons/outcome-hidden-dog-reader.png",
-  genius: "/assets/campus-season/icons/outcome-genius-penguin.png",
+  slacker: activityAsset("assets/campus-season/icons/outcome-slacker-fish-crayon.png"),
+  scholar: activityAsset("assets/campus-season/icons/outcome-scholar-cheese.png"),
+  grinder: activityAsset("assets/campus-season/icons/outcome-grind-cat-roll.png"),
+  hidden: activityAsset("assets/campus-season/icons/outcome-hidden-dog-reader.png"),
+  genius: activityAsset("assets/campus-season/icons/outcome-genius-penguin.png"),
 } as const;
 
 const SHARE_TARGET_URL =
   "https://y.qq.com/viber_pub/campus_gogogo/index.html?_hidehd=1&_miniplayer=1";
-const SHARE_QR_ASSET = "/assets/campus-season/campus-share-qr.svg";
+const SHARE_QR_ASSET = activityAsset("assets/campus-season/campus-share-qr.svg");
 
 const REQUIRED_IMAGE_URLS = Array.from(
   new Set([
-    ...staticImageAssets,
+    ...staticImageAssets.map(activityAsset),
     ...Object.values(CAMPUS_ASSETS),
     ...Object.values(UI_ICONS),
     ...Object.values(OUTCOME_ICONS),

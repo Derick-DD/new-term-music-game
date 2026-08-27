@@ -9,14 +9,12 @@ const OUT = path.join(ROOT, "out");
 const MANIFEST_NAME = "static-build-manifest.json";
 const AUDIO_PATTERN = /\.(?:aac|flac|m4a|mp3|ogg|wav)$/i;
 const IMAGE_PATTERN = /\.(?:gif|jpe?g|png|svg|webp)$/i;
-const SOURCE_ROOTS = ["app", "public", "static", "build", "worker"];
+const SOURCE_ROOTS = ["app", "public", "static", "build"];
 const SOURCE_FILES = [
-  "next.config.ts",
   "package.json",
   "package-lock.json",
   "postcss.config.mjs",
   "tsconfig.json",
-  "vite.config.ts",
   "vite.static.config.ts",
 ];
 
@@ -111,37 +109,21 @@ assert(artifacts.every((file) => !AUDIO_PATTERN.test(file.path)), "静态产物�
 assert(artifacts.every((file) => !file.path.endsWith("/.DS_Store") && file.path !== ".DS_Store"), "静态产物中存在 .DS_Store");
 
 await Promise.all([
-  assertExactPublicCopy("activity-sdk-loader.js"),
+  assertExactPublicCopy("activity.config.js"),
   assertExactPublicCopy("activity-bridge.js"),
-  assertExactPublicCopy("activity-sites.config.js"),
   assertExactPublicCopy("assets/campus-season/campus-share-qr.svg"),
+  assertExactPublicCopy("og.png"),
 ]);
 
-const activityConfigSource = await readFile(
-  path.join(ROOT, "public", "activity-sites.config.js"),
-  "utf8",
-);
-const activityBridgeSource = await readFile(
-  path.join(ROOT, "public", "activity-bridge.js"),
-  "utf8",
-);
-const activitySdkLoaderSource = await readFile(
-  path.join(ROOT, "public", "activity-sdk-loader.js"),
-  "utf8",
-);
+const [activityConfigSource, activityBridgeSource] = await Promise.all([
+  readFile(path.join(ROOT, "public", "activity.config.js"), "utf8"),
+  readFile(path.join(ROOT, "public", "activity-bridge.js"), "utf8"),
+]);
 assert(
   /outsideLaunch\s*:\s*\{\s*enabled\s*:\s*false\s*\}/.test(activityConfigSource),
-  "Sites 测试版本必须禁用 outsideLaunch，避免端外重定向",
+  "上线版本必须禁用 outsideLaunch",
 );
-assert(
-  !activityBridgeSource.includes("QMPlugin"),
-  "Sites 测试版本不得保留 QMPlugin 端外拉起实现",
-);
-assert(
-  activitySdkLoaderSource.includes("outside-qq-music-host") &&
-    activitySdkLoaderSource.includes('hostname.slice(-7) === ".qq.com"'),
-  "QQ 音乐 SDK 必须按部署 hostname 门控",
-);
+assert(!activityBridgeSource.includes("QMPlugin"), "上线版本不得保留 QMPlugin 端外拉起实现");
 
 const searchableExtensions = new Set([".css", ".html", ".js", ".json", ".svg", ".txt"]);
 const searchable = (
@@ -153,8 +135,11 @@ const searchable = (
 ).join("\n");
 
 for (const marker of [
+  "lib/h5/preact.js?max_age=2592000",
+  "lib/h5/music.js?max_age=604800",
+  "window.Music = window.Music || window.M",
   "qmfe-unity-report/iife/index.js",
-  "music-2.4.0.min.js",
+  "fixTopBar.js",
   "qmplayer.music.js",
   "Activity.registerCapability(\"music\"",
   "380208811",
@@ -167,16 +152,16 @@ for (const marker of [
   assert(searchable.includes(marker), `静态产物缺少当前代码标记：${marker}`);
 }
 
-for (const marker of ["/_next/", "__next_s", "__next_f"]) {
-  assert(!searchable.includes(marker), `静态产物仍包含 Next 运行时标记：${marker}`);
-}
-
 const html = await readFile(path.join(OUT, "index.html"), "utf8");
 const orderedScripts = [
   "polyfill.min.js",
+  "/lib/h5/preact.js",
+  "/lib/h5/music.js",
+  "window.Music = window.Music || window.M",
   "qmfe-unity-report/iife/index.js",
-  "activity-sdk-loader.js?v=",
-  "activity-sites.config.js?v=",
+  "fixTopBar.js",
+  "qmplayer.music.js",
+  "activity.config.js?v=",
   "activity-bridge.js?v=",
 ];
 let previousIndex = -1;
@@ -187,27 +172,39 @@ for (const script of orderedScripts) {
 }
 assert(!html.includes("__ACTIVITY_CONFIG_VERSION__"), "Activity 配置缓存版本未生成");
 assert(!html.includes("__ACTIVITY_RUNTIME_VERSION__"), "Activity 运行时缓存版本未生成");
-assert(!html.includes("__ACTIVITY_SDK_LOADER_VERSION__"), "Activity SDK 加载器缓存版本未生成");
-assert(!/<script[^>]+y\.qq\.com[^>]+crossorigin/i.test(html), "Sites 跨域 Activity 经典脚本不应启用 CORS 模式");
-assert(!html.includes("qmfe-unity-ad"), "Sites 测试版本不得加载端外拉起 CDN");
-assert(!/<script[^>]+(?:music-2\.4\.0\.min\.js|qmplayer\.music\.js)[^>]*>/i.test(html), "受限 QQ 音乐 SDK 不得由入口无条件加载");
-
-const gatedScripts = ["music-2.4.0.min.js", "fixTopBar.js", "qmplayer.music.js"];
-let previousGatedIndex = -1;
-for (const script of gatedScripts) {
-  const index = activitySdkLoaderSource.indexOf(script);
-  assert(index > previousGatedIndex, `Activity SDK 门控脚本顺序错误或缺少：${script}`);
-  previousGatedIndex = index;
+assert(!/<script[^>]+y\.qq\.com[^>]+crossorigin/i.test(html), "QQ 音乐经典脚本不应启用 CORS 模式");
+for (const match of html.matchAll(/\b(?:src|href)=["']([^"']+)["']/gi)) {
+  const reference = match[1];
+  if (!/^(?:https?:)?\/\//i.test(reference)) {
+    assert(!reference.startsWith("/"), `本地入口引用必须使用可部署的相对路径：${reference}`);
+  }
 }
+const outputCss = (
+  await Promise.all(
+    artifactPaths.filter((file) => file.endsWith(".css")).map((file) => readFile(file, "utf8")),
+  )
+).join("\n");
+assert(!/url\(\s*["']?\//i.test(outputCss), "CSS 资源仍使用域名根路径，无法部署到活动子目录");
 
 for (const forbidden of [
+  "/_next/",
+  "__next_s",
+  "__next_f",
   "Music user CDN is unavailable",
   "Activity.user",
   "congratulations-treasure-tf-family.mp3",
+  "music-2.4.0.min.js",
   "QMPlugin",
   "qmfe-unity-ad",
+  "activity-sdk-loader",
+  "activity-sites.config",
+  ["chat", "gpt"].join(""),
+  ["derick", "dcr"].join("-"),
+  "earth-tour",
+  "lueluelue",
+  "og-sites.png",
 ]) {
-  assert(!searchable.includes(forbidden), `静态产物仍包含已禁用内容：${forbidden}`);
+  assert(!searchable.toLowerCase().includes(forbidden.toLowerCase()), `静态产物仍包含已禁用内容：${forbidden}`);
 }
 
 const manifest = {
@@ -226,6 +223,8 @@ const manifest = {
     staticOnly: true,
     bundledAudio: false,
     membershipDetection: false,
+    outsideLaunch: false,
+    pvUvScripts: ["preact.js", "music.js"],
     songId: 380208811,
   },
 };

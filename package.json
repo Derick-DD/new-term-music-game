@@ -7,10 +7,9 @@
   },
   "scripts": {
     "dev": "vite --config vite.static.config.ts",
-    "build": "npm run build:static && npm run build:sites",
+    "build": "npm run build:static",
     "build:static": "node build/clean-static-input.mjs && vite build --config vite.static.config.ts && node build/verify-static-export.mjs",
-    "build:sites": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite build",
-    "start": "vite preview",
+    "start": "vite preview --config vite.static.config.ts",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },

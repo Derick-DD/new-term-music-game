@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SOURCE_ROOTS = ["app", "public", "static", "build", "worker"];
+const SOURCE_ROOTS = ["app", "public", "static", "build"];
 
 async function removeFinderMetadata(directory) {
   const entries = await readdir(directory, { withFileTypes: true });

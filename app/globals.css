@@ -1302,48 +1302,24 @@ button:focus-visible {
   background-size: contain;
 }
 
-.road-icon:not(.is-earth-tour):not(.is-lueluelue)::after {
+.road-icon::after {
   color: var(--cyan);
   font-size: 15px;
   font-weight: 950;
 }
 
-.road-icon.is-light-stick:not(.is-earth-tour):not(.is-lueluelue)::after {
+.road-icon.is-light-stick::after {
   content: "▮";
 }
 
-.road-icon.is-dish:not(.is-earth-tour):not(.is-lueluelue)::after {
+.road-icon.is-dish::after {
   content: "▲";
   color: #ff6b4a;
 }
 
-.road-icon.is-crystal:not(.is-earth-tour):not(.is-lueluelue)::after {
+.road-icon.is-crystal::after {
   content: "◆";
   color: var(--pink);
-}
-
-.road-icon.is-light-stick.is-earth-tour {
-  background-image: url("/assets/earth-tour/support-light-stick.png");
-}
-
-.road-icon.is-dish.is-earth-tour {
-  background-image: url("/assets/earth-tour/broken-dish.png");
-}
-
-.road-icon.is-crystal.is-earth-tour {
-  background-image: url("/assets/earth-tour/crystal-obstacle.png");
-}
-
-.road-icon.is-light-stick.is-lueluelue {
-  background-image: url("/assets/lueluelue/support-light-stick.png");
-}
-
-.road-icon.is-dish.is-lueluelue {
-  background-image: url("/assets/lueluelue/electric-barrier.png");
-}
-
-.road-icon.is-crystal.is-lueluelue {
-  background-image: url("/assets/lueluelue/broken-speakers.png");
 }
 
 .shield-chip {
@@ -1537,47 +1513,21 @@ button:focus-visible {
   font-weight: 950;
 }
 
-.legend-icon.is-lucky:not(.is-earth-tour):not(.is-lueluelue) {
+.legend-icon.is-lucky {
   border: 2px solid #fff2a8;
   background: #8c5bff;
   box-shadow: inset 0 5px #c9a9ff;
 }
 
-.legend-icon.is-lucky.is-earth-tour {
-  background-image: url("/assets/earth-tour/lucky-bag.png");
-}
-
-.legend-icon.is-magnet:not(.is-earth-tour):not(.is-lueluelue) {
+.legend-icon.is-magnet {
   border: 5px solid var(--cyan);
   border-top: 0;
   border-radius: 0 0 12px 12px;
 }
 
-.legend-icon.is-invincible:not(.is-earth-tour):not(.is-lueluelue) {
+.legend-icon.is-invincible {
   border: 2px solid var(--pink);
   background: #5a3cc4;
-}
-
-.legend-icon.is-magnet.is-earth-tour {
-  background-image: url("/assets/earth-tour/romance-magnet.png");
-}
-
-.legend-icon.is-invincible.is-earth-tour {
-  background-image: url("/assets/earth-tour/hundred-thousand-volts.png");
-  filter: drop-shadow(0 0 4px rgba(255, 230, 109, 0.6));
-}
-
-.legend-icon.is-lucky.is-lueluelue {
-  background-image: url("/assets/lueluelue/lucky-bag.png");
-}
-
-.legend-icon.is-magnet.is-lueluelue {
-  background-image: url("/assets/lueluelue/magnet.png");
-}
-
-.legend-icon.is-invincible.is-lueluelue {
-  background-image: url("/assets/lueluelue/invincible.png");
-  filter: drop-shadow(0 0 4px rgba(255, 230, 109, 0.6));
 }
 
 .vehicle-task-meter {
@@ -1768,39 +1718,6 @@ button:focus-visible {
   color: var(--gold);
   font-size: 13px;
   box-shadow: 0 0 9px rgba(255, 230, 109, 0.38);
-}
-
-.powerup-chip .earth-crystal-icon,
-.powerup-chip .lueluelue-magnet-icon,
-.powerup-chip.is-invincible .hundred-volts-icon,
-.powerup-chip.is-invincible .lueluelue-invincible-icon {
-  width: 32px;
-  height: 32px;
-  margin-left: 0;
-  border: 0;
-  border-radius: 0;
-  background-color: transparent;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-}
-
-.powerup-chip .earth-crystal-icon {
-  background-image: url("/assets/earth-tour/romance-magnet.png");
-}
-
-.powerup-chip .lueluelue-magnet-icon {
-  background-image: url("/assets/lueluelue/magnet.png");
-}
-
-.powerup-chip.is-invincible .hundred-volts-icon {
-  background-image: url("/assets/earth-tour/hundred-thousand-volts.png");
-  filter: drop-shadow(0 0 5px #ffe66d);
-}
-
-.powerup-chip.is-invincible .lueluelue-invincible-icon {
-  background-image: url("/assets/lueluelue/invincible.png");
-  filter: drop-shadow(0 0 5px #ffe66d);
 }
 
 .game-toast {

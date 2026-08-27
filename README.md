@@ -1,48 +1,44 @@
 # 开学冲冲冲！
 
-QQ 音乐开学季移动端节奏游戏。项目只有一套业务源码：`app/` 与
-`public/`。部署版不是重写页面，而是由 Vite 直接把当前页面源码构建为纯静态
-HTML、CSS、JavaScript 与图片资源；最终产物不包含 Next 运行时或 `_next/`。
+QQ 音乐开学季移动端节奏游戏。业务源码位于 `app/` 与 `public/`，发布版由
+Vite 直接构建为纯静态 HTML、CSS、JavaScript 与图片资源；最终产物不包含
+Next 运行时或 `_next/`。
 
-## 音乐播放
+## 音乐播放与统计
 
 - 正式歌曲：QQ 音乐 `songid=380208811`《恭喜你发现了宝藏》
 - 业务调用：`Activity.music.play/pause/resume`
-- 底层播放器：Activity H5 Skill 指定的 QMPlayer CDN
-- 权限策略：不查询登录、VIP 或 SVIP；最终能否播放只以 QMPlayer 的真实
+- 底层播放器：QMPlayer 官方 CDN
+- 播放权限：不查询登录、VIP 或 SVIP，播放结果以 QMPlayer 的真实
   `play` / `error` 事件为准
-- 失败策略：不回退本地 MP3，也不把任何音频文件放进静态产物
-- `webview.outsideLaunch.enabled=false`，同时不加载 `qmfe-unity-ad`、不创建
-  `QMPlugin`
-- 同一份静态产物按 hostname 加载官方 SDK：`qq.com`（包括
-  `fastest.y.qq.com`）加载 `Music + QMPlayer`；ChatGPT Sites 等非 QQ 音乐
-  域名只加载 `fixTopBar`，避免 `Music` 的域名保护逻辑拉端。此时页面可预览，
-  但官方歌曲播放与端内分享必须在 QQ 音乐正式/预览域名验收
+- 失败策略：不回退本地 MP3，静态产物中不包含音频文件
+- 端外拉起：`webview.outsideLaunch.enabled=false`，不加载
+  `qmfe-unity-ad`，不创建 `QMPlugin`
+- PV/UV：按正式 H5 入口顺序加载 `preact.js`、`music.js`；`music.js` 自动
+  初始化页面统计，并通过 `window.Music = window.Music || window.M` 兼容
+  QMPlayer 与页面现有端内能力调用
 
-## 构建、验证与 Sites 适配
+`music.js` 包含 QQ 音乐域名保护逻辑，发布包应部署在
+`https://y.qq.com/viber_pub/campus_gogogo/`，不能用非 QQ 音乐域名作为正式
+验收地址。
+
+## 构建与交付
 
 ```bash
-npm run build:static
 npm run build
 npm test
 ```
 
-`npm run build:static` 执行以下固定链路：
+构建链路：
 
 ```text
 当前 app/ + public/ → Vite 浏览器静态构建 → out/ → 自动校验与来源清单
 ```
 
-构建入口会先清理 macOS 自动生成的 `.DS_Store`；校验器随后会拒绝音频文件、
-残留的 `.DS_Store`、Next 运行时、缺失的 Activity/QMPlayer 接口、错误歌曲
-ID、缺失的当前玩法/分享文案，以及任何不能与 `public/` 原文件逐字节对应的
-Activity 配置文件。校验通过后会生成 `out/static-build-manifest.json`，记录本次
-参与构建的所有源码 SHA-256 和静态产物树 SHA-256。
+校验器会拒绝音频文件、`.DS_Store`、Next 运行时、旧主题资源、测试域内容、
+错误的官方脚本顺序、错误歌曲 ID，以及任何未进入预加载清单的图片。校验通过
+后生成 `out/static-build-manifest.json`，记录参与构建的源码与静态产物树
+SHA-256。
 
-`app/data/static-image-assets.json` 覆盖 `public/` 中的全部图片。页面只有在这
-些图片全部加载成功后才允许开始游戏；构建校验会阻止任何未加入预加载清单的
-新增图片进入发布包。
-
-`npm run build:sites` 仅把刚生成的 `out/` 复制到 Sites 产物中；测试会再次
-逐文件核对 `out/` 和 `dist/client/`。最终交付 ZIP 也只从同一次构建的 `out/`
-创建。
+`app/data/static-image-assets.json` 覆盖 `public/` 中全部图片；页面只有在所有
+图片加载成功后才允许开始游戏。最终交付 ZIP 只从本次构建生成的 `out/` 创建。
