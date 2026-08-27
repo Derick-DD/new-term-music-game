@@ -84,6 +84,24 @@ test("uses one fixed audio file and preserves the versioned timing data", async 
   assert.doesNotMatch(page, /decodeAudioData|type="file"|handleSongUpload/);
 });
 
+test("preloads required images and keeps mobile steering active while held", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(new URL("app/page.tsx", ROOT), "utf8"),
+    readFile(new URL("app/globals.css", ROOT), "utf8"),
+  ]);
+
+  assert.match(page, /const REQUIRED_IMAGE_URLS = Array\.from/);
+  assert.match(page, /Promise\.all\([\s\S]*?REQUIRED_IMAGE_URLS\.map/);
+  assert.match(page, /if \(!assetsReady\)/);
+  assert.match(page, /assetsLoading \|\| songLoading/);
+  assert.match(page, /joystickFrameRef/);
+  assert.match(page, /window\.requestAnimationFrame\(continueSteering\)/);
+  assert.match(page, /getCoalescedEvents/);
+  assert.match(page, /JOYSTICK_REPEAT_MS = 105/);
+  assert.match(page, /按住下方摇杆并向左右拖动/);
+  assert.match(styles, /\.tutorial-guide[\s\S]*?rgba\(23, 34, 58, 0\.52\)/);
+});
+
 test("implements the requested campus gameplay safeguards", async () => {
   const [page, chartSource, roadImage] = await Promise.all([
     readFile(new URL("app/page.tsx", ROOT), "utf8"),

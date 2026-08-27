@@ -40,8 +40,8 @@ const SECOND_MAGNET_CHANCE = 0.25;
 const VEHICLE_VISUAL_SCALE = 1.2;
 const VEHICLE_EFFECT_CENTER_Y = -46 * VEHICLE_VISUAL_SCALE;
 const MIN_OBSTACLE_BEAT_GAP = 3;
-const JOYSTICK_FIRST_REPEAT_MS = 280;
-const JOYSTICK_REPEAT_MS = 220;
+const JOYSTICK_FIRST_REPEAT_MS = 120;
+const JOYSTICK_REPEAT_MS = 105;
 const STADIUM_SCORE_THRESHOLD = 6_500;
 const OBSTACLE_COLLISION_BEFORE = 36;
 const OBSTACLE_COLLISION_AFTER = 40;
@@ -340,6 +340,22 @@ const OUTCOME_ICONS = {
   hidden: "/assets/campus-season/icons/outcome-hidden-dog-reader.png",
   genius: "/assets/campus-season/icons/outcome-genius-penguin.png",
 } as const;
+
+const REQUIRED_IMAGE_URLS = Array.from(
+  new Set([
+    "/assets/campus-season/campus-hero.png",
+    "/assets/ui/play-icon.png",
+    "/assets/campus-season/icons/obstacle-books.png",
+    "/assets/campus-season/icons/outcome-genius.png",
+    "/assets/campus-season/icons/outcome-grind-king.png",
+    "/assets/campus-season/icons/outcome-hidden-achiever.png",
+    "/assets/campus-season/icons/outcome-scholar.png",
+    "/assets/campus-season/icons/outcome-slacker-fish.png",
+    ...Object.values(CAMPUS_ASSETS),
+    ...Object.values(UI_ICONS),
+    ...Object.values(OUTCOME_ICONS),
+  ]),
+);
 
 type CampusAsset = keyof typeof CAMPUS_ASSETS;
 
@@ -696,7 +712,8 @@ export default function Home() {
   const lastHitInputAtRef = useRef(-Infinity);
   const joystickPointerRef = useRef<number | null>(null);
   const joystickDirectionRef = useRef<-1 | 0 | 1>(0);
-  const joystickRepeatRef = useRef<number | null>(null);
+  const joystickFrameRef = useRef<number | null>(null);
+  const joystickNextMoveAtRef = useRef(0);
   const lastPerfectSoundAtRef = useRef(-Infinity);
   const tutorialActiveRef = useRef(false);
   const tutorialMovedRef = useRef(false);
@@ -710,6 +727,11 @@ export default function Home() {
   const [songReady, setSongReady] = useState(false);
   const [songLoading, setSongLoading] = useState(false);
   const [songError, setSongError] = useState("");
+  const [assetsReady, setAssetsReady] = useState(false);
+  const [assetsLoading, setAssetsLoading] = useState(true);
+  const [assetsProgress, setAssetsProgress] = useState(0);
+  const [assetsError, setAssetsError] = useState("");
+  const [assetsReloadKey, setAssetsReloadKey] = useState(0);
   const [fans, setFans] = useState(STARTING_FANS);
   const [maxCombo, setMaxCombo] = useState(0);
   const [successfulHits, setSuccessfulHits] = useState(0);
@@ -1805,12 +1827,13 @@ export default function Home() {
   );
 
   const stopJoystick = useCallback(() => {
-    if (joystickRepeatRef.current !== null) {
-      window.clearInterval(joystickRepeatRef.current);
-      joystickRepeatRef.current = null;
+    if (joystickFrameRef.current !== null) {
+      window.cancelAnimationFrame(joystickFrameRef.current);
+      joystickFrameRef.current = null;
     }
     joystickPointerRef.current = null;
     joystickDirectionRef.current = 0;
+    joystickNextMoveAtRef.current = 0;
     setJoystickOffset(0);
   }, []);
 
@@ -2518,6 +2541,10 @@ export default function Home() {
   ]);
 
   const startGame = useCallback(async () => {
+    if (!assetsReady) {
+      showToast("图片资源仍在加载，请稍候", "pink");
+      return;
+    }
     const song = songRef.current;
     if (!songReady || !song) {
       showToast("歌曲仍在准备中，请稍候", "pink");
@@ -2672,7 +2699,14 @@ export default function Home() {
     lastTimeRef.current = now;
     lastHudRef.current = 0;
     animationRef.current = window.requestAnimationFrame(gameLoop);
-  }, [gameLoop, resetSongTone, showToast, songReady, stopJoystick]);
+  }, [
+    assetsReady,
+    gameLoop,
+    resetSongTone,
+    showToast,
+    songReady,
+    stopJoystick,
+  ]);
 
   const pauseGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
@@ -2807,19 +2841,35 @@ export default function Home() {
       ) {
         return;
       }
-      if (joystickRepeatRef.current !== null) {
-        window.clearInterval(joystickRepeatRef.current);
-        joystickRepeatRef.current = null;
+      if (joystickFrameRef.current !== null) {
+        window.cancelAnimationFrame(joystickFrameRef.current);
+        joystickFrameRef.current = null;
       }
       joystickDirectionRef.current = direction;
       if (direction === 0) return;
+
       move(direction);
-      joystickRepeatRef.current = window.setTimeout(() => {
-        move(direction);
-        joystickRepeatRef.current = window.setInterval(() => {
+      joystickNextMoveAtRef.current =
+        performance.now() + JOYSTICK_FIRST_REPEAT_MS;
+
+      const continueSteering = (now: number) => {
+        if (
+          joystickDirectionRef.current !== direction ||
+          joystickPointerRef.current === null ||
+          statusRef.current !== "playing"
+        ) {
+          joystickFrameRef.current = null;
+          return;
+        }
+        if (now >= joystickNextMoveAtRef.current) {
           move(direction);
-        }, JOYSTICK_REPEAT_MS);
-      }, JOYSTICK_FIRST_REPEAT_MS);
+          joystickNextMoveAtRef.current = now + JOYSTICK_REPEAT_MS;
+        }
+        joystickFrameRef.current =
+          window.requestAnimationFrame(continueSteering);
+      };
+      joystickFrameRef.current =
+        window.requestAnimationFrame(continueSteering);
     },
     [move],
   );
@@ -2829,7 +2879,7 @@ export default function Home() {
       const bounds = target.getBoundingClientRect();
       const rawOffset = clientX - (bounds.left + bounds.width / 2);
       const maxTravel = Math.max(36, (bounds.width - 64) / 2 - 7);
-      const deadZone = Math.max(20, maxTravel * 0.38);
+      const deadZone = Math.max(12, maxTravel * 0.24);
       const nextOffset = Math.max(-maxTravel, Math.min(maxTravel, rawOffset));
       setJoystickOffset(nextOffset);
       steerWithJoystick(
@@ -2972,18 +3022,58 @@ export default function Home() {
   }, [hitNote, move, pauseGame, resumeGame, startGame, toggleMute]);
 
   useEffect(() => {
-    (Object.entries(CAMPUS_ASSETS) as Array<[CampusAsset, string]>).forEach(
-      ([key, src]) => {
-        const image = new Image();
-        image.src = src;
-        image.onload = () => {
-          campusImagesRef.current[key] = image;
-          const context = canvasRef.current?.getContext("2d");
-          if (context && statusRef.current !== "playing") drawGame(context, 0);
-        };
-      },
-    );
-  }, [drawGame]);
+    let cancelled = false;
+    let completed = 0;
+    setAssetsReady(false);
+    setAssetsLoading(true);
+    setAssetsProgress(0);
+    setAssetsError("");
+
+    Promise.all(
+      REQUIRED_IMAGE_URLS.map((src) =>
+        loadBrowserImage(src).then((image) => {
+          completed += 1;
+          if (!cancelled) {
+            setAssetsProgress(
+              Math.round((completed / REQUIRED_IMAGE_URLS.length) * 100),
+            );
+          }
+          return image;
+        }),
+      ),
+    )
+      .then((loadedImages) => {
+        if (cancelled) return;
+        const imagesByUrl = new Map(
+          REQUIRED_IMAGE_URLS.map((src, index) => [src, loadedImages[index]]),
+        );
+        for (const [key, src] of Object.entries(CAMPUS_ASSETS) as Array<
+          [CampusAsset, string]
+        >) {
+          const image = imagesByUrl.get(src);
+          if (image) campusImagesRef.current[key] = image;
+        }
+        setAssetsProgress(100);
+        setAssetsReady(true);
+        setAssetsLoading(false);
+        const context = canvasRef.current?.getContext("2d");
+        if (context && statusRef.current !== "playing") drawGame(context, 0);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setAssetsReady(false);
+        setAssetsLoading(false);
+        setAssetsError(
+          error instanceof Error
+            ? error.message
+            : "图片资源加载失败，请重新加载",
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assetsReloadKey, drawGame]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -3079,14 +3169,24 @@ export default function Home() {
               <div className="home-actions">
                 <button
                   className="home-start-button"
-                  onClick={() =>
-                    songReady ? void startGame() : void loadFixedSong()
-                  }
-                  disabled={songLoading}
+                  onClick={() => {
+                    if (assetsError) {
+                      setAssetsReloadKey((value) => value + 1);
+                      return;
+                    }
+                    if (!assetsReady) return;
+                    if (songReady) void startGame();
+                    else void loadFixedSong();
+                  }}
+                  disabled={assetsLoading || songLoading}
                   autoFocus
                 >
                   <span>
-                    {songLoading
+                    {assetsLoading
+                      ? `资源加载中 ${assetsProgress}%`
+                      : assetsError
+                        ? "重新加载资源"
+                        : songLoading
                       ? "音乐加载中…"
                       : songReady
                         ? "走进校园"
@@ -3106,6 +3206,9 @@ export default function Home() {
                   查看玩法
                 </button>
               </div>
+              {assetsError && (
+                <p className="home-song-status">{assetsError}</p>
+              )}
               {songError && <p className="home-song-status">{songError}</p>}
               <p className="home-key-hint">
                 <kbd>SPACE</kbd>
@@ -3401,8 +3504,8 @@ export default function Home() {
               >
                 <div className="tutorial-guide-top">
                   <div>
-                    <small>CALIBRATION / 练习不计分</small>
-                    <strong>先热个身</strong>
+                    <small>NEW PLAYER GUIDE / 练习不计分</small>
+                    <strong>请先完成新手操作</strong>
                   </div>
                   <button type="button" onClick={endTutorial}>
                     跳过
@@ -3427,9 +3530,9 @@ export default function Home() {
                     </small>
                     <strong>
                       {tutorialPhase === "move"
-                        ? "左右移动或滑动，躲开落下的障碍"
+                        ? "按住下方摇杆并向左右拖动，持续移动小车躲开障碍"
                         : tutorialPhase === "hit"
-                          ? "圆环收紧到星星时，按 HIT"
+                          ? "星星圆环重合时，立即按右下角 HIT"
                           : "开始！"}
                     </strong>
                   </div>
@@ -3454,7 +3557,7 @@ export default function Home() {
                     合拍 HIT
                   </span>
                 </div>
-                <p>音乐与正式节拍正在同步播放</p>
+                <p>完成高亮操作后才会进入正式挑战</p>
               </div>
             )}
 
@@ -3902,13 +4005,19 @@ export default function Home() {
                   if (statusRef.current !== "playing") return;
                   event.preventDefault();
                   joystickPointerRef.current = event.pointerId;
+                  event.currentTarget.focus({ preventScroll: true });
                   event.currentTarget.setPointerCapture(event.pointerId);
                   updateJoystick(event.clientX, event.currentTarget);
                 }}
                 onPointerMove={(event) => {
                   if (joystickPointerRef.current !== event.pointerId) return;
                   event.preventDefault();
-                  updateJoystick(event.clientX, event.currentTarget);
+                  const samples = event.nativeEvent.getCoalescedEvents?.() ?? [];
+                  const latest = samples.at(-1);
+                  updateJoystick(
+                    latest?.clientX ?? event.clientX,
+                    event.currentTarget,
+                  );
                 }}
                 onPointerUp={(event) => {
                   if (joystickPointerRef.current === event.pointerId) {
