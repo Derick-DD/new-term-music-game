@@ -20,7 +20,8 @@
 
 # generated build and local delivery artifacts
 /dist/
-/deliverables/
+/deliverables/*
+!/deliverables/fan-bus-rhythm-rush-production-ec28768.zip
 /*.zip
 /releases/*.zip
 /releases/*-dev-preview.svg
