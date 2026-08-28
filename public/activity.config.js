@@ -8,7 +8,12 @@
         selectors: [{ className: ".activity-page", navBar: false }]
       },
       outsideLaunch: {
-        enabled: false
+        enabled: true,
+        pagename: "campus_gogogo",
+        type: 44,
+        showBannerIfEmpty: true,
+        disableOnLocalhost: true,
+        disableInDebug: true
       }
     },
     music: {

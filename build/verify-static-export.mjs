@@ -120,10 +120,10 @@ const [activityConfigSource, activityBridgeSource] = await Promise.all([
   readFile(path.join(ROOT, "public", "activity-bridge.js"), "utf8"),
 ]);
 assert(
-  /outsideLaunch\s*:\s*\{\s*enabled\s*:\s*false\s*\}/.test(activityConfigSource),
-  "上线版本必须禁用 outsideLaunch",
+  /outsideLaunch\s*:\s*\{\s*enabled\s*:\s*true/.test(activityConfigSource),
+  "上线版本必须启用 outsideLaunch",
 );
-assert(!activityBridgeSource.includes("QMPlugin"), "上线版本不得保留 QMPlugin 端外拉起实现");
+assert(activityBridgeSource.includes("new window.QMPlugin"), "上线版本缺少 QMPlugin 端外拉起实现");
 
 const searchableExtensions = new Set([".css", ".html", ".js", ".json", ".svg", ".txt"]);
 const searchable = (
@@ -140,7 +140,10 @@ for (const marker of [
   "window.Music = window.Music || window.M",
   "qmfe-unity-report/iife/index.js",
   "fixTopBar.js",
+  "qmfe-unity-ad/iife/index.js",
   "qmplayer.music.js",
+  "new window.QMPlugin",
+  "campus_gogogo",
   "Activity.registerCapability(\"music\"",
   "380208811",
   "按住底部摇杆左右拖动",
@@ -160,6 +163,7 @@ const orderedScripts = [
   "window.Music = window.Music || window.M",
   "qmfe-unity-report/iife/index.js",
   "fixTopBar.js",
+  "qmfe-unity-ad/iife/index.js",
   "qmplayer.music.js",
   "activity.config.js?v=",
   "activity-bridge.js?v=",
@@ -194,10 +198,11 @@ for (const forbidden of [
   "Activity.user",
   "congratulations-treasure-tf-family.mp3",
   "music-2.4.0.min.js",
-  "QMPlugin",
-  "qmfe-unity-ad",
   "activity-sdk-loader",
   "activity-sites.config",
+  "保存图片",
+  "mobile-save-preview",
+  "brand-title",
   ["chat", "gpt"].join(""),
   ["derick", "dcr"].join("-"),
   "earth-tour",
@@ -223,7 +228,7 @@ const manifest = {
     staticOnly: true,
     bundledAudio: false,
     membershipDetection: false,
-    outsideLaunch: false,
+    outsideLaunch: true,
     pvUvScripts: ["preact.js", "music.js"],
     songId: 380208811,
   },

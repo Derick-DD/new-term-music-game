@@ -43,6 +43,8 @@
   "use strict";
 
   var topBarInitialized = false;
+  var outsideLaunchInitialized = false;
+  var outsideLaunchInstance = null;
 
   function warn(message, error) {
     if (!window.console || typeof window.console.warn !== "function") return;
@@ -54,11 +56,29 @@
     return Boolean(window.Music && Music.browser && Music.browser.music);
   }
 
+  function isLocalhost() {
+    var hostname = String(window.location && window.location.hostname || "").toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  }
+
+  function hasDebugFlag() {
+    var search = String(window.location && window.location.search || "");
+    return /(?:^|[?&])debug(?:=1|=true)?(?:&|$)/i.test(search);
+  }
+
   function whenDomReady(action) {
     if (!window.document || document.readyState !== "loading") return Promise.resolve().then(action);
     return new Promise(function (resolve) {
       document.addEventListener("DOMContentLoaded", resolve, { once: true });
     }).then(action);
+  }
+
+  function resolvePageName(options) {
+    if (options.pagename) return String(options.pagename);
+    var reporting = Activity.getConfig("reporting") || {};
+    if (reporting.pageName) return String(reporting.pageName);
+    var segments = String(window.location && window.location.pathname || "").split("/").filter(Boolean);
+    return segments.length > 1 ? segments[segments.length - 2] : "activity_h5";
   }
 
   function fixTopBar(options) {
@@ -84,8 +104,27 @@
     });
   }
 
-  function initOutsideLaunch() {
-    return Promise.resolve({ initialized: false, reason: "disabled-by-configuration" });
+  function initOutsideLaunch(options) {
+    options = options || {};
+    if (options.enabled === false || isMusicClient()) return Promise.resolve({ initialized: false, reason: "disabled-or-in-client" });
+    if (options.disableOnLocalhost !== false && isLocalhost()) return Promise.resolve({ initialized: false, reason: "localhost" });
+    if (options.disableInDebug !== false && hasDebugFlag()) return Promise.resolve({ initialized: false, reason: "debug" });
+    if (outsideLaunchInitialized) return Promise.resolve({ initialized: false, reason: "already-initialized", instance: outsideLaunchInstance });
+    return whenDomReady(function () {
+      if (typeof window.QMPlugin !== "function") throw new Error("QMPlugin CDN is unavailable");
+      var type = options.type == null ? 44 : Number(options.type);
+      if (!Number.isFinite(type) || type < 0) throw new Error("outsideLaunch.type must be a non-negative number");
+      outsideLaunchInstance = new window.QMPlugin({
+        pagename: resolvePageName(options),
+        type: type,
+        showBannerIfEmpty: options.showBannerIfEmpty !== false
+      });
+      outsideLaunchInitialized = true;
+      return { initialized: true, instance: outsideLaunchInstance };
+    }).catch(function (error) {
+      warn("端外拉起 QQ 音乐能力初始化失败，页面将继续运行", error);
+      return { initialized: false, reason: "failed", error: error };
+    });
   }
 
   function init(options) {

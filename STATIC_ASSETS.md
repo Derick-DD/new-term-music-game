@@ -17,7 +17,8 @@
 - 播放实现：QMPlayer 官方 CDN
 - 会员处理：不检测用户或会员身份；播放成功与否只看播放器真实事件
 - 本地音频：禁止 MP3、M4A、WAV、AAC、OGG、FLAC
-- 端外拉起：关闭，不加载广告拉端组件
+- 端外拉起：正式页面在客户端外通过 `QMPlugin` 拉起 QQ 音乐；客户端内、
+  localhost 与 `debug=1` 不重复拉起
 
 官方依赖保持为远程脚本，不进入 ZIP，并按下列顺序加载：
 
@@ -27,7 +28,8 @@
 4. `window.Music = window.Music || window.M`
 5. `https://y.qq.com/component/m/qmfe-unity-report/iife/index.js?max_age=2592000`
 6. `https://y.qq.com/component/m/fixTopBar/dist/fixTopBar.js?max_age=2592000`
-7. `https://y.qq.com/component/m/qmplayer/qmplayer.music.js?max_age=604800`
+7. `https://y.qq.com/component/m/qmfe-unity-ad/iife/index.js?max_age=604800&v=20201223`
+8. `https://y.qq.com/component/m/qmplayer/qmplayer.music.js?max_age=604800`
 
 其中 `preact.js` 是 `music.js` 的运行依赖；`music.js` 提供正式 H5 的 PV/UV
 统计和 QQ 音乐端能力。发布入口不再加载 `music-2.4.0`，避免两套 Music 核心
@@ -35,7 +37,7 @@
 
 ## 分享与图片
 
-分享使用 `Activity.share`；分享二维码与分享链接指向
+分享卡只保留 `Activity.share` 端内分享，不提供图片保存入口；分享二维码与分享链接指向
 `https://y.qq.com/viber_pub/campus_gogogo/index.html?_hidehd=1&_miniplayer=1`。
 所有本地图片会在开始游戏前预加载；`app/data/static-image-assets.json` 必须与
 `public/` 下图片集合完全一致。

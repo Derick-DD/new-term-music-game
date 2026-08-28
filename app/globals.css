@@ -828,35 +828,6 @@ button:focus-visible {
   letter-spacing: 0.12em;
 }
 
-.brand-title {
-  display: flex;
-  align-items: baseline;
-  min-width: 0;
-  white-space: nowrap;
-  color: #fff;
-  font-family: "Arial Black", "PingFang SC", sans-serif;
-  font-size: clamp(27px, 3vw, 36px);
-  font-weight: 950;
-  letter-spacing: -0.09em;
-  line-height: 1;
-  filter: drop-shadow(0 0 10px rgba(255, 79, 163, 0.16));
-}
-
-.brand-title span {
-  color: #fff;
-  text-shadow:
-    3px 0 0 var(--pink),
-    -2px 3px 0 #5037c4;
-}
-
-.brand-title em {
-  color: var(--gold);
-  font-style: normal;
-  text-shadow:
-    3px 0 0 var(--pink),
-    -2px 3px 0 #5037c4;
-}
-
 .meta-strip {
   display: grid;
   grid-template-columns: 92px 88px 104px;
@@ -3301,71 +3272,6 @@ button:focus-visible {
   opacity: 0.5;
 }
 
-.mobile-save-preview {
-  position: fixed;
-  z-index: 80;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  overflow-y: auto;
-  padding:
-    max(18px, env(safe-area-inset-top))
-    max(14px, env(safe-area-inset-right))
-    max(18px, env(safe-area-inset-bottom))
-    max(14px, env(safe-area-inset-left));
-  background: rgba(10, 17, 32, 0.92);
-}
-
-.mobile-save-preview > section {
-  position: relative;
-  width: min(88vw, 390px);
-  padding: 52px 12px 12px;
-  border: 2px solid var(--ink);
-  background: #fffaf1;
-  box-shadow: 6px 7px 0 rgba(69, 200, 237, 0.72);
-}
-
-.mobile-save-preview p {
-  margin: 0 0 12px;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.5;
-  text-align: center;
-}
-
-.mobile-save-preview p strong {
-  color: #b32260;
-  font-weight: 900;
-}
-
-.mobile-save-preview-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 2px solid var(--ink);
-  border-radius: 50%;
-  background: #ffd84d;
-}
-
-.mobile-save-preview-close > img {
-  width: 17px;
-  height: 17px;
-}
-
-.mobile-save-preview-image {
-  display: block;
-  width: 100%;
-  height: auto;
-  border: 2px solid var(--ink);
-  -webkit-touch-callout: default;
-  user-select: auto;
-}
-
 .failed-overlay {
   overflow-y: auto;
   padding: 18px 24px;
@@ -4757,9 +4663,6 @@ body {
 }
 
 .brand-kicker,
-.brand-title,
-.brand-title span,
-.brand-title em,
 .meta-strip,
 .meta-strip > span {
   color: var(--ink);

@@ -62,11 +62,12 @@ test("builds the current application as a production static export without Next 
   assert.match(staticIndex, /lib\/h5\/music\.js\?max_age=604800/);
   assert.match(staticIndex, /window\.Music = window\.Music \|\| window\.M/);
   assert.match(staticIndex, /qmfe-unity-report\/iife\/index\.js/);
+  assert.match(staticIndex, /qmfe-unity-ad\/iife\/index\.js/);
   assert.match(staticIndex, /qmplayer\.music\.js/);
   assert.match(staticIndex, /activity\.config\.js\?v=__ACTIVITY_CONFIG_VERSION__/);
   assert.match(staticIndex, /activity-bridge\.js\?v=__ACTIVITY_RUNTIME_VERSION__/);
   assert.doesNotMatch(staticIndex, /(?:src|href)="\/(?!\/)/);
-  assert.doesNotMatch(staticIndex, /music-2\.4\.0|qmfe-unity-ad|activity-sdk-loader|crossorigin/i);
+  assert.doesNotMatch(staticIndex, /music-2\.4\.0|activity-sdk-loader|crossorigin/i);
 });
 
 test("uses Activity.music for song 380208811 without membership checks or local audio", async () => {
@@ -80,8 +81,10 @@ test("uses Activity.music for song 380208811 without membership checks or local 
   const sourceFiles = await walk(path.join(ROOT, "public"));
 
   assert.match(config, /id:\s*380208811/);
-  assert.match(config, /outsideLaunch\s*:\s*\{\s*enabled\s*:\s*false\s*\}/);
-  assert.doesNotMatch(config, /pagename|showBannerIfEmpty/);
+  assert.match(config, /outsideLaunch\s*:\s*\{\s*enabled\s*:\s*true/);
+  assert.match(config, /pagename:\s*"campus_gogogo"/);
+  assert.match(config, /type:\s*44/);
+  assert.match(config, /showBannerIfEmpty:\s*true/);
   assert.match(page, /const SONG_ID = 380208811/);
   assert.match(page, /music\.play\(/);
   assert.match(page, /music\.resume\(\)/);
@@ -91,7 +94,8 @@ test("uses Activity.music for song 380208811 without membership checks or local 
   assert.match(bridge, /Activity\.registerCapability\("music"/);
   assert.match(bridge, /new window\.QMPlayer/);
   assert.match(page, /typeof window\.QMPlayer !== "function"/);
-  assert.doesNotMatch(`${page}\n${config}\n${bridge}`, /Activity\.user|queryProfile|requiredMembership|vipStatus|svipStatus|QMPlugin/);
+  assert.match(bridge, /new window\.QMPlugin/);
+  assert.doesNotMatch(`${page}\n${config}\n${bridge}`, /Activity\.user|queryProfile|requiredMembership|vipStatus|svipStatus/);
   assert.doesNotMatch(page, /new\s+Audio\s*\(|AudioContext|webkitAudioContext|localSrc/);
   assert.equal(chart.audio.songId, 380208811);
   assert.equal(chart.audio.localSrc, undefined);
@@ -101,11 +105,18 @@ test("uses Activity.music for song 380208811 without membership checks or local 
 test("registers Activity.music locally and forwards the configured song id to QMPlayer", async () => {
   const bridge = await readFile(path.join(ROOT, "public", "activity-bridge.js"), "utf8");
   const played = [];
+  const launches = [];
   const sandbox = {
     console,
     Promise,
     setTimeout,
     clearTimeout,
+    document: {
+      readyState: "complete",
+      addEventListener() {},
+      querySelector() { return null; },
+      body: { classList: { add() {} } },
+    },
     location: {
       hostname: "localhost",
       pathname: "/",
@@ -126,9 +137,23 @@ test("registers Activity.music locally and forwards the configured song id to QM
 
   vm.runInNewContext(bridge, sandbox);
   assert.ok(sandbox.Activity?.music, "Activity.music should not depend on a client injection");
-  const outsideLaunch = await sandbox.Activity.webview.initOutsideLaunch();
-  assert.equal(outsideLaunch.initialized, false);
-  assert.equal(outsideLaunch.reason, "disabled-by-configuration");
+  sandbox.QMPlugin = function QMPlugin(options) {
+    launches.push(options);
+  };
+  const outsideLaunch = await sandbox.Activity.webview.initOutsideLaunch({
+    enabled: true,
+    pagename: "campus_gogogo",
+    type: 44,
+    showBannerIfEmpty: true,
+    disableOnLocalhost: false,
+    disableInDebug: false,
+  });
+  assert.equal(outsideLaunch.initialized, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(launches)), [{
+    pagename: "campus_gogogo",
+    type: 44,
+    showBannerIfEmpty: true,
+  }]);
 
   sandbox.QMPlayer = function QMPlayer() {};
   sandbox.QMPlayer.prototype.play = function play(song) {
@@ -147,11 +172,12 @@ test("registers Activity.music locally and forwards the configured song id to QM
 });
 
 test("retains the current gameplay, tutorial, control, lane, share, and preload changes", async () => {
-  const [page, css, config, imageManifestSource] = await Promise.all([
+  const [page, css, config, imageManifestSource, shareQr] = await Promise.all([
     readFile(path.join(ROOT, "app", "page.tsx"), "utf8"),
     readFile(path.join(ROOT, "app", "globals.css"), "utf8"),
     readFile(path.join(ROOT, "public", "activity.config.js"), "utf8"),
     readFile(path.join(ROOT, "app", "data", "static-image-assets.json"), "utf8"),
+    readFile(path.join(ROOT, "public", "assets", "campus-season", "campus-share-qr.svg"), "utf8"),
   ]);
   const configuredImages = JSON.parse(imageManifestSource).sort();
   const publicImages = (await walk(path.join(ROOT, "public")))
@@ -173,6 +199,10 @@ test("retains the current gameplay, tutorial, control, lane, share, and preload 
   assert.match(css, /\.cabinet-top\s*\{[\s\S]*?overflow:\s*hidden/);
   assert.match(css, /\.share-card-tagline/);
   assert.match(config, /https:\/\/y\.qq\.com\/viber_pub\/campus_gogogo\/index\.html\?_hidehd=1&_miniplayer=1/);
+  assert.match(page, /const SHARE_TARGET_URL =\s*\n\s*"https:\/\/y\.qq\.com\/viber_pub\/campus_gogogo\/index\.html\?_hidehd=1&_miniplayer=1"/);
+  assert.match(shareQr, /https:\/\/y\.qq\.com\/viber_pub\/campus_gogogo\/index\.html\?_hidehd=1&amp;_miniplayer=1/);
+  assert.doesNotMatch(page, /className="brand-title"|保存图片|saveShareCard|mobileSavePreview/);
+  assert.match(page, /status !== "finished" && status !== "failed"/);
   assert.match(page, /Promise\.all\(\s*REQUIRED_IMAGE_URLS\.map/);
   assert.deepEqual(configuredImages, publicImages);
   assert.doesNotMatch(`${page}\n${css}\n${imageManifestSource}`, /earth-tour|lueluelue/);
@@ -185,7 +215,7 @@ test("records and verifies the exact current source and pure-static artifact tre
   assert.equal(manifest.guarantees.staticOnly, true);
   assert.equal(manifest.guarantees.bundledAudio, false);
   assert.equal(manifest.guarantees.membershipDetection, false);
-  assert.equal(manifest.guarantees.outsideLaunch, false);
+  assert.equal(manifest.guarantees.outsideLaunch, true);
   assert.deepEqual(manifest.guarantees.pvUvScripts, ["preact.js", "music.js"]);
   assert.equal(manifest.guarantees.songId, 380208811);
 

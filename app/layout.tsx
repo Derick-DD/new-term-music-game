@@ -66,6 +66,10 @@ export default function RootLayout({
           strategy="beforeInteractive"
         />
         <Script
+          src="https://y.qq.com/component/m/qmfe-unity-ad/iife/index.js?max_age=604800&v=20201223"
+          strategy="beforeInteractive"
+        />
+        <Script
           src="https://y.qq.com/component/m/qmplayer/qmplayer.music.js?max_age=604800"
           strategy="beforeInteractive"
         />

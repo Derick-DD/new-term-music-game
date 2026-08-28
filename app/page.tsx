@@ -700,30 +700,6 @@ async function createShareCardBlob(data: ShareCardData) {
   });
 }
 
-function downloadShareCard(blob: Blob, song: string) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = getShareCardFileName(song);
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-}
-
-function getShareCardFileName(song: string) {
-  const safeSong = song.replace(/[\\/:*?"<>|]/g, "-").slice(0, 36);
-  return `开学冲冲冲-${safeSong || "校园成绩"}.png`;
-}
-
-function isMobileSaveTarget() {
-  return (
-    navigator.maxTouchPoints > 0 ||
-    window.matchMedia?.("(pointer: coarse)").matches ||
-    window.matchMedia?.("(max-width: 780px)").matches
-  );
-}
-
 function laneCenter(lane: number) {
   return ROAD_LEFT + LANE_WIDTH * lane + LANE_WIDTH / 2;
 }
@@ -941,9 +917,6 @@ export default function Home() {
     useState<FailureSummary | null>(null);
   const [shareCardOpen, setShareCardOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
-  const [mobileSavePreviewUrl, setMobileSavePreviewUrl] = useState<
-    string | null
-  >(null);
   const [noteJudgement, setNoteJudgement] = useState<NoteJudgement | null>(
     null,
   );
@@ -1020,64 +993,9 @@ export default function Home() {
     [fans, maxCombo, resultTier.iconSrc, resultTier.name],
   );
 
-  useEffect(
-    () => () => {
-      if (mobileSavePreviewUrl) URL.revokeObjectURL(mobileSavePreviewUrl);
-    },
-    [mobileSavePreviewUrl],
-  );
-
-  const showMobileSavePreview = useCallback((blob: Blob) => {
-    setMobileSavePreviewUrl(URL.createObjectURL(blob));
-  }, []);
-
   const closeShareCard = useCallback(() => {
-    setMobileSavePreviewUrl(null);
     setShareCardOpen(false);
   }, []);
-
-  const saveShareCard = useCallback(async () => {
-    setShareBusy(true);
-    try {
-      const blob = await createCurrentShareCard();
-      if (!blob) throw new Error("Share card unavailable");
-
-      if (isMobileSaveTarget()) {
-        const file = new File([blob], getShareCardFileName(songTitle), {
-          type: "image/png",
-        });
-        if (
-          !isQqMusicClient() &&
-          navigator.share &&
-          navigator.canShare?.({ files: [file] })
-        ) {
-          try {
-            await navigator.share({
-              title: "开学冲冲冲！校园成绩",
-              files: [file],
-            });
-            showToast("请在系统菜单中选择“存储图像”", "cyan");
-            return;
-          } catch (error) {
-            if (error instanceof DOMException && error.name === "AbortError") {
-              return;
-            }
-          }
-        }
-
-        showMobileSavePreview(blob);
-        showToast("请长按图片，选择保存到照片", "gold");
-        return;
-      }
-
-      downloadShareCard(blob, songTitle);
-      showToast("成绩卡已保存，可以分享给好友啦", "cyan");
-    } catch {
-      showToast("成绩卡生成失败，请稍后重试", "danger");
-    } finally {
-      setShareBusy(false);
-    }
-  }, [createCurrentShareCard, showMobileSavePreview, showToast, songTitle]);
 
   const shareResult = useCallback(async () => {
     setShareBusy(true);
@@ -3285,10 +3203,6 @@ export default function Home() {
               开学季<i>GO</i>
             </strong>
           </span>
-          <span className="brand-title">
-            <span>开学季</span>
-            <em>冲冲冲！</em>
-          </span>
         </div>
         <div className="meta-strip" aria-label="游戏记录">
           <span>
@@ -3933,50 +3847,7 @@ export default function Home() {
                         >
                           {shareBusy ? "生成中…" : "分享给好友"}
                         </button>
-                        <button
-                          className="secondary-button"
-                          onClick={() => void saveShareCard()}
-                          disabled={shareBusy}
-                        >
-                          保存图片
-                        </button>
                       </div>
-                      {mobileSavePreviewUrl && (
-                        <div
-                          className="mobile-save-preview"
-                          role="dialog"
-                          aria-modal="true"
-                          aria-label="长按保存成绩卡"
-                          onPointerDown={(event) => {
-                            if (event.target === event.currentTarget) {
-                              setMobileSavePreviewUrl(null);
-                            }
-                          }}
-                        >
-                          <section>
-                            <button
-                              className="mobile-save-preview-close"
-                              onClick={() => setMobileSavePreviewUrl(null)}
-                              aria-label="关闭图片预览"
-                            >
-                              <img
-                                src={UI_ICONS.close}
-                                alt=""
-                                aria-hidden="true"
-                              />
-                            </button>
-                            <p>
-                              <strong>长按下方图片</strong>
-                              ，选择“存储到照片”或“保存图片”
-                            </p>
-                            <img
-                              className="mobile-save-preview-image"
-                              src={mobileSavePreviewUrl}
-                              alt={`开学冲冲冲成绩卡：${resultTier.name}，${fans * maxCombo} 分`}
-                            />
-                          </section>
-                        </div>
-                      )}
                     </section>
                   </div>
                 )}
@@ -4029,7 +3900,8 @@ export default function Home() {
             )}
           </div>
 
-          <div className="mobile-controls">
+          {status !== "finished" && status !== "failed" && (
+            <div className="mobile-controls">
             <div
               className={`joystick-control ${status !== "playing" ? "is-disabled" : ""} ${tutorialPhase === "move" ? "is-tutorial-focus" : ""}`}
               aria-label="左右换道摇杆"
@@ -4115,7 +3987,8 @@ export default function Home() {
               <span>HIT</span>
               <small>SPACE</small>
             </button>
-          </div>
+            </div>
+          )}
         </div>
       </section>
 

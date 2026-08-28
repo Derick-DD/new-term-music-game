@@ -12,8 +12,9 @@ Next 运行时或 `_next/`。
 - 播放权限：不查询登录、VIP 或 SVIP，播放结果以 QMPlayer 的真实
   `play` / `error` 事件为准
 - 失败策略：不回退本地 MP3，静态产物中不包含音频文件
-- 端外拉起：`webview.outsideLaunch.enabled=false`，不加载
-  `qmfe-unity-ad`，不创建 `QMPlugin`
+- 端外拉起：`webview.outsideLaunch.enabled=true`；正式页面在 QQ 音乐客户端外
+  初始化 `QMPlugin`，使用稳定页面标识 `campus_gogogo` 拉起 QQ 音乐。客户端
+  内不重复拉起，本地与 `debug=1` 调试保持可访问
 - PV/UV：按正式 H5 入口顺序加载 `preact.js`、`music.js`；`music.js` 自动
   初始化页面统计，并通过 `window.Music = window.Music || window.M` 兼容
   QMPlayer 与页面现有端内能力调用
@@ -36,7 +37,7 @@ npm test
 ```
 
 校验器会拒绝音频文件、`.DS_Store`、Next 运行时、旧主题资源、测试域内容、
-错误的官方脚本顺序、错误歌曲 ID，以及任何未进入预加载清单的图片。校验通过
+缺失的强制拉端依赖、错误的官方脚本顺序、错误歌曲 ID，以及任何未进入预加载清单的图片。校验通过
 后生成 `out/static-build-manifest.json`，记录参与构建的源码与静态产物树
 SHA-256。
 
