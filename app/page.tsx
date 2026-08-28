@@ -971,7 +971,8 @@ export default function Home() {
       showToast("QQ 音乐分享已完成", "cyan");
     };
     try {
-      activity.share?.init?.({});
+      // Music.share.init creates the QQ Music top-right share action. Keep it
+      // uninitialized so sharing is available only from the result-card button.
       activity.share?.on?.(handleClientShare);
     } catch {
       return;

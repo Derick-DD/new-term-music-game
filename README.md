@@ -43,3 +43,6 @@ SHA-256。
 
 `app/data/static-image-assets.json` 覆盖 `public/` 中全部图片；页面只有在所有
 图片加载成功后才允许开始游戏。最终交付 ZIP 只从本次构建生成的 `out/` 创建。
+
+分享仅从结算分享卡的居中按钮主动调起；页面不会调用 `Music.share.init`，因此
+QQ 音乐 WebView 右上角不展示额外分享入口。

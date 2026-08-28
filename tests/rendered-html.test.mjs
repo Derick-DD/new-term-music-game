@@ -171,6 +171,72 @@ test("registers Activity.music locally and forwards the configured song id to QM
   assert.deepEqual(played, [380208811]);
 });
 
+test("keeps result-card sharing available without initializing the top-right share action", async () => {
+  const bridge = await readFile(path.join(ROOT, "public", "activity-bridge.js"), "utf8");
+  const clientCalls = [];
+  const nativeShareInits = [];
+  const sandbox = {
+    console,
+    Promise,
+    setTimeout,
+    clearTimeout,
+    document: {
+      readyState: "complete",
+      addEventListener() {},
+      querySelector() { return null; },
+      body: { classList: { add() {} } },
+    },
+    location: {
+      hostname: "y.qq.com",
+      pathname: "/viber_pub/campus_gogogo/index.html",
+      search: "?_hidehd=1&_miniplayer=1",
+      href: "https://y.qq.com/viber_pub/campus_gogogo/index.html?_hidehd=1&_miniplayer=1",
+      origin: "https://y.qq.com",
+    },
+    ACTIVITY_CONFIG: {
+      webview: {
+        topBar: { enabled: false },
+        outsideLaunch: { enabled: false },
+      },
+      sharing: {
+        title: "开学冲冲冲！校园成绩",
+        url: "https://y.qq.com/viber_pub/campus_gogogo/index.html?_hidehd=1&_miniplayer=1",
+      },
+    },
+    Music: {
+      browser: { music: true },
+      musicReady(callback) { callback(true); },
+      client: {
+        on() {},
+        open(group, method, params, callback) {
+          clientCalls.push({ group, method, params });
+          callback({ code: 0 });
+        },
+      },
+      share: {
+        init(params) { nativeShareInits.push(params); },
+      },
+    },
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+
+  vm.runInNewContext(bridge, sandbox);
+  sandbox.Activity.configure(sandbox.ACTIVITY_CONFIG);
+  sandbox.Activity.share.on(() => {});
+  await sandbox.Activity.share.callImage("data:image/png;base64,AA==", {
+    link: sandbox.ACTIVITY_CONFIG.sharing.url,
+    shareform: "campus.result",
+  });
+
+  assert.equal(nativeShareInits.length, 0);
+  assert.equal(clientCalls.length, 1);
+  assert.equal(clientCalls[0].group, "other");
+  assert.equal(clientCalls[0].method, "callShareImg");
+  assert.equal(clientCalls[0].params.link, sandbox.ACTIVITY_CONFIG.sharing.url);
+  assert.equal(clientCalls[0].params.shareform, "campus.result");
+});
+
 test("retains the current gameplay, tutorial, control, lane, share, and preload changes", async () => {
   const [page, css, config, imageManifestSource, shareQr] = await Promise.all([
     readFile(path.join(ROOT, "app", "page.tsx"), "utf8"),
@@ -202,6 +268,11 @@ test("retains the current gameplay, tutorial, control, lane, share, and preload 
   assert.match(page, /const SHARE_TARGET_URL =\s*\n\s*"https:\/\/y\.qq\.com\/viber_pub\/campus_gogogo\/index\.html\?_hidehd=1&_miniplayer=1"/);
   assert.match(shareQr, /https:\/\/y\.qq\.com\/viber_pub\/campus_gogogo\/index\.html\?_hidehd=1&amp;_miniplayer=1/);
   assert.doesNotMatch(page, /className="brand-title"|保存图片|saveShareCard|mobileSavePreview/);
+  assert.doesNotMatch(page, /activity\.share\?\.init/);
+  assert.match(page, /activity\.share\?\.on\?\.\(handleClientShare\)/);
+  assert.match(page, /activityShare\.callImage/);
+  assert.match(page, /activityShare\.call\(/);
+  assert.match(css, /\.share-card-actions \.primary-button\s*\{[\s\S]*?max-width:\s*240px[\s\S]*?flex:\s*0 1 240px/);
   assert.match(page, /status !== "finished" && status !== "failed"/);
   assert.match(page, /Promise\.all\(\s*REQUIRED_IMAGE_URLS\.map/);
   assert.deepEqual(configuredImages, publicImages);

@@ -3252,21 +3252,18 @@ button:focus-visible {
 .share-card-actions {
   display: flex;
   justify-content: center;
-  gap: 9px;
-}
-
-.share-card-actions .primary-button,
-.share-card-actions .secondary-button {
-  min-width: 0;
-  flex: 1;
+  width: 100%;
 }
 
 .share-card-actions .primary-button {
+  width: 100%;
+  max-width: 240px;
+  min-width: 0;
+  flex: 0 1 240px;
   padding: 11px 9px;
   font-size: 10px;
 }
 
-.share-card-actions .secondary-button:disabled,
 .share-card-close:disabled {
   cursor: wait;
   opacity: 0.5;

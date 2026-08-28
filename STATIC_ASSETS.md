@@ -37,7 +37,8 @@
 
 ## 分享与图片
 
-分享卡只保留 `Activity.share` 端内分享，不提供图片保存入口；分享二维码与分享链接指向
+分享卡只保留居中的 `Activity.share` 端内分享按钮，不提供图片保存入口，也不
+初始化 QQ 音乐右上角分享入口；分享二维码与分享链接指向
 `https://y.qq.com/viber_pub/campus_gogogo/index.html?_hidehd=1&_miniplayer=1`。
 所有本地图片会在开始游戏前预加载；`app/data/static-image-assets.json` 必须与
 `public/` 下图片集合完全一致。
